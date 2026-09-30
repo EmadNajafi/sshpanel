@@ -34,7 +34,7 @@ Run `sudo bash deploy/install.sh --local-test`. This binds **the web panel** to 
 ssh -N -L 127.0.0.1:8080:127.0.0.1:8080 root@SERVER_IP
 ```
 
-Open `http://localhost:8080/login/` on the computer running the tunnel. On the server, run `sudo menu admin` to create your own web administrator. The local test mode has no domain for certificate issuance; configure a domain and HTTPS before exposing the web panel publicly. Any preexisting Nginx sites remain active.
+Open `http://localhost:8080/login/` on the computer running the tunnel. On the server, run `sudo menu admin` to create your own web administrator. When you are ready to use a domain, point its DNS record to the server, make ports 80 and 443 reachable, and run `sudo menu ssl panel.example.com admin@example.com`. This switches the panel from the local test listener to HTTPS. A failed certificate request restores the local Nginx settings. Any preexisting Nginx sites remain active.
 
 `sudo menu` opens an interactive list. Direct commands include `ssl`, `renew`, `status`, `restart`, `logs`, `backup`, `admin`, `admin-password USERNAME`, `vpn-public`, and `vpn-local`.
 

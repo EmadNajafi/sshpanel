@@ -19,7 +19,15 @@ show_menu() {
   echo "0) Exit"
   read -r -p "Choose: " choice
   case "$choice" in
-    1) issue_ssl ;;
+    1)
+      if [[ "${PANEL_TLS_ENABLED:-1}" == "0" ]]; then
+        read -r -p "Panel domain: " requested_domain
+        read -r -p "Certificate email: " requested_email
+        issue_ssl "$requested_domain" "$requested_email"
+      else
+        issue_ssl
+      fi
+      ;;
     2) certbot renew ;;
     3) systemctl status --no-pager sshvpn-panel sshvpn-sshd nginx postgresql ;;
     4) systemctl restart sshvpn-panel sshvpn-sshd ;;
@@ -35,13 +43,69 @@ show_menu() {
 }
 
 issue_ssl() {
-  if [[ "${PANEL_TLS_ENABLED:-1}" != "1" ]]; then
-    echo "Local test mode has no public domain. Configure a domain before requesting SSL." >&2
-    exit 1
+  if [[ "${PANEL_TLS_ENABLED:-1}" == "0" ]]; then
+    if [[ $# -ne 2 ]]; then
+      echo "Usage: sudo menu ssl panel.example.com admin@example.com" >&2
+      return 1
+    fi
+    activate_tls "$1" "$2"
+    return
+  fi
+  if [[ $# -ne 0 ]]; then
+    echo "This installation already uses $PANEL_DOMAIN. Run sudo menu ssl without arguments." >&2
+    return 1
   fi
   certbot --nginx -d "$PANEL_DOMAIN" --non-interactive --agree-tos --email "${PANEL_EMAIL:?PANEL_EMAIL missing}" --redirect
   nginx -t
   systemctl reload nginx
+}
+
+activate_tls() {
+  local domain="$1" email="$2" nginx_config env_file nginx_backup env_backup candidate
+  if [[ ! "$domain" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$ ]]; then
+    echo "Invalid domain." >&2
+    return 1
+  fi
+  if [[ ! "$email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+    echo "Invalid email." >&2
+    return 1
+  fi
+
+  nginx_config=/etc/nginx/sites-available/sshvpn-panel
+  env_file=/etc/sshvpn/panel.env
+  nginx_backup="$(mktemp)"
+  env_backup="$(mktemp)"
+  candidate="$(mktemp)"
+  cp "$nginx_config" "$nginx_backup"
+  cp "$env_file" "$env_backup"
+  if ! sed -i -e "s/^PANEL_DOMAIN=.*/PANEL_DOMAIN=$domain/" \
+      -e "s/^PANEL_EMAIL=.*/PANEL_EMAIL=$email/" \
+      -e 's/^PANEL_TLS_ENABLED=.*/PANEL_TLS_ENABLED=1/' "$env_file" || \
+     ! chown root:sshvpn-panel "$env_file" || ! chmod 0640 "$env_file" || \
+     ! systemctl restart sshvpn-panel; then
+    install -m 0640 -o root -g sshvpn-panel "$env_backup" "$env_file"
+    systemctl restart sshvpn-panel || true
+    rm -f "$nginx_backup" "$env_backup" "$candidate"
+    echo "Panel activation failed; local panel settings were restored." >&2
+    return 1
+  fi
+  sed -e 's/listen 127.0.0.1:8080;/listen 80;/' \
+      -e "s/server_name localhost;/server_name $domain;/" "$nginx_config" > "$candidate"
+  install -m 0644 -o root -g root "$candidate" "$nginx_config"
+  rm -f "$candidate"
+
+  if ! nginx -t || ! systemctl reload nginx || \
+     ! certbot --nginx -d "$domain" --non-interactive --agree-tos --email "$email" --redirect; then
+    install -m 0640 -o root -g sshvpn-panel "$env_backup" "$env_file"
+    install -m 0644 -o root -g root "$nginx_backup" "$nginx_config"
+    systemctl reload nginx || true
+    systemctl restart sshvpn-panel || true
+    rm -f "$nginx_backup" "$env_backup"
+    echo "Certificate request failed; local panel settings were restored." >&2
+    return 1
+  fi
+  rm -f "$nginx_backup" "$env_backup"
+  echo "Panel HTTPS is active at https://$domain/"
 }
 
 create_admin() {
@@ -87,7 +151,7 @@ backup_db() {
 
 case "${1:-menu}" in
   menu) show_menu ;;
-  ssl) issue_ssl ;;
+  ssl) shift; issue_ssl "$@" ;;
   renew) certbot renew ;;
   status) systemctl status --no-pager sshvpn-panel sshvpn-sshd nginx postgresql ;;
   restart) systemctl restart sshvpn-panel sshvpn-sshd ;;
@@ -97,5 +161,5 @@ case "${1:-menu}" in
   admin-password) shift; change_admin_password "$@" ;;
   vpn-public) vpn_listen public ;;
   vpn-local) vpn_listen local ;;
-  *) echo "Usage: sshvpn-menu [menu|ssl|renew|status|restart|logs|backup|admin|admin-password USERNAME|vpn-public|vpn-local]" >&2; exit 1 ;;
+  *) echo "Usage: sshvpn-menu [menu|ssl [DOMAIN EMAIL]|renew|status|restart|logs|backup|admin|admin-password USERNAME|vpn-public|vpn-local]" >&2; exit 1 ;;
 esac
