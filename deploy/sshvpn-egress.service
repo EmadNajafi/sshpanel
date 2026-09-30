@@ -1,0 +1,14 @@
+[Unit]
+Description=Block VPN forwarding to this host and private networks
+After=nftables.service
+PartOf=nftables.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=-/usr/sbin/nft delete table inet sshvpn_egress
+ExecStart=/usr/sbin/nft -f /etc/sshvpn/egress.nft
+ExecStop=/usr/sbin/nft delete table inet sshvpn_egress
+
+[Install]
+WantedBy=multi-user.target

@@ -2,11 +2,20 @@
 set -euo pipefail
 
 if [[ $EUID -ne 0 ]]; then echo "Run as root." >&2; exit 1; fi
-if [[ $# -ne 2 ]]; then echo "Usage: sudo bash deploy/install.sh panel.example.com admin@example.com" >&2; exit 1; fi
-domain="$1"
-email="$2"
-if [[ ! "$domain" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$ ]]; then echo "Invalid domain." >&2; exit 1; fi
-if [[ ! "$email" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; then echo "Invalid email." >&2; exit 1; fi
+local_test=0
+if [[ $# -eq 1 && "$1" == "--local-test" ]]; then
+  local_test=1
+  domain=localhost
+  email=""
+elif [[ $# -eq 2 ]]; then
+  domain="$1"
+  email="$2"
+  if [[ ! "$domain" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$ ]]; then echo "Invalid domain." >&2; exit 1; fi
+  if [[ ! "$email" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; then echo "Invalid email." >&2; exit 1; fi
+else
+  echo "Usage: sudo bash deploy/install.sh panel.example.com admin@example.com | --local-test" >&2
+  exit 1
+fi
 if ! grep -q '^ID=ubuntu$' /etc/os-release || ! grep -q '^VERSION_ID="24.04"$' /etc/os-release; then
   echo "This installer targets Ubuntu 24.04 only." >&2; exit 1
 fi
@@ -19,7 +28,7 @@ fi
 
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-venv python3-pip postgresql nginx certbot python3-certbot-nginx sudo rsync openssh-server openssl
+DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-venv python3-pip postgresql nginx certbot python3-certbot-nginx sudo rsync openssh-server openssl nftables
 
 getent group sshvpn >/dev/null || groupadd --system sshvpn
 getent group sshvpn-panel >/dev/null || groupadd --system sshvpn-panel
@@ -39,6 +48,7 @@ cat > /etc/sshvpn/panel.env <<EOF
 DJANGO_SECRET_KEY=$secret_key
 PANEL_DOMAIN=$domain
 PANEL_EMAIL=$email
+PANEL_TLS_ENABLED=$((1-local_test))
 DB_NAME=sshvpn
 DB_USER=sshvpn
 DB_PASSWORD=$db_password
@@ -54,20 +64,28 @@ chmod 0440 /etc/sudoers.d/sshvpn-panel
 visudo -cf /etc/sudoers.d/sshvpn-panel
 
 install -m 0644 "$repo_dir/deploy/sshvpn_sshd_config" /etc/ssh/sshvpn_sshd_config
+install -m 0644 "$repo_dir/deploy/sshvpn-egress.nft" /etc/sshvpn/egress.nft
+/usr/sbin/nft -c -f /etc/sshvpn/egress.nft
 printf '%s\n' 'DenyGroups sshvpn' > /etc/ssh/sshd_config.d/05-sshvpn-deny.conf
 chmod 0644 /etc/ssh/sshd_config.d/05-sshvpn-deny.conf
 /usr/sbin/sshd -t
 /usr/sbin/sshd -t -f /etc/ssh/sshvpn_sshd_config
 install -m 0644 "$repo_dir/deploy/sshvpn-sshd.service" /etc/systemd/system/sshvpn-sshd.service
+install -m 0644 "$repo_dir/deploy/sshvpn-egress.service" /etc/systemd/system/sshvpn-egress.service
 install -m 0644 "$repo_dir/deploy/sshvpn-panel.service" /etc/systemd/system/sshvpn-panel.service
 install -m 0755 -o root -g root "$repo_dir/deploy/menu.sh" /usr/local/bin/sshvpn-menu
 if [[ ! -e /usr/local/bin/menu ]]; then
   ln -s /usr/local/bin/sshvpn-menu /usr/local/bin/menu
 fi
 
+if [[ $local_test -eq 1 ]]; then
+  nginx_listen='127.0.0.1:8080'
+else
+  nginx_listen='80'
+fi
 cat > /etc/nginx/sites-available/sshvpn-panel <<EOF
 server {
-    listen 80;
+    listen $nginx_listen;
     server_name $domain;
     location /static/ { alias /opt/ssh-vpn-panel/staticfiles/; }
     location = /login/ {
@@ -97,9 +115,15 @@ runuser -u sshvpn-panel -- .venv/bin/python manage.py migrate --noinput
 .venv/bin/python manage.py collectstatic --noinput
 
 systemctl daemon-reload
-systemctl enable --now postgresql nginx sshvpn-panel sshvpn-sshd
+systemctl enable --now postgresql nginx sshvpn-panel sshvpn-egress sshvpn-sshd
+systemctl reload nginx
 systemctl reload ssh
 echo "Create the web administrator now:"
-runuser -u sshvpn-panel -- .venv/bin/python manage.py createsuperuser
-echo "Issue TLS: sudo menu ssl"
+if [[ $local_test -eq 1 ]]; then
+  echo "For the local test, create an administrator later with: cd /opt/ssh-vpn-panel && sudo -u sshvpn-panel -E .venv/bin/python manage.py createsuperuser"
+  echo "Local test mode: the panel is at 127.0.0.1:8080, reachable through an administrator SSH tunnel. No TLS certificate was configured."
+else
+  runuser -u sshvpn-panel -- .venv/bin/python manage.py createsuperuser
+  echo "Issue TLS: sudo menu ssl"
+fi
 echo "VPN SSH is bound to 127.0.0.1:2222 until egress isolation is tested. Keep your existing admin SSH port open."

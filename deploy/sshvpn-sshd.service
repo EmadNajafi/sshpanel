@@ -1,10 +1,13 @@
 [Unit]
 Description=SSH VPN forwarding service
-After=network.target
+After=network.target sshvpn-egress.service
+BindsTo=sshvpn-egress.service
+PartOf=sshvpn-egress.service
 
 [Service]
 Type=simple
 ExecStart=/usr/sbin/sshd -D -f /etc/ssh/sshvpn_sshd_config
+ExecStartPre=/usr/sbin/nft list table inet sshvpn_egress
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=3
