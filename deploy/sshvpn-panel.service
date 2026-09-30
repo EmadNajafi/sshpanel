@@ -1,0 +1,22 @@
+[Unit]
+Description=SSH VPN web panel
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=sshvpn-panel
+Group=sshvpn-panel
+WorkingDirectory=/opt/ssh-vpn-panel
+EnvironmentFile=/etc/sshvpn/panel.env
+ExecStart=/opt/ssh-vpn-panel/.venv/bin/gunicorn sshvpn.wsgi:application --bind 127.0.0.1:8000 --workers 2 --access-logfile - --error-logfile -
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/sshvpn-panel
+
+[Install]
+WantedBy=multi-user.target

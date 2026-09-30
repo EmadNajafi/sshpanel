@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""Root-owned, narrowly scoped account helper. Only JSON arrives on stdin."""
+import grp
+import json
+import os
+import pwd
+import re
+import spwd
+import subprocess
+import sys
+
+
+USERNAME = re.compile(r"^vpn_[a-z][a-z0-9_]{2,26}$")
+GROUP = "sshvpn"
+ALLOWED = {"create", "disable", "enable", "delete", "password"}
+
+
+def fail(message):
+    print(message, file=sys.stderr)
+    return 1
+
+
+def run(*args, input_text=None, ok=(0,)):
+    result = subprocess.run(args, input=input_text, text=True, capture_output=True, timeout=15)
+    if result.returncode not in ok:
+        raise RuntimeError(f"System command failed: {args[0]}")
+
+
+def managed_user(username, group_id):
+    try:
+        user = pwd.getpwnam(username)
+    except KeyError as exc:
+        raise ValueError("Account does not exist.") from exc
+    if user.pw_gid != group_id:
+        raise ValueError("Account is not managed by this panel.")
+    return user
+
+
+def main():
+    if os.geteuid() != 0:
+        return fail("Root privileges are required.")
+    if len(sys.argv) != 2 or sys.argv[1] not in ALLOWED:
+        return fail("Invalid action.")
+    try:
+        body = sys.stdin.read(4097)
+        if len(body) > 4096:
+            raise ValueError("Request is too large.")
+        request = json.loads(body)
+        username = request["username"]
+        if not isinstance(username, str) or not USERNAME.fullmatch(username):
+            raise ValueError("Invalid username.")
+        group_id = grp.getgrnam(GROUP).gr_gid
+        action = sys.argv[1]
+        if action in {"create", "password"}:
+            password = request["password"]
+            if not isinstance(password, str) or not 12 <= len(password) <= 256 or "\n" in password or "\r" in password:
+                raise ValueError("Invalid password.")
+        if action == "create":
+            try:
+                pwd.getpwnam(username)
+            except KeyError:
+                pass
+            else:
+                raise ValueError("Account already exists.")
+            run("/usr/sbin/useradd", "--no-create-home", "--home-dir", "/var/empty", "--shell", "/usr/sbin/nologin", "--gid", GROUP, username)
+            try:
+                run("/usr/sbin/chpasswd", input_text=f"{username}:{password}\n")
+            except Exception:
+                run("/usr/sbin/userdel", username)
+                raise
+        else:
+            managed_user(username, group_id)
+            if action == "disable":
+                run("/usr/sbin/usermod", "--lock", username)
+                run("/usr/bin/pkill", "-u", username, ok=(0, 1))
+            elif action == "enable":
+                run("/usr/sbin/usermod", "--unlock", username)
+            elif action == "password":
+                was_locked = spwd.getspnam(username).sp_pwdp.startswith("!")
+                run("/usr/sbin/chpasswd", input_text=f"{username}:{password}\n")
+                if was_locked:
+                    run("/usr/sbin/usermod", "--lock", username)
+                run("/usr/bin/pkill", "-u", username, ok=(0, 1))
+            elif action == "delete":
+                run("/usr/bin/pkill", "-u", username, ok=(0, 1))
+                run("/usr/sbin/userdel", username)
+    except (ValueError, KeyError, json.JSONDecodeError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        return fail(str(exc))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

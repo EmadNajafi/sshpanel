@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>VPN accounts</h1>
+<p>These accounts can use SSH local forwarding and SOCKS. Shell, commands and SFTP are blocked by the dedicated SSH service.</p>
+<section class="card">
+  <h2>Create account</h2>
+  <form method="post" action="{% url 'create_account' %}">{% csrf_token %}
+    {{ create_form.as_p }}
+    <button type="submit">Create account</button>
+  </form>
+</section>
+<section class="card">
+  <h2>Accounts</h2>
+  <div class="table-scroll"><table><thead><tr><th>Username</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>
+  {% for account in accounts %}
+    <tr><td>{{ account.username }}</td><td>{% if account.enabled %}Enabled{% else %}Disabled{% endif %}</td><td>{{ account.created_at }}</td><td class="actions">
+      {% if account.enabled %}<form method="post" action="{% url 'disable_account' account.pk %}">{% csrf_token %}<button>Disable</button></form>
+      {% else %}<form method="post" action="{% url 'enable_account' account.pk %}">{% csrf_token %}<button>Enable</button></form>{% endif %}
+      <details><summary>Change password</summary><form method="post" action="{% url 'reset_password' account.pk %}">{% csrf_token %}{{ password_form.as_p }}<button>Save</button></form></details>
+      <form method="post" action="{% url 'delete_account' account.pk %}" onsubmit="return confirm('Delete {{ account.username }}?')">{% csrf_token %}<button class="danger">Delete</button></form>
+    </td></tr>
+  {% empty %}<tr><td colspan="4">No accounts yet.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+<section class="card"><h2>Recent activity</h2><ul>{% for event in events %}<li>{{ event.created_at }} — {{ event.actor }} — {{ event.action }} {{ event.username }} — {% if event.succeeded %}OK{% else %}Failed{% endif %}</li>{% empty %}<li>No activity yet.</li>{% endfor %}</ul></section>
+{% endblock %}
