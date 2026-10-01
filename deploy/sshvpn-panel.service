@@ -12,11 +12,10 @@ EnvironmentFile=/etc/sshvpn/panel.env
 ExecStart=/opt/ssh-vpn-panel/.venv/bin/gunicorn sshvpn.wsgi:application --bind 127.0.0.1:8000 --workers 2 --access-logfile - --error-logfile -
 Restart=on-failure
 RestartSec=3
-NoNewPrivileges=yes
+NoNewPrivileges=no
 PrivateTmp=yes
-ProtectSystem=strict
+ProtectSystem=no
 ProtectHome=yes
-ReadWritePaths=/var/lib/sshvpn-panel
 
 [Install]
 WantedBy=multi-user.target

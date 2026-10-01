@@ -39,6 +39,7 @@ cp -a /etc/sshvpn/panel.env "$backup_dir/panel.env"
 cp -a /etc/nginx/sites-available/sshvpn-panel "$backup_dir/nginx-panel"
 cp -a /etc/ssh/sshvpn_sshd_config "$backup_dir/sshvpn_sshd_config"
 cp -a /etc/pam.d/sshd "$backup_dir/pam-sshd"
+cp -a /etc/systemd/system/sshvpn-panel.service "$backup_dir/sshvpn-panel.service"
 tar -C /opt --exclude='ssh-vpn-panel/.venv' --exclude='ssh-vpn-panel/staticfiles' \
   -czf "$backup_dir/application.tar.gz" ssh-vpn-panel
 runuser -u postgres -- pg_dump -Fc "${DB_NAME:-sshvpn}" > "$backup_dir/database.dump"
@@ -70,6 +71,7 @@ install -d -m 0700 -o root -g root /etc/sshvpn/accounts
 install -m 0755 -o root -g root "$repo_dir/deploy/install-pam-hook.sh" /usr/local/sbin/sshvpn-install-pam-hook
 install -m 0644 "$repo_dir/deploy/sshvpn-policy.service" /etc/systemd/system/sshvpn-policy.service
 install -m 0644 "$repo_dir/deploy/sshvpn-policy.timer" /etc/systemd/system/sshvpn-policy.timer
+install -m 0644 "$repo_dir/deploy/sshvpn-panel.service" /etc/systemd/system/sshvpn-panel.service
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/deploy/menu.sh /usr/local/bin/sshvpn-menu
 nginx -t
 /usr/sbin/sshd -t
