@@ -1,6 +1,7 @@
 """Root-owned policy storage and per-connection admission for VPN SSH accounts."""
 
 import fcntl
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -89,7 +90,7 @@ def lease_path(username):
     return LEASE_DIR / f"{username}.json"
 
 
-def admit_connection(username, monitor_pid, now=None):
+def admit_connection(username, monitor_pid, now=None, remote_ip=None):
     policy = read_policy(username)  # Missing policy fails closed.
     now = time.time() if now is None else now
     if policy["expires_at"] is not None and now >= policy["expires_at"]:
@@ -112,8 +113,15 @@ def admit_connection(username, monitor_pid, now=None):
                     live.append(lease)
             except (FileNotFoundError, ProcessLookupError, KeyError, ValueError):
                 continue
-        current = {"pid": monitor_pid, "start_time": start_time}
-        if current in live:
+        try:
+            address = str(ipaddress.ip_address(remote_ip)) if remote_ip else None
+        except ValueError:
+            address = None
+        current = {"pid": monitor_pid, "start_time": start_time, "ip": address}
+        existing = next((lease for lease in live if lease["pid"] == monitor_pid and lease["start_time"] == start_time), None)
+        if existing is not None:
+            if address and not existing.get("ip"):
+                existing["ip"] = address
             allowed = True
         elif limit is not None and len(live) >= limit:
             allowed = False

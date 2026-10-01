@@ -1,5 +1,6 @@
 """Per-account VPN socket counters and active SSH transport leases."""
 import fcntl
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -149,20 +150,24 @@ def _remove_account_unlocked(state, username, data):
 def _live_connections(username):
     path = lease_path(username)
     if not path.exists():
-        return 0
+        return []
     with path.open(encoding="utf-8") as source:
         try:
             leases = json.load(source)
         except json.JSONDecodeError:
-            return 0
-    count = 0
+            return []
+    live = []
     for lease in leases:
         try:
             if process_start_time(lease["pid"]) == lease["start_time"]:
-                count += 1
+                try:
+                    address = str(ipaddress.ip_address(lease.get("ip"))) if lease.get("ip") else None
+                except ValueError:
+                    address = None
+                live.append(address)
         except (FileNotFoundError, ProcessLookupError, KeyError, ValueError, TypeError):
             continue
-    return count
+    return live
 
 
 def snapshot():
@@ -179,10 +184,12 @@ def snapshot():
                 previous = entry[f"last_{direction}"]
                 entry[direction] += raw - previous if raw >= previous else raw
                 entry[f"last_{direction}"] = raw
+            ips = _live_connections(username)
             result[username] = {
                 "upload_bytes": entry["up"],
                 "download_bytes": entry["down"],
-                "connections": _live_connections(username),
+                "connections": len(ips),
+                "ips": ips,
             }
         _save_state(state)
         return result

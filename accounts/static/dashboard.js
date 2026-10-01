@@ -99,16 +99,24 @@
         const usage = payload.accounts[row.dataset.accountUsername];
         const onlineCell = row.querySelector("[data-online-status]");
         const usageCell = row.querySelector("[data-usage-cell]");
+        const nameButton = row.querySelector(".account-name-button");
         if (!usage) {
           onlineCell.textContent = "—";
           usageCell.textContent = "Unavailable";
+          nameButton.disabled = true;
           return;
         }
-        const status = document.createElement("span");
-        status.className = `state ${usage.connections > 0 ? "state-active" : "state-disabled"}`;
+        const isOnline = usage.connections > 0;
+        const status = document.createElement(isOnline ? "button" : "span");
+        status.className = `state ${isOnline ? "state-active online-trigger" : "state-disabled"}`;
+        if (isOnline) {
+          status.type = "button";
+          status.dataset.sessionTrigger = "";
+        }
         status.textContent = usage.connections > 0 ? `${usage.connections} online` : "Offline";
         onlineCell.replaceChildren(status);
-        if (usage.connections > 0) onlineAccounts += 1;
+        nameButton.disabled = !isOnline;
+        if (isOnline) onlineAccounts += 1;
         const total = document.createElement("strong");
         total.className = "usage-total";
         total.textContent = usage.total;
@@ -126,4 +134,50 @@
     }
   }
   window.setInterval(refreshUsage, 15000);
+
+  const sessionsDialog = document.getElementById("sessions-dialog");
+  usagePanel.addEventListener("click", async (event) => {
+    const trigger = event.target.closest("[data-session-trigger]");
+    if (!trigger || trigger.disabled) return;
+    const row = trigger.closest("[data-account-username]");
+    if (!row) return;
+    const username = row.dataset.accountUsername;
+    const list = sessionsDialog.querySelector("[data-sessions-list]");
+    sessionsDialog.querySelector("[data-sessions-name]").textContent = username;
+    list.replaceChildren();
+    const message = document.createElement("li");
+    message.textContent = "Loading active connections…";
+    list.append(message);
+    sessionsDialog.showModal();
+    try {
+      const response = await fetch(usagePanel.dataset.usageUrl, {
+        credentials: "same-origin", headers: { Accept: "application/json" }, cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Request failed");
+      const payload = await response.json();
+      if (!payload.available) throw new Error("Usage unavailable");
+      const ips = payload.accounts?.[username]?.ips ?? [];
+      list.replaceChildren();
+      if (!ips.length) {
+        const empty = document.createElement("li");
+        empty.textContent = "No active connections now.";
+        list.append(empty);
+      } else {
+        ips.forEach((ip, index) => {
+          const item = document.createElement("li");
+          const label = document.createElement("span");
+          label.textContent = `Connection ${index + 1}`;
+          const address = document.createElement("code");
+          address.textContent = ip ?? "IP unavailable — reconnect needed";
+          item.append(label, address);
+          list.append(item);
+        });
+      }
+    } catch (_error) {
+      list.replaceChildren();
+      const error = document.createElement("li");
+      error.textContent = "Could not load active IP addresses.";
+      list.append(error);
+    }
+  });
 })();

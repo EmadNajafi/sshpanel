@@ -1,6 +1,7 @@
 """Connection admission behavior; filesystem locking runs natively on Linux."""
 
 import importlib
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -47,6 +48,22 @@ class PolicyTests(unittest.TestCase):
     def test_expired_account_is_denied(self):
         policy.write_policy("alice", 1000, 2)
         self.assertFalse(policy.admit_connection("alice", 101, now=1000))
+
+    def test_records_ip_on_live_lease_without_duplicating_connection(self):
+        policy.write_policy("alice", 2000, 2)
+        with patch.object(policy, "process_start_time", return_value="one"):
+            self.assertTrue(policy.admit_connection("alice", 101, now=1000, remote_ip="198.51.100.25"))
+            self.assertTrue(policy.admit_connection("alice", 101, now=1000, remote_ip="198.51.100.25"))
+        leases = json.loads(policy.lease_path("alice").read_text())
+        self.assertEqual(len(leases), 1)
+        self.assertEqual(leases[0]["ip"], "198.51.100.25")
+
+    def test_invalid_remote_host_does_not_block_vpn_login(self):
+        policy.write_policy("alice", 2000, 2)
+        with patch.object(policy, "process_start_time", return_value="one"):
+            self.assertTrue(policy.admit_connection("alice", 101, now=1000, remote_ip="not-an-ip"))
+        leases = json.loads(policy.lease_path("alice").read_text())
+        self.assertIsNone(leases[0]["ip"])
 
 
 if __name__ == "__main__":

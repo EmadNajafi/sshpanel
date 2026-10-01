@@ -21,7 +21,7 @@ def main():
         )
         if egress.returncode != 0:
             return 1
-        return 0 if admit_connection(username, os.getppid()) else 1
+        return 0 if admit_connection(username, os.getppid(), remote_ip=os.environ.get("PAM_RHOST")) else 1
     except (OSError, KeyError, ValueError, subprocess.TimeoutExpired):
         return 1
 

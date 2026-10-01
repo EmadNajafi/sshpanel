@@ -143,12 +143,15 @@ class AccountViewsTests(TestCase):
     @patch("accounts.views.call_helper")
     def test_dashboard_and_api_show_online_connections_and_transfer(self, helper):
         account = VpnAccount.objects.create(username="alice", created_by=self.staff)
-        helper.return_value = '{"alice": {"connections": 2, "upload_bytes": 2048, "download_bytes": 3072}}'
+        helper.return_value = '{"alice": {"connections": 2, "ips": ["198.51.100.25", "2001:db8::1"], "upload_bytes": 2048, "download_bytes": 3072}}'
         page = self.client.get(reverse("dashboard"))
         self.assertContains(page, "2 online")
+        self.assertContains(page, 'id="sessions-dialog"')
+        self.assertNotContains(page, "198.51.100.25")
         self.assertContains(page, "5.0 KiB")
         response = self.client.get(reverse("account_usage"))
         self.assertEqual(response.json()["accounts"]["alice"]["upload"], "2.0 KiB")
+        self.assertEqual(response.json()["accounts"]["alice"]["ips"], ["198.51.100.25", "2001:db8::1"])
         self.assertIn("no-store", response["Cache-Control"])
         self.client.logout()
         self.assertEqual(self.client.get(reverse("account_usage")).status_code, 302)

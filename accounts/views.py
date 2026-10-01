@@ -35,6 +35,7 @@ def get_account_usage():
         raw = json.loads(call_helper("usage-status"))
         return {username: {
             "connections": item["connections"],
+            "ips": item.get("ips", []),
             "upload": format_bytes(item["upload_bytes"]),
             "download": format_bytes(item["download_bytes"]),
             "total": format_bytes(item["upload_bytes"] + item["download_bytes"]),

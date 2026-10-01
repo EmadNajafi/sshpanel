@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}Overview · SSH VPN Panel{% endblock %}
-{% block scripts %}<script src="{% static 'dashboard.js' %}?v=5" defer></script>{% endblock %}
+{% block scripts %}<script src="{% static 'dashboard.js' %}?v=6" defer></script>{% endblock %}
 {% block content %}
 <div class="page-heading">
   <div>
@@ -52,10 +52,10 @@
         <tbody>
         {% for account in accounts %}
           <tr data-account-username="{{ account.username }}">
-            <td><strong class="account-name">{{ account.username }}</strong><small class="table-subtext">Created {{ account.created_at|date:"Y-m-d" }}</small></td>
+            <td><button class="account-name account-name-button" type="button" data-session-trigger {% if not account.usage.connections %}disabled{% endif %} aria-label="Show active IP addresses for {{ account.username }}">{{ account.username }}</button><small class="table-subtext">Created {{ account.created_at|date:"Y-m-d" }}</small></td>
             <td><div class="password-cell"><span data-password-value>••••••</span><button class="button button-small button-secondary" type="button" data-reveal-password data-password-url="{% url 'account_password' account.pk %}" aria-label="Show password for {{ account.username }}">Show</button></div></td>
             <td>{% if account.is_expired %}<span class="state state-expired">Expired</span>{% elif account.enabled %}<span class="state state-active">Active</span>{% else %}<span class="state state-disabled">Disabled</span>{% endif %}</td>
-            <td data-online-status>{% if account.usage is None %}<span class="muted">—</span>{% elif account.usage.connections %}<span class="state state-active">{{ account.usage.connections }} online</span>{% else %}<span class="state state-disabled">Offline</span>{% endif %}</td>
+            <td data-online-status>{% if account.usage is None %}<span class="muted">—</span>{% elif account.usage.connections %}<button class="state state-active online-trigger" type="button" data-session-trigger>{{ account.usage.connections }} online</button>{% else %}<span class="state state-disabled">Offline</span>{% endif %}</td>
             <td data-usage-cell>{% if account.usage is None %}<span class="muted">Unavailable</span>{% else %}<strong class="usage-total">{{ account.usage.total }}</strong><small class="table-subtext">↑ {{ account.usage.upload }} · ↓ {{ account.usage.download }}</small>{% endif %}</td>
             <td class="nowrap">{{ account.expires_at|date:"Y-m-d H:i"|default:"Unlimited" }}</td>
             <td>{{ account.max_connections|default:"Unlimited" }}</td>
@@ -74,6 +74,12 @@
     </div>
   </section>
 </div>
+
+<dialog id="sessions-dialog" class="account-dialog" aria-labelledby="sessions-dialog-title">
+  <div class="dialog-heading"><div><p class="eyebrow">LIVE CONNECTIONS</p><h2 id="sessions-dialog-title"><span data-sessions-name></span> IP addresses</h2></div><button type="button" class="dialog-close" data-close-dialog aria-label="Close">×</button></div>
+  <p class="panel-description">Addresses of currently connected SSH VPN clients.</p>
+  <ul class="sessions-list" data-sessions-list></ul>
+</dialog>
 
 <dialog id="create-account-dialog" class="account-dialog" aria-labelledby="create-dialog-title">
   <div class="dialog-heading"><div><p class="eyebrow">NEW VPN USER</p><h2 id="create-dialog-title">Create account</h2></div><button type="button" class="dialog-close" data-close-dialog aria-label="Close">×</button></div>

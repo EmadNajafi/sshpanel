@@ -134,6 +134,15 @@ th, td { padding: 15px 10px; text-align: left; vertical-align: middle; border-bo
 tbody tr:last-child td { border-bottom: 0; }
 td { color: #506078; font-size: 12px; }
 .account-name { display: block; color: #25354f; font-size: 13px; font-weight: 750; }
+.account-name-button { border: 0; padding: 0; background: transparent; text-align: left; }
+.account-name-button:not(:disabled) { color: #2866e8; text-decoration: underline; text-underline-offset: 3px; }
+.account-name-button:disabled { cursor: default; }
+.online-trigger { border: 0; }
+.online-trigger:hover { background: #d8f3e7; }
+.sessions-list { list-style: none; margin: 0; padding: 0; }
+.sessions-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid #edf1f6; }
+.sessions-list span { color: var(--muted); font-size: 12px; }
+.sessions-list code { color: var(--ink); font-size: 13px; overflow-wrap: anywhere; text-align: right; }
 .usage-total { display: block; color: #25354f; font-size: 12px; white-space: nowrap; }
 .password-cell { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
 .password-cell [data-password-value] { max-width: 175px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
