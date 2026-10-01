@@ -213,6 +213,22 @@ class AccountViewsTests(TestCase):
         self.assertEqual(format_bytes(0), "0 B")
         self.assertEqual(format_bytes(1024), "1.0 KiB")
 
+    @patch("accounts.views.get_system_metrics", return_value={})
+    @patch("accounts.views.get_account_usage", return_value={})
+    def test_dashboard_shows_remaining_days_and_keeps_exact_expiry_for_copy(self, usage, metrics):
+        future = timezone.now() + timedelta(days=2, hours=3)
+        VpnAccount.objects.create(username="future", created_by=self.staff, expires_at=future)
+        VpnAccount.objects.create(username="expired", created_by=self.staff,
+                                  expires_at=timezone.now() - timedelta(minutes=1))
+        VpnAccount.objects.create(username="unlimited", created_by=self.staff)
+        page = self.client.get(reverse("dashboard"))
+        self.assertContains(page, "Days left")
+        self.assertContains(page, "3 days")
+        self.assertContains(page, "0 days")
+        self.assertContains(page, "Unlimited")
+        self.assertContains(page, f'data-expires-at="{future.isoformat()}"')
+        self.assertNotContains(page, '<td class="nowrap" data-expiry-cell>')
+
     @patch("accounts.views.get_system_metrics")
     @patch("accounts.views.get_account_usage", return_value={})
     def test_audit_log_is_in_menu_and_not_dashboard(self, usage, metrics):

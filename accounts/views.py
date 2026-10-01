@@ -1,5 +1,6 @@
 from datetime import timedelta
 import json
+import math
 
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
@@ -50,8 +51,11 @@ def get_account_usage():
 def dashboard(request):
     accounts = list(VpnAccount.objects.select_related("created_by").order_by("username"))
     usage = get_account_usage()
+    now = timezone.now()
     for account in accounts:
         account.usage = usage.get(account.username) if usage is not None else None
+        account.days_remaining = (max(0, math.ceil((account.expires_at - now).total_seconds() / 86400))
+                                  if account.expires_at is not None else None)
     return render(request, "dashboard.html", {
         "accounts": accounts,
         "account_total": len(accounts),

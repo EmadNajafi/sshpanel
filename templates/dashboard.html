@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}Overview · SSH VPN Panel{% endblock %}
-{% block scripts %}<script src="{% static 'dashboard.js' %}?v=7" defer></script>{% endblock %}
+{% block scripts %}<script src="{% static 'dashboard.js' %}?v=8" defer></script>{% endblock %}
 {% block content %}
 <svg class="action-icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
   <symbol id="action-edit" viewBox="0 0 24 24"><path d="m4 16-.5 4.5L8 20l11-11-4-4L4 16Zm9.5-9.5 4 4M13 20h7"/></symbol>
@@ -57,16 +57,16 @@
     </div>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Account</th><th>Password</th><th>Status</th><th>Online</th><th>Data usage</th><th>Expires</th><th>Limit</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Account</th><th>Password</th><th>Status</th><th>Online</th><th>Data usage</th><th>Days left</th><th>Limit</th><th>Actions</th></tr></thead>
         <tbody>
         {% for account in accounts %}
-          <tr data-account-username="{{ account.username }}">
+          <tr data-account-username="{{ account.username }}" data-expires-at="{{ account.expires_at|date:'c' }}">
             <td><button class="account-name account-name-button" type="button" data-session-trigger {% if not account.usage.connections %}disabled{% endif %} aria-label="Show active IP addresses for {{ account.username }}">{{ account.username }}</button><small class="table-subtext">Created {{ account.created_at|date:"Y-m-d" }}</small></td>
             <td><div class="password-cell"><span data-password-value>••••••</span><button class="button button-small button-secondary" type="button" data-reveal-password data-password-url="{% url 'account_password' account.pk %}" aria-label="Show password for {{ account.username }}">Show</button></div></td>
             <td>{% if account.is_expired %}<span class="state state-expired">Expired</span>{% elif account.enabled %}<span class="state state-active">Active</span>{% else %}<span class="state state-disabled">Disabled</span>{% endif %}</td>
             <td data-online-status>{% if account.usage is None %}<span class="muted">—</span>{% elif account.usage.connections %}<button class="state state-active online-trigger" type="button" data-session-trigger>{{ account.usage.connections }} online</button>{% else %}<span class="state state-disabled">Offline</span>{% endif %}</td>
             <td data-usage-cell>{% if account.usage is None %}<span class="muted">Unavailable</span>{% else %}<strong class="usage-total">{{ account.usage.total }}</strong><small class="table-subtext">↑ {{ account.usage.upload }} · ↓ {{ account.usage.download }}</small>{% endif %}</td>
-            <td class="nowrap" data-expiry-cell>{{ account.expires_at|date:"Y-m-d H:i"|default:"Unlimited" }}</td>
+            <td class="nowrap">{% if account.days_remaining is None %}Unlimited{% else %}{{ account.days_remaining }} days{% endif %}</td>
             <td>{{ account.max_connections|default:"Unlimited" }}</td>
             <td>
               <div class="row-actions" role="group" aria-label="Actions for {{ account.username }}">

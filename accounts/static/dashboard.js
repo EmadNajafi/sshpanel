@@ -91,6 +91,18 @@
     return copied;
   }
 
+  function formatPersianExpiry(isoValue) {
+    if (!isoValue) return "نامحدود";
+    const date = new Date(isoValue);
+    if (Number.isNaN(date.getTime())) throw new Error("Expiry date is unavailable.");
+    const formatter = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+      timeZone: "Asia/Tehran", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    });
+    const parts = Object.fromEntries(formatter.formatToParts(date).map(({ type, value }) => [type, value]));
+    return `${parts.year}/${parts.month}/${parts.day} ${parts.hour}:${parts.minute} (تهران)`;
+  }
+
   document.querySelectorAll("[data-copy-account]").forEach((button) => {
     button.addEventListener("click", async () => {
       const row = button.closest("[data-account-username]");
@@ -107,7 +119,7 @@
           `SSH port: ${document.querySelector("[data-ssh-port]").dataset.sshPort}`,
           `Username: ${row.dataset.accountUsername}`,
           `Password: ${password}`,
-          `Expires: ${row.querySelector("[data-expiry-cell]").textContent.trim()}`,
+          `تاریخ انقضا (شمسی): ${formatPersianExpiry(row.dataset.expiresAt)}`,
           `Connection limit: ${button.dataset.connections || "Unlimited"}`,
         ].join("\n");
         if (await copyText(details)) {

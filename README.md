@@ -4,7 +4,7 @@ A web panel for password based OpenSSH SOCKS and local forwarding accounts on Ub
 
 ## Components
 
-- Django staff sign in, account creation and editing with active days and simultaneous VPN connection limit, quick 30/60/90-day renewal, traffic reset, disabling, enabling, password reset, deletion, and audit events. Row actions use labeled icons; the copy action includes host, SSH port, username, password, expiry, and connection limit.
+- Django staff sign in, account creation and editing with active days and simultaneous VPN connection limit, quick 30/60/90-day renewal, traffic reset, disabling, enabling, password reset, deletion, and audit events. The account list shows remaining days; row actions use labeled icons. The copy action includes host, SSH port, username, password, exact expiry in the Persian calendar and Tehran time, and connection limit.
 - Dashboard cards show server CPU, available-memory usage, and root-filesystem disk usage. They refresh every 15 seconds while the dashboard is open and are accessible only to staff.
 - The account list shows live SSH tunnel connection counts and per-account upload, download and combined traffic. Readings refresh every 15 seconds. A root-owned counter snapshot persists totals across panel restarts and server reboots.
 - PostgreSQL for metadata. New and changed VPN passwords are encrypted before storage and can be revealed by a signed-in staff administrator. Existing passwords created before this feature cannot be recovered from Linux hashes; set a new password to make them available in the list.
