@@ -95,13 +95,16 @@ chown root:sshvpn-panel /etc/sshvpn/panel.env
 chmod 0640 /etc/sshvpn/panel.env
 
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpnctl /usr/local/sbin/sshvpnctl
+install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_backup.py /usr/local/sbin/sshvpn-backup
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_policy.py /usr/local/sbin/sshvpn_policy.py
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_port.py /usr/local/sbin/sshvpn_port.py
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_usage.py /usr/local/sbin/sshvpn_usage.py
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn-authz /usr/local/sbin/sshvpn-authz
 install -d -m 0700 -o root -g root /etc/sshvpn/accounts
+install -d -m 0750 -o root -g sshvpn-panel /var/lib/sshvpn-panel/backups
+install -d -m 0700 -o sshvpn-panel -g sshvpn-panel /var/lib/sshvpn-panel/restore-uploads
 install -m 0755 -o root -g root "$repo_dir/deploy/install-pam-hook.sh" /usr/local/sbin/sshvpn-install-pam-hook
-printf '%s\n' 'sshvpn-panel ALL=(root) NOPASSWD: /usr/local/sbin/sshvpnctl' > /etc/sudoers.d/sshvpn-panel
+printf '%s\n' 'sshvpn-panel ALL=(root) NOPASSWD: /usr/local/sbin/sshvpnctl, /usr/local/sbin/sshvpn-backup' > /etc/sudoers.d/sshvpn-panel
 chmod 0440 /etc/sudoers.d/sshvpn-panel
 visudo -cf /etc/sudoers.d/sshvpn-panel
 
@@ -129,6 +132,8 @@ cat > /etc/nginx/sites-available/sshvpn-panel <<EOF
 server {
     listen $nginx_listen;
     server_name $domain;
+    client_max_body_size 1100m;
+    proxy_read_timeout 420s;
     location /static/ { alias /opt/ssh-vpn-panel/staticfiles/; }
     location = /login/ {
         limit_req zone=sshvpn_login burst=20 nodelay;

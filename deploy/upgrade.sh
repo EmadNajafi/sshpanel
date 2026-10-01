@@ -61,11 +61,23 @@ source /etc/sshvpn/panel.env
 set +a
 
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpnctl /usr/local/sbin/sshvpnctl
+install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_backup.py /usr/local/sbin/sshvpn-backup
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_policy.py /usr/local/sbin/sshvpn_policy.py
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_port.py /usr/local/sbin/sshvpn_port.py
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_usage.py /usr/local/sbin/sshvpn_usage.py
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn-authz /usr/local/sbin/sshvpn-authz
 install -d -m 0700 -o root -g root /etc/sshvpn/accounts
+install -d -m 0750 -o root -g sshvpn-panel /var/lib/sshvpn-panel/backups
+install -d -m 0700 -o sshvpn-panel -g sshvpn-panel /var/lib/sshvpn-panel/restore-uploads
+printf '%s\n' 'sshvpn-panel ALL=(root) NOPASSWD: /usr/local/sbin/sshvpnctl, /usr/local/sbin/sshvpn-backup' > /etc/sudoers.d/sshvpn-panel
+chmod 0440 /etc/sudoers.d/sshvpn-panel
+visudo -cf /etc/sudoers.d/sshvpn-panel
+if ! grep -q 'client_max_body_size' /etc/nginx/sites-available/sshvpn-panel; then
+  sed -i '/^[[:space:]]*server[[:space:]]*{/a\    client_max_body_size 1100m;' /etc/nginx/sites-available/sshvpn-panel
+fi
+if ! grep -q 'proxy_read_timeout 420s' /etc/nginx/sites-available/sshvpn-panel; then
+  sed -i '/^[[:space:]]*server[[:space:]]*{/a\    proxy_read_timeout 420s;' /etc/nginx/sites-available/sshvpn-panel
+fi
 install -m 0755 -o root -g root "$repo_dir/deploy/install-pam-hook.sh" /usr/local/sbin/sshvpn-install-pam-hook
 install -m 0755 -o root -g root "$repo_dir/deploy/configure-main-ssh.sh" /usr/local/sbin/sshvpn-configure-main-ssh
 install -m 0644 "$repo_dir/deploy/sshvpn-egress.service" /etc/systemd/system/sshvpn-egress.service
@@ -76,6 +88,7 @@ install -m 0644 "$repo_dir/deploy/sshvpn-usage.timer" /etc/systemd/system/sshvpn
 install -m 0644 "$repo_dir/deploy/sshvpn-panel.service" /etc/systemd/system/sshvpn-panel.service
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/deploy/menu.sh /usr/local/bin/sshvpn-menu
 nginx -t
+systemctl reload nginx
 /usr/sbin/sshd -t
 cd /opt/ssh-vpn-panel
 runuser -u sshvpn-panel -- .venv/bin/python manage.py check

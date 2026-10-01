@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}Restore completed · SSH VPN Panel{% endblock %}
+{% block content %}
+<section class="panel restore-complete">
+  <p class="eyebrow">RECOVERY COMPLETE</p>
+  <h1>Backup restored</h1>
+  <p>{{ restored_accounts }} VPN accounts and the complete panel database were restored. The panel service will restart in a few seconds. Sign in with an administrator account from the backup.</p>
+  <a class="button button-primary" href="{% url 'login' %}">Go to sign in</a>
+</section>
+{% endblock %}

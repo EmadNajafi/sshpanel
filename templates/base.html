@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#101a2b">
   <title>{% block title %}SSH VPN Panel{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'panel.css' %}?v=7">
+  <link rel="stylesheet" href="{% static 'panel.css' %}?v=8">
   <script src="{% static 'panel.js' %}?v=2" defer></script>
   {% block scripts %}{% endblock %}
 </head>
@@ -34,7 +34,7 @@
       <nav class="drawer-links" aria-label="Panel navigation">
         <a class="drawer-link {% if request.resolver_match.url_name == 'dashboard' %}is-active{% endif %}" href="{% url 'dashboard' %}" {% if request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}><span class="drawer-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><span><strong>Dashboard</strong><small>Users and server overview</small></span></a>
         <a class="drawer-link {% if request.resolver_match.url_name == 'audit_log' %}is-active{% endif %}" href="{% url 'audit_log' %}" {% if request.resolver_match.url_name == 'audit_log' %}aria-current="page"{% endif %}><span class="drawer-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 4h10a2 2 0 0 1 2 2v14H8a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4Z"/><path d="M4 16a4 4 0 0 1 4-4h12M9 8h7"/></svg></span><span><strong>Audit log</strong><small>Account activity history</small></span></a>
-        <a class="drawer-link {% if request.resolver_match.url_name == 'panel_settings' %}is-active{% endif %}" href="{% url 'panel_settings' %}" {% if request.resolver_match.url_name == 'panel_settings' %}aria-current="page"{% endif %}><span class="drawer-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="white"/><circle cx="15" cy="17" r="2" fill="white"/></svg></span><span><strong>Settings</strong><small>SSH port and admin password</small></span></a>
+        <a class="drawer-link {% if request.resolver_match.url_name == 'panel_settings' or request.resolver_match.url_name == 'backup_settings' %}is-active{% endif %}" href="{% url 'panel_settings' %}" {% if request.resolver_match.url_name == 'panel_settings' or request.resolver_match.url_name == 'backup_settings' %}aria-current="page"{% endif %}><span class="drawer-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="white"/><circle cx="15" cy="17" r="2" fill="white"/></svg></span><span><strong>Settings</strong><small>Access, port, and backups</small></span></a>
       </nav>
       <div class="drawer-footer"><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="drawer-signout" type="submit"><span>Sign out</span><span aria-hidden="true">↗</span></button></form><small>SSH VPN control panel</small></div>
     </div>

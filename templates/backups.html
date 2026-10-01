@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}Backups · SSH VPN Panel{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><p class="eyebrow">SETTINGS / DATA & RECOVERY</p><h1>Backup and restore</h1><p class="page-intro">Move your panel and VPN accounts to another Ubuntu 24.04 server.</p></div>
+  <a class="button button-secondary" href="{% url 'panel_settings' %}">← Settings</a>
+</div>
+<div class="settings-grid">
+  <section class="panel settings-panel">
+    <div class="panel-heading"><div><p class="eyebrow">CREATE</p><h2>New encrypted backup</h2></div></div>
+    <p class="panel-description">Includes the complete PostgreSQL database, administrators, VPN usernames and password hashes, recoverable VPN passwords, account limits, audit history, and saved traffic totals. Server-specific IP, TLS, and SSH port settings are saved in the file but are not applied on restore.</p>
+    <form method="post" action="{% url 'create_backup' %}" class="account-form">{% csrf_token %}
+      <p><label for="backup-passphrase">Backup passphrase</label><input id="backup-passphrase" name="passphrase" type="password" minlength="16" autocomplete="new-password" required><span class="helptext">At least 16 characters. Store this separately; it cannot be recovered.</span></p>
+      <p><label for="backup-passphrase-confirm">Confirm passphrase</label><input id="backup-passphrase-confirm" name="passphrase_confirm" type="password" minlength="16" autocomplete="new-password" required></p>
+      <button class="button button-primary" type="submit">Create backup</button>
+    </form>
+  </section>
+  <section class="panel settings-panel">
+    <div class="panel-heading"><div><p class="eyebrow">RESTORE</p><h2>Restore from file</h2></div></div>
+    <p class="panel-description">Install this panel on the destination server first, then upload the backup here. Restoring replaces its panel database and administrator accounts with those in the file. The destination web address, TLS mode, database connection, and SSH port stay local to that server. Sign in afterward with an administrator from the backup.</p>
+    <form method="post" action="{% url 'restore_backup' %}" enctype="multipart/form-data" class="account-form" onsubmit="return confirm('Restore the selected backup? Current panel data and administrator accounts will be replaced. A server-side recovery copy will be created first.')">{% csrf_token %}
+      <p><label for="restore-file">Encrypted backup file</label><input id="restore-file" name="backup_file" type="file" accept=".svpb" required></p>
+      <p><label for="restore-passphrase">Backup passphrase</label><input id="restore-passphrase" name="passphrase" type="password" autocomplete="off" required></p>
+      <p class="restore-confirm"><label><input type="checkbox" name="confirm_replace" value="yes" required> I understand the destination panel data will be replaced.</label></p>
+      <button class="button button-secondary" type="submit">Restore backup</button>
+    </form>
+  </section>
+</div>
+<section class="panel backup-list-panel">
+  <div class="panel-heading"><div><p class="eyebrow">SAVED ON THIS SERVER</p><h2>Available backups</h2></div></div>
+  {% if backups %}
+    <div class="table-scroll"><table><thead><tr><th>File</th><th>Created</th><th>Size</th><th></th></tr></thead><tbody>
+    {% for backup in backups %}<tr><td><strong class="account-name">{{ backup.name }}</strong></td><td class="nowrap">{{ backup.created|date:"Y-m-d H:i" }} UTC</td><td>{{ backup.size|filesizeformat }}</td><td><a class="button button-secondary" href="{% url 'download_backup' backup.name %}">Download</a></td></tr>{% endfor %}
+    </tbody></table></div>
+  {% else %}<p class="panel-description">No backups have been created on this server yet.</p>{% endif %}
+</section>
+{% endblock %}

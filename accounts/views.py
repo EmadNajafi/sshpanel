@@ -7,13 +7,14 @@ from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.decorators import user_passes_test
 from django.conf import settings
 from django.db import IntegrityError
-from django.http import JsonResponse
+from django.http import FileResponse, Http404, JsonResponse
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
 from django.utils import timezone
 
 from .forms import CreateAccountForm, EditAccountForm, PasswordForm
+from .backups import BACKUP_DIR, BACKUP_NAME, UPLOAD_DIR, BackupError, call_backup, list_backups, save_upload
 from .models import AuditEvent, VpnAccount
 from .services import ProvisionError, call_helper, get_ssh_port
 from .secrets import decrypt_password, encrypt_password
@@ -246,6 +247,76 @@ def panel_settings(request):
         "ssh_port": get_ssh_port(),
         "pending_port": pending_port,
     })
+
+
+@staff_required
+@require_GET
+def backup_settings(request):
+    try:
+        backups = list_backups()
+    except OSError:
+        backups = []
+        messages.error(request, "Backups could not be listed.")
+    return render(request, "backups.html", {"backups": backups})
+
+
+@staff_required
+@require_POST
+def create_backup(request):
+    passphrase = request.POST.get("passphrase", "")
+    confirmation = request.POST.get("passphrase_confirm", "")
+    if passphrase != confirmation:
+        messages.error(request, "Backup passphrases do not match.")
+    else:
+        try:
+            result = call_backup("create", passphrase=passphrase)
+        except BackupError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, f"Backup created: {result['name']}. Download it and store the passphrase separately.")
+    return redirect("backup_settings")
+
+
+@staff_required
+@require_GET
+def download_backup(request, name):
+    if not BACKUP_NAME.fullmatch(name):
+        raise Http404
+    path = BACKUP_DIR / name
+    if not path.is_file() or path.is_symlink():
+        raise Http404
+    try:
+        response = FileResponse(path.open("rb"), as_attachment=True, filename=name, content_type="application/octet-stream")
+    except OSError as exc:
+        raise Http404 from exc
+    response["Cache-Control"] = "no-store, private"
+    return response
+
+
+@staff_required
+@require_POST
+def restore_backup(request):
+    upload = request.FILES.get("backup_file")
+    passphrase = request.POST.get("passphrase", "")
+    if not upload or request.POST.get("confirm_replace") != "yes":
+        messages.error(request, "Choose a backup file and confirm the restore.")
+        return redirect("backup_settings")
+    name = None
+    try:
+        name = save_upload(upload)
+        result = call_backup("restore", name=name, passphrase=passphrase)
+    except (BackupError, OSError) as exc:
+        messages.error(request, str(exc))
+        return redirect("backup_settings")
+    finally:
+        if name:
+            try:
+                (UPLOAD_DIR / name).unlink(missing_ok=True)
+            except OSError:
+                pass
+    # The restored administrator accounts and signing key take effect after
+    # the background service restart scheduled by the privileged helper.
+    return render(request, "restore_complete.html", {"restored_accounts": result["accounts"]})
 
 
 @staff_required

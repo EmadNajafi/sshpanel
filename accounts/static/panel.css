@@ -193,6 +193,11 @@ td { color: #506078; font-size: 12px; }
 .audit-count { color: #71819b; font-size: 12px; font-weight: 700; }
 .audit-pagination { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding-top: 20px; border-top: 1px solid #edf1f6; }
 .audit-pagination > span { color: #71819b; font-size: 12px; }
+.backup-list-panel { margin-top: 20px; }
+.restore-confirm label { display: flex; align-items: flex-start; gap: 9px; font-weight: 600; color: var(--muted); }
+.restore-confirm input { width: auto; min-height: 0; margin-top: 4px; }
+.restore-complete { max-width: 620px; margin: 30px auto; }
+.restore-complete p:not(.eyebrow) { color: var(--muted); }
 
 .notice { padding: 12px 15px; margin-bottom: 18px; border: 1px solid #caecdb; border-radius: 11px; background: #edfaf3; color: #1e7650; font-size: 13px; }
 .notice.error { border-color: #f3d3d8; background: #fff0f2; color: #a83b4a; }

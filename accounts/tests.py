@@ -1,11 +1,14 @@
 from unittest.mock import patch
 from io import StringIO
 from datetime import timedelta
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import Client, TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.utils import timezone
 
@@ -189,6 +192,45 @@ class AccountViewsTests(TestCase):
         self.assertEqual(len(first.context["page"]), 25)
         self.assertEqual(len(second.context["page"]), 1)
         self.assertContains(first, 'href="?page=2"')
+
+    @patch("accounts.views.list_backups", return_value=[])
+    def test_backup_settings_requires_staff(self, listing):
+        self.assertContains(self.client.get(reverse("backup_settings")), "Backup and restore")
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("backup_settings")).status_code, 302)
+        self.assertEqual(self.client.post(reverse("create_backup"), {"passphrase": "A" * 16}).status_code, 302)
+        listing.assert_called_once()
+
+    @patch("accounts.views.call_backup", return_value={"name": "sshpanel-20261001T000000Z-12345678.svpb"})
+    def test_create_backup_needs_matching_passphrase(self, helper):
+        self.client.post(reverse("create_backup"), {"passphrase": "A" * 16, "passphrase_confirm": "B" * 16})
+        helper.assert_not_called()
+        self.client.post(reverse("create_backup"), {"passphrase": "A" * 16, "passphrase_confirm": "A" * 16})
+        helper.assert_called_once_with("create", passphrase="A" * 16)
+
+    def test_backup_download_requires_staff_and_uses_attachment(self):
+        name = "sshpanel-20261001T000000Z-12345678.svpb"
+        with TemporaryDirectory() as directory, patch("accounts.views.BACKUP_DIR", Path(directory)):
+            (Path(directory) / name).write_bytes(b"encrypted test data")
+            response = self.client.get(reverse("download_backup", args=[name]))
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("attachment", response["Content-Disposition"])
+            self.assertIn("no-store", response["Cache-Control"])
+            self.assertEqual(b"".join(response.streaming_content), b"encrypted test data")
+            self.client.logout()
+            self.assertEqual(self.client.get(reverse("download_backup", args=[name])).status_code, 302)
+
+    @patch("accounts.views.call_backup", return_value={"accounts": 2})
+    def test_restore_requires_confirmation_and_calls_service(self, helper):
+        with TemporaryDirectory() as directory, patch("accounts.backups.UPLOAD_DIR", Path(directory)), patch("accounts.views.UPLOAD_DIR", Path(directory)):
+            data = {"backup_file": SimpleUploadedFile("backup.svpb", b"encrypted"), "passphrase": "A" * 16}
+            self.client.post(reverse("restore_backup"), data)
+            helper.assert_not_called()
+            data["backup_file"] = SimpleUploadedFile("backup.svpb", b"encrypted")
+            data["confirm_replace"] = "yes"
+            response = self.client.post(reverse("restore_backup"), data)
+            self.assertContains(response, "2 VPN accounts")
+            self.assertEqual(helper.call_args.args, ("restore",))
 
     @patch("accounts.views.call_helper")
     def test_cross_site_post_is_rejected(self, helper):
