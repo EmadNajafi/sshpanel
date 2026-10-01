@@ -8,6 +8,7 @@ DEBUG = False
 TLS_ENABLED = os.environ.get("PANEL_TLS_ENABLED", "0") == "1"
 ALLOWED_HOSTS = [os.environ["PANEL_DOMAIN"]]
 HTTP_PORT = os.environ.get("PANEL_HTTP_PORT", "80")
+VPN_SSH_PORT = int(os.environ.get("VPN_SSH_PORT", "22"))
 if os.environ["PANEL_DOMAIN"] == "localhost":
     ALLOWED_HOSTS.append("127.0.0.1")
 if TLS_ENABLED:

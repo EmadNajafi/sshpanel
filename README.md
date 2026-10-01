@@ -7,18 +7,18 @@ A web panel for password based OpenSSH SOCKS and local forwarding accounts on Ub
 - Django staff sign in, account creation with active days and simultaneous VPN connection limit, disabling, enabling, password reset, deletion, and audit events.
 - PostgreSQL for metadata. VPN passwords are sent to the Linux account helper and are not stored in the database.
 - A root owned helper with a fixed set of allowed operations; the web service can run only that helper through sudo.
-- Nginx and Gunicorn for the panel, a separate VPN `sshd` on port 2222, and a `menu` command for administration and later SSL issuance.
+- Nginx and Gunicorn for the panel, VPN accounts on the server's existing SSH port, and a `menu` command for administration and later SSL issuance.
 - An nftables output policy for VPN forwarding sockets that blocks this host, loopback, private, link local, and other nonpublic destination ranges. Ubuntu's local DNS stub is allowed on port 53.
 
 ## Security model
 
-VPN users belong to `sshvpn`. The normal administrator SSH daemon denies that group. The VPN daemon permits password authentication and local forwarding, while `MaxSessions 0` prevents shell, command, and SFTP sessions. Clients must use a forwarding only connection, such as `ssh -N -D 1080 -p 2222 vpn_alice@server.example.com`.
+VPN users belong to `sshvpn`. A `Match Group sshvpn` block at the end of the main SSH configuration permits password authentication and local forwarding for that group, while `MaxSessions 0` prevents shell, command, and SFTP sessions. Administrator SSH accounts keep their existing authentication and port. Clients must use a forwarding only connection, such as `ssh -N -D 1080 -p YOUR_EXISTING_SSH_PORT vpn_alice@server.example.com`. On the current test VPS that port is 5656.
 
 At account creation, enter the Linux login name, VPN password, number of active days, and maximum simultaneous SSH connections. The expiration clock starts when the account is created. A PAM account hook denies new VPN logins after expiration or when the connection limit is reached. A systemd timer runs every minute to lock expired Linux accounts and disconnect their existing tunnels. The limit counts SSH transport connections, not people or individual SOCKS requests; someone sharing credentials can open many SOCKS requests through one connection. VPN passwords may be shorter than 12 characters, including one character. Empty passwords, line breaks and NUL are rejected, as are duplicate or invalid Linux login names. The separate web administrator password still requires at least 12 characters.
 
 The PAM hook is added only once to `/etc/pam.d/sshd`, before the normal account rules, and bypasses Linux users outside the `sshvpn` group. Its previous file is saved under `/var/backups/sshvpn-panel`. Earlier VPN accounts receive an unlimited policy on upgrade; new accounts receive the selected limits. The hook and the timer must both be working for the limits to be enforced.
 
-The VPN daemon initially listens on `127.0.0.1:2222`. After testing isolation on a new server, `sudo menu vpn-public` changes it to `0.0.0.0:2222`; `sudo menu vpn-local` restores the loopback listener. The egress policy is required by the VPN daemon's systemd unit. Review any existing firewall and cloud network rules before opening the port. On servers with public address translation, test that forwarding cannot reach the server through its external address.
+The installer keeps the SSH port already configured on the server; it does not open another listener. The egress policy blocks VPN forwarding to this host and private networks. Review existing firewall and cloud network rules for the SSH port. On servers with public address translation, test that forwarding cannot reach the server through its external address. The managed SSH block is appended to `/etc/ssh/sshd_config`; keep it at the end when editing SSH settings later. The installer and upgrade back up SSH configuration before changing it and validate it before reloading the service.
 
 ## Install: HTTP first
 
@@ -30,7 +30,7 @@ To make a previously loopback-only HTTP panel reachable at the server's public I
 2. Clone the repository and run `sudo bash deploy/install.sh` from its root. You can pass a domain or IPv4 address as the first argument to skip the host prompt.
 3. The **first interactive prompts** ask for the web administrator username and password, including password confirmation. The password input is hidden, is sent to Django through stdin, and is stored only as a hash.
 4. Enter the domain or IPv4 address for the panel if prompted. The installer starts the panel on **HTTP port 80** and does not request a certificate.
-5. Test VPN forwarding and denied shell/SFTP/internal destinations before `sudo menu vpn-public`.
+5. Test VPN forwarding and denied shell/SFTP/internal destinations on the server's existing SSH port.
 
 For example, with an IPv4 address:
 
@@ -54,10 +54,10 @@ ssh -N -L 127.0.0.1:8080:127.0.0.1:8080 root@SERVER_IP
 
 Open `http://localhost:8080/login/` on the computer running the tunnel. The installer asks for and creates the administrator before it starts the web service. When you are ready to use a domain, point its DNS record to the server, make ports 80 and 443 reachable, and run `sudo menu ssl panel.example.com admin@example.com`. This switches the panel from the local test listener to HTTPS. A failed certificate request restores the local Nginx settings. Any preexisting Nginx sites remain active.
 
-`sudo menu` opens an interactive list. Direct commands include `ssl`, `renew`, `status`, `restart`, `logs`, `backup`, `admin`, `admin-password USERNAME`, `vpn-public`, and `vpn-local`.
+`sudo menu` opens an interactive list. Direct commands include `ssl`, `renew`, `status`, `restart`, `logs`, `backup`, `admin`, and `admin-password USERNAME`.
 
 ## Verification
 
-On the earlier test VPS (Ubuntu 24.04), installation and migrations completed; all six services were active. A real password authenticated VPN account reached a public web destination through SOCKS but could not reach the server's loopback SSH port, run a shell command, or authenticate to the administrator SSH service. The web operations create, disable, enable, reset password, and delete passed against PostgreSQL and Linux accounts. The current HTTP-first installer has not been run on that VPS.
+On the test VPS (Ubuntu 24.04), the shared-port configuration was tested on the existing SSH port 5656 with a disposable password account. Password authentication and public TCP forwarding succeeded; shell sessions, forwarding to the server's loopback SSH port, and a second concurrent login at a limit of one were denied. The disposable account was deleted afterward. A new administrator SSH connection still succeeded, and the former port 2222 listener was stopped. The web operations create, disable, enable, reset password, and delete passed against PostgreSQL and Linux accounts. The current HTTP-first installer has not been run from scratch on that VPS.
 
 Each new server needs its own verification, particularly if it uses public address translation or an existing firewall. The installer does not automatically expose the web panel in local test mode.

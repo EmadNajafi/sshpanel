@@ -39,6 +39,26 @@ def set_password(username, password):
     run("/usr/sbin/usermod", "--password", result.stdout.strip(), username)
 
 
+def verify_ssh_policy(username):
+    result = subprocess.run(
+        ["/usr/sbin/sshd", "-T", "-C", f"user={username},host=localhost,addr=127.0.0.1"],
+        text=True, capture_output=True, timeout=15,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("Could not verify the main SSH configuration.")
+    lines = set(result.stdout.splitlines())
+    required = {
+        "maxsessions 0", "allowtcpforwarding local", "permittty no",
+        "forcecommand /usr/sbin/nologin", "passwordauthentication yes",
+        "pubkeyauthentication no",
+    }
+    if not required.issubset(lines) or any(
+        line.startswith("denygroups ") and GROUP in line.split()[1:]
+        for line in lines
+    ):
+        raise RuntimeError("VPN account restrictions are not active on the main SSH port.")
+
+
 def managed_user(username, group_id):
     try:
         user = pwd.getpwnam(username)
@@ -81,10 +101,17 @@ def sweep_expired_accounts():
             run("/usr/bin/pkill", "-KILL", "-u", username, ok=(0, 1))
 
 
+def disconnect_all_accounts():
+    group_id = grp.getgrnam(GROUP).gr_gid
+    for account in pwd.getpwall():
+        if account.pw_gid == group_id:
+            run("/usr/bin/pkill", "-KILL", "-u", account.pw_name, ok=(0, 1))
+
+
 def main():
     if os.geteuid() != 0:
         return fail("Root privileges are required.")
-    if len(sys.argv) != 2 or sys.argv[1] not in ALLOWED | {"seed-legacy", "sweep"}:
+    if len(sys.argv) != 2 or sys.argv[1] not in ALLOWED | {"seed-legacy", "sweep", "disconnect-all"}:
         return fail("Invalid action.")
     try:
         if sys.argv[1] == "seed-legacy":
@@ -92,6 +119,9 @@ def main():
             return 0
         if sys.argv[1] == "sweep":
             sweep_expired_accounts()
+            return 0
+        if sys.argv[1] == "disconnect-all":
+            disconnect_all_accounts()
             return 0
         body = sys.stdin.read(4097)
         if len(body) > 4096:
@@ -121,6 +151,7 @@ def main():
                 raise ValueError("Account already exists.")
             run("/usr/sbin/useradd", "--no-create-home", "--home-dir", "/var/empty", "--shell", "/usr/sbin/nologin", "--gid", GROUP, username)
             try:
+                verify_ssh_policy(username)
                 set_password(username, password)
                 write_policy(username, expires_at, max_connections)
             except Exception:

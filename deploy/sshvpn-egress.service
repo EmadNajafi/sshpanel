@@ -8,6 +8,7 @@ Type=oneshot
 RemainAfterExit=yes
 ExecStartPre=-/usr/sbin/nft delete table inet sshvpn_egress
 ExecStart=/usr/sbin/nft -f /etc/sshvpn/egress.nft
+ExecStop=/usr/local/sbin/sshvpnctl disconnect-all
 ExecStop=/usr/sbin/nft delete table inet sshvpn_egress
 
 [Install]

@@ -74,6 +74,7 @@ python3 -m venv /opt/ssh-vpn-panel/.venv
 
 db_password="$(openssl rand -hex 32)"
 secret_key="$(openssl rand -hex 48)"
+main_ssh_port="$(/usr/sbin/sshd -T | awk '$1 == "port" {print $2; exit}')"
 runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "CREATE ROLE sshvpn LOGIN PASSWORD '$db_password'"
 runuser -u postgres -- createdb -O sshvpn sshvpn
 install -d -m 0750 -o root -g sshvpn-panel /etc/sshvpn
@@ -83,6 +84,7 @@ PANEL_DOMAIN=$domain
 PANEL_EMAIL=$email
 PANEL_TLS_ENABLED=0
 PANEL_HTTP_PORT=$([[ $local_test -eq 1 ]] && echo 8080 || echo 80)
+VPN_SSH_PORT=$main_ssh_port
 DB_NAME=sshvpn
 DB_USER=sshvpn
 DB_PASSWORD=$db_password
@@ -101,30 +103,14 @@ printf '%s\n' 'sshvpn-panel ALL=(root) NOPASSWD: /usr/local/sbin/sshvpnctl' > /e
 chmod 0440 /etc/sudoers.d/sshvpn-panel
 visudo -cf /etc/sudoers.d/sshvpn-panel
 
-install -m 0644 "$repo_dir/deploy/sshvpn_sshd_config" /etc/ssh/sshvpn_sshd_config
 install -m 0644 "$repo_dir/deploy/sshvpn-egress.nft" /etc/sshvpn/egress.nft
 /usr/sbin/nft -c -f /etc/sshvpn/egress.nft
-printf '%s\n' 'DenyGroups sshvpn' > /etc/ssh/sshd_config.d/05-sshvpn-deny.conf
-chmod 0644 /etc/ssh/sshd_config.d/05-sshvpn-deny.conf
 /usr/sbin/sshd -t
-/usr/sbin/sshd -t -f /etc/ssh/sshvpn_sshd_config
-main_ssh_policy="$(/usr/sbin/sshd -T)"
-vpn_ssh_policy="$(/usr/sbin/sshd -T -f /etc/ssh/sshvpn_sshd_config)"
-if ! grep -Eq '^denygroups (.* )?sshvpn( |$)' <<< "$main_ssh_policy" || \
-   ! grep -Fxq 'allowgroups sshvpn' <<< "$vpn_ssh_policy" || \
-   ! grep -Fxq 'maxsessions 0' <<< "$vpn_ssh_policy" || \
-   ! grep -Fxq 'allowtcpforwarding local' <<< "$vpn_ssh_policy" || \
-   ! grep -Fxq 'permittty no' <<< "$vpn_ssh_policy" || \
-   ! grep -Fxq 'pubkeyauthentication no' <<< "$vpn_ssh_policy" || \
-   ! grep -Fxq 'passwordauthentication yes' <<< "$vpn_ssh_policy"; then
-  echo "SSH restrictions are not effective; refusing to start VPN services." >&2
-  exit 1
-fi
-install -m 0644 "$repo_dir/deploy/sshvpn-sshd.service" /etc/systemd/system/sshvpn-sshd.service
 install -m 0644 "$repo_dir/deploy/sshvpn-egress.service" /etc/systemd/system/sshvpn-egress.service
 install -m 0644 "$repo_dir/deploy/sshvpn-panel.service" /etc/systemd/system/sshvpn-panel.service
 install -m 0644 "$repo_dir/deploy/sshvpn-policy.service" /etc/systemd/system/sshvpn-policy.service
 install -m 0644 "$repo_dir/deploy/sshvpn-policy.timer" /etc/systemd/system/sshvpn-policy.timer
+install -m 0755 -o root -g root "$repo_dir/deploy/configure-main-ssh.sh" /usr/local/sbin/sshvpn-configure-main-ssh
 install -m 0755 -o root -g root "$repo_dir/deploy/menu.sh" /usr/local/bin/sshvpn-menu
 if [[ ! -e /usr/local/bin/menu ]]; then
   ln -s /usr/local/bin/sshvpn-menu /usr/local/bin/menu
@@ -170,13 +156,14 @@ unset admin_password
 
 sshvpn-install-pam-hook
 systemctl daemon-reload
-systemctl enable --now postgresql nginx sshvpn-panel sshvpn-egress sshvpn-sshd sshvpn-policy.timer
+systemctl enable --now sshvpn-egress
+sshvpn-configure-main-ssh
+systemctl enable --now postgresql nginx sshvpn-panel sshvpn-policy.timer
 systemctl reload nginx
-systemctl reload ssh
 if [[ $local_test -eq 1 ]]; then
   echo "Panel HTTP: http://localhost:8080/ through an administrator SSH tunnel."
 else
   echo "Panel HTTP: http://$domain/"
 fi
 echo "Optional SSL later: sudo menu ssl panel.example.com admin@example.com"
-echo "VPN SSH is bound to 127.0.0.1:2222 until egress isolation is tested. Keep your existing admin SSH port open."
+echo "VPN accounts use the main SSH port shown by: sudo sshd -T | grep '^port '"

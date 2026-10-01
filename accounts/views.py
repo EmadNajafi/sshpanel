@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
+from django.conf import settings
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -22,6 +23,7 @@ def dashboard(request):
         "events": AuditEvent.objects.select_related("actor")[:20],
         "create_form": CreateAccountForm(),
         "password_form": PasswordForm(),
+        "vpn_ssh_port": settings.VPN_SSH_PORT,
     })
 
 

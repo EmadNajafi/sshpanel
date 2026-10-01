@@ -12,22 +12,10 @@ if [[ "$repo_dir" == /opt/ssh-vpn-panel ]]; then
   echo "Run this upgrade from a separate Git checkout, not the live installation." >&2; exit 1
 fi
 if [[ ! -f /opt/ssh-vpn-panel/manage.py || ! -x /opt/ssh-vpn-panel/.venv/bin/python || \
-      ! -f /etc/sshvpn/panel.env || ! -f /etc/nginx/sites-available/sshvpn-panel || \
-      ! -f /etc/ssh/sshvpn_sshd_config ]]; then
+      ! -f /etc/sshvpn/panel.env || ! -f /etc/nginx/sites-available/sshvpn-panel ]]; then
   echo "A complete existing SSH VPN panel installation was not found; refusing to change it." >&2; exit 1
 fi
 /usr/sbin/sshd -t
-/usr/sbin/sshd -t -f /etc/ssh/sshvpn_sshd_config
-main_ssh_policy="$(/usr/sbin/sshd -T)"
-vpn_ssh_policy="$(/usr/sbin/sshd -T -f /etc/ssh/sshvpn_sshd_config)"
-if ! grep -Eq '^denygroups (.* )?sshvpn( |$)' <<< "$main_ssh_policy" || \
-   ! grep -Fxq 'allowgroups sshvpn' <<< "$vpn_ssh_policy" || \
-   ! grep -Fxq 'maxsessions 0' <<< "$vpn_ssh_policy" || \
-   ! grep -Fxq 'allowtcpforwarding local' <<< "$vpn_ssh_policy" || \
-   ! grep -Fxq 'permittty no' <<< "$vpn_ssh_policy"; then
-  echo "SSH VPN restrictions are not effective; refusing to upgrade." >&2
-  exit 1
-fi
 
 # Preserve the live configuration, application code, and database before copying files.
 set -a
@@ -37,7 +25,9 @@ backup_dir="/var/backups/sshvpn-panel/upgrade-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 install -d -m 0700 -o root -g root "$backup_dir"
 cp -a /etc/sshvpn/panel.env "$backup_dir/panel.env"
 cp -a /etc/nginx/sites-available/sshvpn-panel "$backup_dir/nginx-panel"
-cp -a /etc/ssh/sshvpn_sshd_config "$backup_dir/sshvpn_sshd_config"
+if [[ -f /etc/ssh/sshvpn_sshd_config ]]; then
+  cp -a /etc/ssh/sshvpn_sshd_config "$backup_dir/sshvpn_sshd_config"
+fi
 cp -a /etc/pam.d/sshd "$backup_dir/pam-sshd"
 cp -a /etc/systemd/system/sshvpn-panel.service "$backup_dir/sshvpn-panel.service"
 tar -C /opt --exclude='ssh-vpn-panel/.venv' --exclude='ssh-vpn-panel/staticfiles' \
@@ -58,6 +48,12 @@ if ! grep -q '^PANEL_HTTP_PORT=' /etc/sshvpn/panel.env; then
     printf '%s\n' 'PANEL_HTTP_PORT=80' >> /etc/sshvpn/panel.env
   fi
 fi
+main_ssh_port="$(/usr/sbin/sshd -T | awk '$1 == "port" {print $2; exit}')"
+if grep -q '^VPN_SSH_PORT=' /etc/sshvpn/panel.env; then
+  sed -i -E "s/^VPN_SSH_PORT=.*/VPN_SSH_PORT=$main_ssh_port/" /etc/sshvpn/panel.env
+else
+  printf 'VPN_SSH_PORT=%s\n' "$main_ssh_port" >> /etc/sshvpn/panel.env
+fi
 chown root:sshvpn-panel /etc/sshvpn/panel.env
 chmod 0640 /etc/sshvpn/panel.env
 set -a
@@ -69,13 +65,14 @@ install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_policy.py /usr/
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn-authz /usr/local/sbin/sshvpn-authz
 install -d -m 0700 -o root -g root /etc/sshvpn/accounts
 install -m 0755 -o root -g root "$repo_dir/deploy/install-pam-hook.sh" /usr/local/sbin/sshvpn-install-pam-hook
+install -m 0755 -o root -g root "$repo_dir/deploy/configure-main-ssh.sh" /usr/local/sbin/sshvpn-configure-main-ssh
+install -m 0644 "$repo_dir/deploy/sshvpn-egress.service" /etc/systemd/system/sshvpn-egress.service
 install -m 0644 "$repo_dir/deploy/sshvpn-policy.service" /etc/systemd/system/sshvpn-policy.service
 install -m 0644 "$repo_dir/deploy/sshvpn-policy.timer" /etc/systemd/system/sshvpn-policy.timer
 install -m 0644 "$repo_dir/deploy/sshvpn-panel.service" /etc/systemd/system/sshvpn-panel.service
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/deploy/menu.sh /usr/local/bin/sshvpn-menu
 nginx -t
 /usr/sbin/sshd -t
-/usr/sbin/sshd -t -f /etc/ssh/sshvpn_sshd_config
 cd /opt/ssh-vpn-panel
 runuser -u sshvpn-panel -- .venv/bin/python manage.py check
 runuser -u sshvpn-panel -- .venv/bin/python manage.py migrate --noinput
@@ -84,6 +81,11 @@ runuser -u sshvpn-panel -- .venv/bin/python manage.py migrate --noinput
 /usr/local/sbin/sshvpnctl seed-legacy
 sshvpn-install-pam-hook "$backup_dir/pam-sshd"
 systemctl daemon-reload
+systemctl enable --now sshvpn-egress
+sshvpn-configure-main-ssh "$backup_dir"
+if systemctl cat sshvpn-sshd.service >/dev/null 2>&1; then
+  systemctl disable --now sshvpn-sshd.service
+fi
 systemctl enable --now sshvpn-policy.timer
 systemctl restart sshvpn-panel
 systemctl is-active --quiet sshvpn-panel
