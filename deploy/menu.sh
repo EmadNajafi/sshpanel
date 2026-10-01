@@ -30,9 +30,9 @@ show_menu() {
       fi
       ;;
     2) certbot renew ;;
-    3) systemctl status --no-pager sshvpn-panel sshvpn-sshd nginx postgresql ;;
+    3) systemctl status --no-pager sshvpn-panel sshvpn-sshd sshvpn-policy.timer nginx postgresql ;;
     4) systemctl restart sshvpn-panel sshvpn-sshd ;;
-    5) journalctl -u sshvpn-panel -u sshvpn-sshd -n 100 --no-pager ;;
+    5) journalctl -u sshvpn-panel -u sshvpn-sshd -u sshvpn-policy.service -n 100 --no-pager ;;
     6) backup_db ;;
     7) create_admin ;;
     8) read -r -p "Administrator username: " admin_user; change_admin_password "$admin_user" ;;
@@ -238,9 +238,9 @@ case "${1:-menu}" in
   menu) show_menu ;;
   ssl) shift; issue_ssl "$@" ;;
   renew) certbot renew ;;
-  status) systemctl status --no-pager sshvpn-panel sshvpn-sshd nginx postgresql ;;
+  status) systemctl status --no-pager sshvpn-panel sshvpn-sshd sshvpn-policy.timer nginx postgresql ;;
   restart) systemctl restart sshvpn-panel sshvpn-sshd ;;
-  logs) journalctl -u sshvpn-panel -u sshvpn-sshd -n 100 --no-pager ;;
+  logs) journalctl -u sshvpn-panel -u sshvpn-sshd -u sshvpn-policy.service -n 100 --no-pager ;;
   backup) backup_db ;;
   admin) create_admin ;;
   admin-password) shift; change_admin_password "$@" ;;

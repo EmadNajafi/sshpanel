@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class VpnAccount(models.Model):
@@ -7,9 +8,15 @@ class VpnAccount(models.Model):
     enabled = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    max_connections = models.PositiveIntegerField(null=True, blank=True)
 
     def __str__(self):
         return self.username
+
+    @property
+    def is_expired(self):
+        return self.expires_at is not None and timezone.now() >= self.expires_at
 
 
 class AuditEvent(models.Model):

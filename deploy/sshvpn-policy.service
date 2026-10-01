@@ -1,0 +1,6 @@
+[Unit]
+Description=Expire SSH VPN accounts and disconnect their tunnels
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sshvpnctl sweep

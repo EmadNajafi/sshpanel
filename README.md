@@ -4,7 +4,7 @@ A web panel for password based OpenSSH SOCKS and local forwarding accounts on Ub
 
 ## Components
 
-- Django staff sign in, account creation, disabling, enabling, password reset, deletion, and audit events.
+- Django staff sign in, account creation with active days and simultaneous VPN connection limit, disabling, enabling, password reset, deletion, and audit events.
 - PostgreSQL for metadata. VPN passwords are sent to the Linux account helper and are not stored in the database.
 - A root owned helper with a fixed set of allowed operations; the web service can run only that helper through sudo.
 - Nginx and Gunicorn for the panel, a separate VPN `sshd` on port 2222, and a `menu` command for administration and later SSL issuance.
@@ -13,6 +13,10 @@ A web panel for password based OpenSSH SOCKS and local forwarding accounts on Ub
 ## Security model
 
 VPN users belong to `sshvpn`. The normal administrator SSH daemon denies that group. The VPN daemon permits password authentication and local forwarding, while `MaxSessions 0` prevents shell, command, and SFTP sessions. Clients must use a forwarding only connection, such as `ssh -N -D 1080 -p 2222 vpn_alice@server.example.com`.
+
+At account creation, enter the Linux login name, VPN password, number of active days, and maximum simultaneous SSH connections. The expiration clock starts when the account is created. A PAM account hook denies new VPN logins after expiration or when the connection limit is reached. A systemd timer runs every minute to lock expired Linux accounts and disconnect their existing tunnels. The limit counts SSH transport connections, not people or individual SOCKS requests; someone sharing credentials can open many SOCKS requests through one connection. VPN passwords may be shorter than 12 characters, including one character. Empty passwords, line breaks and NUL are rejected, as are duplicate or invalid Linux login names. The separate web administrator password still requires at least 12 characters.
+
+The PAM hook is added only once to `/etc/pam.d/sshd`, before the normal account rules, and bypasses Linux users outside the `sshvpn` group. Its previous file is saved under `/var/backups/sshvpn-panel`. Earlier VPN accounts receive an unlimited policy on upgrade; new accounts receive the selected limits. The hook and the timer must both be working for the limits to be enforced.
 
 The VPN daemon initially listens on `127.0.0.1:2222`. After testing isolation on a new server, `sudo menu vpn-public` changes it to `0.0.0.0:2222`; `sudo menu vpn-local` restores the loopback listener. The egress policy is required by the VPN daemon's systemd unit. Review any existing firewall and cloud network rules before opening the port. On servers with public address translation, test that forwarding cannot reach the server through its external address.
 

@@ -38,6 +38,7 @@ install -d -m 0700 -o root -g root "$backup_dir"
 cp -a /etc/sshvpn/panel.env "$backup_dir/panel.env"
 cp -a /etc/nginx/sites-available/sshvpn-panel "$backup_dir/nginx-panel"
 cp -a /etc/ssh/sshvpn_sshd_config "$backup_dir/sshvpn_sshd_config"
+cp -a /etc/pam.d/sshd "$backup_dir/pam-sshd"
 tar -C /opt --exclude='ssh-vpn-panel/.venv' --exclude='ssh-vpn-panel/staticfiles' \
   -czf "$backup_dir/application.tar.gz" ssh-vpn-panel
 runuser -u postgres -- pg_dump -Fc "${DB_NAME:-sshvpn}" > "$backup_dir/database.dump"
@@ -63,6 +64,12 @@ source /etc/sshvpn/panel.env
 set +a
 
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpnctl /usr/local/sbin/sshvpnctl
+install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_policy.py /usr/local/sbin/sshvpn_policy.py
+install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn-authz /usr/local/sbin/sshvpn-authz
+install -d -m 0700 -o root -g root /etc/sshvpn/accounts
+install -m 0755 -o root -g root "$repo_dir/deploy/install-pam-hook.sh" /usr/local/sbin/sshvpn-install-pam-hook
+install -m 0644 "$repo_dir/deploy/sshvpn-policy.service" /etc/systemd/system/sshvpn-policy.service
+install -m 0644 "$repo_dir/deploy/sshvpn-policy.timer" /etc/systemd/system/sshvpn-policy.timer
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/deploy/menu.sh /usr/local/bin/sshvpn-menu
 nginx -t
 /usr/sbin/sshd -t
@@ -71,6 +78,11 @@ cd /opt/ssh-vpn-panel
 runuser -u sshvpn-panel -- .venv/bin/python manage.py check
 runuser -u sshvpn-panel -- .venv/bin/python manage.py migrate --noinput
 .venv/bin/python manage.py collectstatic --noinput
+# Older VPN accounts retain their previous unlimited policy on upgrade.
+/usr/local/sbin/sshvpnctl seed-legacy
+sshvpn-install-pam-hook "$backup_dir/pam-sshd"
+systemctl daemon-reload
+systemctl enable --now sshvpn-policy.timer
 systemctl restart sshvpn-panel
 systemctl is-active --quiet sshvpn-panel
 

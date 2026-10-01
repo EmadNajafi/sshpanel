@@ -1,0 +1,10 @@
+[Unit]
+Description=Check SSH VPN account expiration each minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+Unit=sshvpn-policy.service
+
+[Install]
+WantedBy=timers.target

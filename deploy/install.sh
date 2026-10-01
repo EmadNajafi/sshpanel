@@ -93,6 +93,10 @@ chown root:sshvpn-panel /etc/sshvpn/panel.env
 chmod 0640 /etc/sshvpn/panel.env
 
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpnctl /usr/local/sbin/sshvpnctl
+install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_policy.py /usr/local/sbin/sshvpn_policy.py
+install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn-authz /usr/local/sbin/sshvpn-authz
+install -d -m 0700 -o root -g root /etc/sshvpn/accounts
+install -m 0755 -o root -g root "$repo_dir/deploy/install-pam-hook.sh" /usr/local/sbin/sshvpn-install-pam-hook
 printf '%s\n' 'sshvpn-panel ALL=(root) NOPASSWD: /usr/local/sbin/sshvpnctl' > /etc/sudoers.d/sshvpn-panel
 chmod 0440 /etc/sudoers.d/sshvpn-panel
 visudo -cf /etc/sudoers.d/sshvpn-panel
@@ -119,6 +123,8 @@ fi
 install -m 0644 "$repo_dir/deploy/sshvpn-sshd.service" /etc/systemd/system/sshvpn-sshd.service
 install -m 0644 "$repo_dir/deploy/sshvpn-egress.service" /etc/systemd/system/sshvpn-egress.service
 install -m 0644 "$repo_dir/deploy/sshvpn-panel.service" /etc/systemd/system/sshvpn-panel.service
+install -m 0644 "$repo_dir/deploy/sshvpn-policy.service" /etc/systemd/system/sshvpn-policy.service
+install -m 0644 "$repo_dir/deploy/sshvpn-policy.timer" /etc/systemd/system/sshvpn-policy.timer
 install -m 0755 -o root -g root "$repo_dir/deploy/menu.sh" /usr/local/bin/sshvpn-menu
 if [[ ! -e /usr/local/bin/menu ]]; then
   ln -s /usr/local/bin/sshvpn-menu /usr/local/bin/menu
@@ -162,8 +168,9 @@ runuser -u sshvpn-panel -- .venv/bin/python manage.py migrate --noinput
 printf '%s\n%s\n' "$admin_username" "$admin_password" | runuser -u sshvpn-panel -- .venv/bin/python manage.py initial_admin
 unset admin_password
 
+sshvpn-install-pam-hook
 systemctl daemon-reload
-systemctl enable --now postgresql nginx sshvpn-panel sshvpn-egress sshvpn-sshd
+systemctl enable --now postgresql nginx sshvpn-panel sshvpn-egress sshvpn-sshd sshvpn-policy.timer
 systemctl reload nginx
 systemctl reload ssh
 if [[ $local_test -eq 1 ]]; then

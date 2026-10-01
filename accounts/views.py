@@ -1,8 +1,11 @@
+from datetime import timedelta
+
 from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
+from django.utils import timezone
 
 from .forms import CreateAccountForm, PasswordForm
 from .models import AuditEvent, VpnAccount
@@ -31,16 +34,26 @@ def record(request, username, action, succeeded):
 def create_account(request):
     form = CreateAccountForm(request.POST)
     if not form.is_valid():
-        messages.error(request, "Invalid username or password. Passwords need at least 12 characters.")
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                messages.error(request, error)
         return redirect("dashboard")
     username = form.cleaned_data["username"]
     if VpnAccount.objects.filter(username=username).exists():
         messages.error(request, "This account already exists.")
         return redirect("dashboard")
     try:
-        call_helper("create", username, form.cleaned_data["password"])
+        expires_at = timezone.now() + timedelta(days=form.cleaned_data["valid_days"])
+        max_connections = form.cleaned_data["max_connections"]
+        call_helper(
+            "create", username, form.cleaned_data["password"],
+            expires_at=int(expires_at.timestamp()), max_connections=max_connections,
+        )
         try:
-            VpnAccount.objects.create(username=username, created_by=request.user)
+            VpnAccount.objects.create(
+                username=username, created_by=request.user,
+                expires_at=expires_at, max_connections=max_connections,
+            )
         except IntegrityError:
             call_helper("delete", username)
             raise ProvisionError("The account could not be saved.")
@@ -95,7 +108,9 @@ def reset_password(request, pk):
     account = get_object_or_404(VpnAccount, pk=pk)
     form = PasswordForm(request.POST)
     if not form.is_valid():
-        messages.error(request, "Password must have at least 12 characters.")
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                messages.error(request, error)
         return redirect("dashboard")
     try:
         call_helper("password", account.username, form.cleaned_data["password"])

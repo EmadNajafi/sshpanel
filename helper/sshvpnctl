@@ -4,15 +4,17 @@ import grp
 import json
 import os
 import pwd
-import re
 import spwd
 import subprocess
 import sys
 import time
 
+from sshvpn_policy import (
+    GROUP, POLICY_DIR, USERNAME, lease_path, policy_path, read_policy,
+    seed_legacy_accounts, write_policy,
+)
 
-USERNAME = re.compile(r"^vpn_[a-z][a-z0-9_]{2,26}$")
-GROUP = "sshvpn"
+
 ALLOWED = {"create", "disable", "enable", "delete", "password"}
 
 
@@ -25,6 +27,16 @@ def run(*args, input_text=None, ok=(0,)):
     result = subprocess.run(args, input=input_text, text=True, capture_output=True, timeout=15)
     if result.returncode not in ok:
         raise RuntimeError(f"System command failed: {args[0]}")
+
+
+def set_password(username, password):
+    result = subprocess.run(
+        ["/usr/bin/openssl", "passwd", "-6", "-stdin"], input=password + "\n",
+        text=True, capture_output=True, timeout=15,
+    )
+    if result.returncode != 0 or not result.stdout.startswith("$6$"):
+        raise RuntimeError("Password hashing failed.")
+    run("/usr/sbin/usermod", "--password", result.stdout.strip(), username)
 
 
 def managed_user(username, group_id):
@@ -51,12 +63,36 @@ def stop_user_processes(username):
     raise RuntimeError("Account processes are still running; retry deletion.")
 
 
+def sweep_expired_accounts():
+    if not POLICY_DIR.exists():
+        return
+    for path in POLICY_DIR.glob("*.json"):
+        username = path.stem
+        if not USERNAME.fullmatch(username):
+            continue
+        try:
+            managed_user(username, grp.getgrnam(GROUP).gr_gid)
+            policy = read_policy(username)
+        except (KeyError, ValueError, FileNotFoundError):
+            continue
+        if policy["expires_at"] is not None and time.time() >= policy["expires_at"]:
+            if not spwd.getspnam(username).sp_pwdp.startswith("!"):
+                run("/usr/sbin/usermod", "--lock", username)
+            run("/usr/bin/pkill", "-KILL", "-u", username, ok=(0, 1))
+
+
 def main():
     if os.geteuid() != 0:
         return fail("Root privileges are required.")
-    if len(sys.argv) != 2 or sys.argv[1] not in ALLOWED:
+    if len(sys.argv) != 2 or sys.argv[1] not in ALLOWED | {"seed-legacy", "sweep"}:
         return fail("Invalid action.")
     try:
+        if sys.argv[1] == "seed-legacy":
+            seed_legacy_accounts()
+            return 0
+        if sys.argv[1] == "sweep":
+            sweep_expired_accounts()
+            return 0
         body = sys.stdin.read(4097)
         if len(body) > 4096:
             raise ValueError("Request is too large.")
@@ -68,9 +104,15 @@ def main():
         action = sys.argv[1]
         if action in {"create", "password"}:
             password = request["password"]
-            if not isinstance(password, str) or not 12 <= len(password) <= 256 or "\n" in password or "\r" in password:
+            if not isinstance(password, str) or not 1 <= len(password) <= 256 or any(c in password for c in "\n\r\x00"):
                 raise ValueError("Invalid password.")
         if action == "create":
+            expires_at = request["expires_at"]
+            max_connections = request["max_connections"]
+            if type(expires_at) is not int or expires_at <= int(time.time()):
+                raise ValueError("Expiry must be in the future.")
+            if type(max_connections) is not int or not 1 <= max_connections <= 10000:
+                raise ValueError("Invalid connection limit.")
             try:
                 pwd.getpwnam(username)
             except KeyError:
@@ -79,7 +121,8 @@ def main():
                 raise ValueError("Account already exists.")
             run("/usr/sbin/useradd", "--no-create-home", "--home-dir", "/var/empty", "--shell", "/usr/sbin/nologin", "--gid", GROUP, username)
             try:
-                run("/usr/sbin/chpasswd", input_text=f"{username}:{password}\n")
+                set_password(username, password)
+                write_policy(username, expires_at, max_connections)
             except Exception:
                 run("/usr/sbin/userdel", username)
                 raise
@@ -89,10 +132,13 @@ def main():
                 run("/usr/sbin/usermod", "--lock", username)
                 run("/usr/bin/pkill", "-u", username, ok=(0, 1))
             elif action == "enable":
+                policy = read_policy(username)
+                if policy["expires_at"] is not None and time.time() >= policy["expires_at"]:
+                    raise ValueError("This account has expired.")
                 run("/usr/sbin/usermod", "--unlock", username)
             elif action == "password":
                 was_locked = spwd.getspnam(username).sp_pwdp.startswith("!")
-                run("/usr/sbin/chpasswd", input_text=f"{username}:{password}\n")
+                set_password(username, password)
                 if was_locked:
                     run("/usr/sbin/usermod", "--lock", username)
                 run("/usr/bin/pkill", "-u", username, ok=(0, 1))
@@ -100,7 +146,9 @@ def main():
                 run("/usr/sbin/usermod", "--lock", username)
                 stop_user_processes(username)
                 run("/usr/sbin/userdel", username)
-    except (ValueError, KeyError, json.JSONDecodeError, RuntimeError, subprocess.TimeoutExpired) as exc:
+                policy_path(username).unlink(missing_ok=True)
+                lease_path(username).unlink(missing_ok=True)
+    except (ValueError, KeyError, OSError, json.JSONDecodeError, RuntimeError, subprocess.TimeoutExpired) as exc:
         return fail(str(exc))
     return 0
 
