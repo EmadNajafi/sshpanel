@@ -23,6 +23,9 @@ class WebAddressTests(unittest.TestCase):
                 web.web_port(bad)
         self.assertEqual(web.web_port(80), 80)
         self.assertEqual(web.web_port(18080), 18080)
+        self.assertEqual(web.web_port(443, tls=True), 443)
+        with self.assertRaises(ValueError):
+            web.web_port(80, tls=True)
 
     def test_nginx_config_routes_only_under_selected_path(self):
         config = web.nginx_config("65.20.109.66", 18080, "/private-42")
@@ -33,6 +36,24 @@ class WebAddressTests(unittest.TestCase):
         self.assertIn("location / { return 404; }", config)
         self.assertIn("proxy_pass http://127.0.0.1:8000/;", config)
         self.assertNotIn("location = /login/", config)
+
+    def test_tls_config_preserves_certificate_and_http_challenge_port(self):
+        old_site = """server {
+    listen 443 ssl;
+    ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+}
+"""
+        directives = web._ssl_directives(old_site)
+        config = web.nginx_config("example.com", 18443, "/private-42", tls=True,
+                                  ssl_directives=directives)
+        self.assertIn("listen 18443 ssl;", config)
+        self.assertIn("listen 80;", config)
+        self.assertIn("https://$host:18443$request_uri", config)
+        self.assertIn("ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;", config)
+        self.assertIn("location /private-42/", config)
 
     def test_stage_preserves_active_config_until_background_apply(self):
         with TemporaryDirectory() as directory:

@@ -162,7 +162,8 @@ activate_tls() {
   if ! sed -i -e "s/^PANEL_DOMAIN=.*/PANEL_DOMAIN=$domain/" \
       -e "s/^PANEL_EMAIL=.*/PANEL_EMAIL=$email/" \
       -e 's/^PANEL_TLS_ENABLED=.*/PANEL_TLS_ENABLED=1/' \
-      -e 's/^PANEL_HTTP_PORT=.*/PANEL_HTTP_PORT=80/' "$env_file" || \
+      -e 's/^PANEL_HTTP_PORT=.*/PANEL_HTTP_PORT=80/' \
+      -e 's/^PANEL_HTTPS_PORT=.*/PANEL_HTTPS_PORT=443/' "$env_file" || \
      ! chown root:sshvpn-panel "$env_file" || ! chmod 0640 "$env_file" || \
      ! systemctl restart sshvpn-panel; then
     install -m 0640 -o root -g sshvpn-panel "$env_backup" "$env_file"

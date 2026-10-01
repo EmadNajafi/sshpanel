@@ -47,19 +47,17 @@
       <section id="web-address" class="panel settings-section">
         <div class="settings-section-head">
           <span class="settings-section-icon settings-icon-green" aria-hidden="true">02</span>
-          <div><p class="eyebrow">PANEL ACCESS</p><h2>Web address</h2><p>Choose the URL path and HTTP port used to open this panel.</p></div>
+          <div><p class="eyebrow">PANEL ACCESS</p><h2>Web address</h2><p>Choose the URL path and {% if tls_enabled %}HTTPS{% else %}HTTP{% endif %} port used to open this panel.</p></div>
         </div>
         <div class="settings-current-port settings-current-web"><div><span class="settings-detail-label">CURRENT ADDRESS</span><strong>{{ panel_web_url }}</strong></div><span class="settings-live-badge"><span class="status-dot"></span> Active</span></div>
         {% if pending_web %}
           <div class="settings-callout"><strong>Address change pending</strong><p>{% if pending_web.phase == 'awaiting-confirmation' %}You are at the new address. Confirm it within five minutes or the panel will automatically return to its previous address.{% else %}The new address is being activated. Open it after a few seconds.{% endif %}</p></div>
           {% if pending_web.phase == 'awaiting-confirmation' %}<form method="post" action="{% url 'confirm_web_address' %}" class="settings-actions">{% csrf_token %}<button class="button button-primary" type="submit">Confirm this address</button></form>{% endif %}
-        {% elif tls_enabled %}
-          <p class="settings-field-note">HTTP port and path changes are available before SSL is enabled. Certificate and HTTPS listener settings stay managed by the SSL menu.</p>
         {% else %}
           <form method="post" action="{% url 'stage_web_address' %}" class="web-address-form">{% csrf_token %}
             <div><label for="panel-web-path">Private path</label><input id="panel-web-path" name="path" type="text" maxlength="65" value="{{ panel_web_path }}" autocomplete="off" spellcheck="false" required><span class="helptext">One segment, such as /my-panel. Use / to open the panel at the root.</span></div>
-            <div><label for="panel-web-port">HTTP port</label><input id="panel-web-port" name="port" type="number" min="80" max="65535" value="{{ panel_web_port }}" required><span class="helptext">Use 80 or a port from 1024 to 65535.</span></div>
-            <p class="settings-field-note">Allow the new port in your server and provider firewalls. After changing the address, open the new URL and confirm it within five minutes; otherwise the old address is restored automatically.</p>
+            <div><label for="panel-web-port">{% if tls_enabled %}HTTPS{% else %}HTTP{% endif %} port</label><input id="panel-web-port" name="port" type="number" min="{% if tls_enabled %}443{% else %}80{% endif %}" max="65535" value="{{ panel_web_port }}" required><span class="helptext">Use {% if tls_enabled %}443{% else %}80{% endif %} or a port from 1024 to 65535.</span></div>
+            <p class="settings-field-note">Allow the new port in your server and provider firewalls. {% if tls_enabled %}Port 80 stays available for certificate renewal.{% endif %} Open the new URL and confirm it within five minutes; otherwise the old address is restored automatically.</p>
             <button class="button button-primary" type="submit">Change web address</button>
           </form>
         {% endif %}

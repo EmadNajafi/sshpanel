@@ -208,6 +208,14 @@ class AccountViewsTests(TestCase):
         self.assertEqual(self.client.post(reverse("confirm_web_address")).status_code, 302)
         helper.assert_not_called()
 
+    @override_settings(TLS_ENABLED=True, HTTPS_PORT="8443", ALLOWED_HOSTS=["example.com"])
+    @patch("accounts.views.call_helper", return_value="null")
+    def test_settings_shows_https_address_and_port_control(self, helper):
+        page = self.client.get(reverse("panel_settings"), HTTP_HOST="example.com:8443", secure=True)
+        self.assertContains(page, "https://example.com:8443/")
+        self.assertContains(page, "HTTPS port")
+        self.assertContains(page, 'value="8443"')
+
     @override_settings(FORCE_SCRIPT_NAME="/private-42", STATIC_URL="/private-42/static/")
     def test_prefixed_panel_links_and_login(self):
         original_prefix = get_script_prefix()

@@ -9,6 +9,7 @@ DEBUG = False
 TLS_ENABLED = os.environ.get("PANEL_TLS_ENABLED", "0") == "1"
 ALLOWED_HOSTS = [os.environ["PANEL_DOMAIN"]]
 HTTP_PORT = os.environ.get("PANEL_HTTP_PORT", "80")
+HTTPS_PORT = os.environ.get("PANEL_HTTPS_PORT", "443")
 WEB_PATH = os.environ.get("PANEL_WEB_PATH", "").rstrip("/")
 if WEB_PATH and not re.fullmatch(r"/[A-Za-z0-9_-]{1,64}", WEB_PATH):
     raise ValueError("Invalid PANEL_WEB_PATH.")
@@ -17,7 +18,8 @@ VPN_SSH_PORT = int(os.environ.get("VPN_SSH_PORT", "22"))
 if os.environ["PANEL_DOMAIN"] == "localhost":
     ALLOWED_HOSTS.append("127.0.0.1")
 if TLS_ENABLED:
-    CSRF_TRUSTED_ORIGINS = [f"https://{os.environ['PANEL_DOMAIN']}"]
+    https_port_suffix = "" if HTTPS_PORT == "443" else f":{HTTPS_PORT}"
+    CSRF_TRUSTED_ORIGINS = [f"https://{os.environ['PANEL_DOMAIN']}{https_port_suffix}"]
 else:
     port_suffix = "" if HTTP_PORT == "80" else f":{HTTP_PORT}"
     CSRF_TRUSTED_ORIGINS = [f"http://{host}{port_suffix}" for host in ALLOWED_HOSTS]

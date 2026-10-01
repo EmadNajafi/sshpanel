@@ -290,9 +290,9 @@ def panel_settings(request):
     except (ProvisionError, ValueError, TypeError):
         pending_web = None
     web_path = settings.WEB_PATH
-    web_port = settings.HTTP_PORT
+    web_port = settings.HTTPS_PORT if settings.TLS_ENABLED else settings.HTTP_PORT
     web_scheme = "https" if settings.TLS_ENABLED else "http"
-    web_port_suffix = "" if settings.TLS_ENABLED or web_port == "80" else f":{web_port}"
+    web_port_suffix = "" if web_port == ("443" if settings.TLS_ENABLED else "80") else f":{web_port}"
     return render(request, "settings.html", {
         "password_form": PasswordChangeForm(request.user),
         "ssh_port": get_ssh_port(),

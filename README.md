@@ -41,7 +41,7 @@ For migration, install the same version of this panel on a fresh Ubuntu 24.04 se
 
 ## Install: HTTP first
 
-In **Settings → Web address**, an administrator can set a single-segment URL path and HTTP port. Existing installations keep their current address until the form is submitted. Open the new URL and confirm it there within five minutes; an unconfirmed change or a failed local health check restores the previous Nginx and panel configuration. Allow the chosen port through host and provider firewalls first. The path is an address choice, not an authentication or TLS substitute. Web address changes from the panel are available in HTTP mode; the SSL menu continues to manage HTTPS.
+In **Settings → Web address**, an administrator can set a single-segment URL path and the current HTTP or HTTPS listener port. Existing installations keep their current address until the form is submitted. Open the new URL and confirm it there within five minutes; an unconfirmed change or a failed local health check restores the previous Nginx and panel configuration. Allow the chosen port through host and provider firewalls first. HTTPS changes preserve the installed certificate and keep port 80 for renewal. The path is an address choice, not an authentication or TLS substitute.
 
 For an existing installation, update the checkout and run `sudo bash deploy/upgrade.sh` instead of the fresh installer. If the server uses `/root/.ssh/sshpanel_deploy`, run `GIT_SSH_COMMAND='ssh -i /root/.ssh/sshpanel_deploy -o IdentitiesOnly=yes' git pull --ff-only` to update it. The upgrade backs up the database and configuration and retains the web administrator, VPN accounts, listener addresses, and current TLS mode.
 

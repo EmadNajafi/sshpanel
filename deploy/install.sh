@@ -85,6 +85,7 @@ PANEL_DOMAIN=$domain
 PANEL_EMAIL=$email
 PANEL_TLS_ENABLED=0
 PANEL_HTTP_PORT=$([[ $local_test -eq 1 ]] && echo 8080 || echo 80)
+PANEL_HTTPS_PORT=443
 PANEL_WEB_PATH=$panel_path
 VPN_SSH_PORT=$main_ssh_port
 DB_NAME=sshvpn
