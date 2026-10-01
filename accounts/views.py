@@ -33,14 +33,14 @@ def format_bytes(value):
 def get_account_usage():
     try:
         raw = json.loads(call_helper("usage-status"))
-    except (ProvisionError, ValueError, TypeError):
+        return {username: {
+            "connections": item["connections"],
+            "upload": format_bytes(item["upload_bytes"]),
+            "download": format_bytes(item["download_bytes"]),
+            "total": format_bytes(item["upload_bytes"] + item["download_bytes"]),
+        } for username, item in raw.items()}
+    except (ProvisionError, ValueError, TypeError, KeyError, OverflowError, AttributeError):
         return None
-    return {username: {
-        "connections": item["connections"],
-        "upload": format_bytes(item["upload_bytes"]),
-        "download": format_bytes(item["download_bytes"]),
-        "total": format_bytes(item["upload_bytes"] + item["download_bytes"]),
-    } for username, item in raw.items()}
 
 
 @staff_required
