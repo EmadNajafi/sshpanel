@@ -1,10 +1,12 @@
 """Two-step SSH port changes that retain the old listener until confirmed."""
 import json
+import os
 from pathlib import Path
 import re
 import shutil
 import socket
 import subprocess
+import tempfile
 
 
 CONFIG = Path("/etc/ssh/sshd_config")
@@ -38,7 +40,19 @@ def current_state():
 
 
 def _write_config(content):
-    CONFIG.write_text(content, encoding="utf-8")
+    original = CONFIG.stat()
+    descriptor, temporary = tempfile.mkstemp(prefix=".sshvpn-port-", dir=CONFIG.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+            output.write(content)
+            output.flush()
+            os.fsync(output.fileno())
+        os.chmod(temporary, original.st_mode & 0o777)
+        os.chown(temporary, original.st_uid, original.st_gid)
+        os.replace(temporary, CONFIG)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
     command("/usr/sbin/sshd", "-t")
     command("/usr/bin/systemctl", "reload", "ssh")
 
