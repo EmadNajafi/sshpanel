@@ -95,9 +95,6 @@ def admit_connection(username, monitor_pid, now=None):
     if policy["expires_at"] is not None and now >= policy["expires_at"]:
         return False
     limit = policy["max_connections"]
-    if limit is None:
-        return True
-
     start_time = process_start_time(monitor_pid)
     path = lease_path(username)
     with path.open("a+", encoding="utf-8") as state:
@@ -118,7 +115,7 @@ def admit_connection(username, monitor_pid, now=None):
         current = {"pid": monitor_pid, "start_time": start_time}
         if current in live:
             allowed = True
-        elif len(live) >= limit:
+        elif limit is not None and len(live) >= limit:
             allowed = False
         else:
             live.append(current)

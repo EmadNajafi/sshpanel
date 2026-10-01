@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}Overview · SSH VPN Panel{% endblock %}
-{% block scripts %}<script src="{% static 'dashboard.js' %}?v=4" defer></script>{% endblock %}
+{% block scripts %}<script src="{% static 'dashboard.js' %}?v=5" defer></script>{% endblock %}
 {% block content %}
 <div class="page-heading">
   <div>
@@ -38,23 +38,25 @@
 </section>
 
 <div class="dashboard-grid">
-  <section class="panel accounts-panel">
+  <section class="panel accounts-panel" data-usage-url="{% url 'account_usage' %}">
     <div class="panel-heading">
       <div><p class="eyebrow">YOUR USERS</p><h2>VPN accounts</h2></div>
       <div class="account-heading-actions">
-        <div class="account-totals"><span>{{ account_total }} total</span><span class="active-total">{{ account_active }} active</span></div>
+        <div class="account-totals"><span>{{ account_total }} total</span><span class="active-total">{{ account_active }} active</span><span class="online-total" data-online-total>{{ account_online }} online</span></div>
         <button class="button button-primary create-trigger" type="button" data-open-dialog="create-account-dialog" aria-label="Create VPN account"><span aria-hidden="true">+</span><span>New user</span></button>
       </div>
     </div>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Account</th><th>Password</th><th>Status</th><th>Expires</th><th>Connections</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Account</th><th>Password</th><th>Status</th><th>Online</th><th>Data usage</th><th>Expires</th><th>Limit</th><th>Actions</th></tr></thead>
         <tbody>
         {% for account in accounts %}
-          <tr>
+          <tr data-account-username="{{ account.username }}">
             <td><strong class="account-name">{{ account.username }}</strong><small class="table-subtext">Created {{ account.created_at|date:"Y-m-d" }}</small></td>
             <td><div class="password-cell"><span data-password-value>••••••</span><button class="button button-small button-secondary" type="button" data-reveal-password data-password-url="{% url 'account_password' account.pk %}" aria-label="Show password for {{ account.username }}">Show</button></div></td>
             <td>{% if account.is_expired %}<span class="state state-expired">Expired</span>{% elif account.enabled %}<span class="state state-active">Active</span>{% else %}<span class="state state-disabled">Disabled</span>{% endif %}</td>
+            <td data-online-status>{% if account.usage is None %}<span class="muted">—</span>{% elif account.usage.connections %}<span class="state state-active">{{ account.usage.connections }} online</span>{% else %}<span class="state state-disabled">Offline</span>{% endif %}</td>
+            <td data-usage-cell>{% if account.usage is None %}<span class="muted">Unavailable</span>{% else %}<strong class="usage-total">{{ account.usage.total }}</strong><small class="table-subtext">↑ {{ account.usage.upload }} · ↓ {{ account.usage.download }}</small>{% endif %}</td>
             <td class="nowrap">{{ account.expires_at|date:"Y-m-d H:i"|default:"Unlimited" }}</td>
             <td>{{ account.max_connections|default:"Unlimited" }}</td>
             <td>
@@ -66,7 +68,7 @@
               </div>
             </td>
           </tr>
-        {% empty %}<tr><td colspan="6" class="empty-state">No accounts yet. Use the + New user button to create one.</td></tr>{% endfor %}
+        {% empty %}<tr><td colspan="8" class="empty-state">No accounts yet. Use the + New user button to create one.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>

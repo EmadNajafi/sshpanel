@@ -63,6 +63,7 @@ set +a
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpnctl /usr/local/sbin/sshvpnctl
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_policy.py /usr/local/sbin/sshvpn_policy.py
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_port.py /usr/local/sbin/sshvpn_port.py
+install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_usage.py /usr/local/sbin/sshvpn_usage.py
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn-authz /usr/local/sbin/sshvpn-authz
 install -d -m 0700 -o root -g root /etc/sshvpn/accounts
 install -m 0755 -o root -g root "$repo_dir/deploy/install-pam-hook.sh" /usr/local/sbin/sshvpn-install-pam-hook
@@ -70,6 +71,8 @@ install -m 0755 -o root -g root "$repo_dir/deploy/configure-main-ssh.sh" /usr/lo
 install -m 0644 "$repo_dir/deploy/sshvpn-egress.service" /etc/systemd/system/sshvpn-egress.service
 install -m 0644 "$repo_dir/deploy/sshvpn-policy.service" /etc/systemd/system/sshvpn-policy.service
 install -m 0644 "$repo_dir/deploy/sshvpn-policy.timer" /etc/systemd/system/sshvpn-policy.timer
+install -m 0644 "$repo_dir/deploy/sshvpn-usage.service" /etc/systemd/system/sshvpn-usage.service
+install -m 0644 "$repo_dir/deploy/sshvpn-usage.timer" /etc/systemd/system/sshvpn-usage.timer
 install -m 0644 "$repo_dir/deploy/sshvpn-panel.service" /etc/systemd/system/sshvpn-panel.service
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/deploy/menu.sh /usr/local/bin/sshvpn-menu
 nginx -t
@@ -83,11 +86,13 @@ runuser -u sshvpn-panel -- .venv/bin/python manage.py migrate --noinput
 sshvpn-install-pam-hook "$backup_dir/pam-sshd"
 systemctl daemon-reload
 systemctl enable --now sshvpn-egress
+/usr/local/sbin/sshvpnctl usage-sync
 sshvpn-configure-main-ssh "$backup_dir"
 if systemctl cat sshvpn-sshd.service >/dev/null 2>&1; then
   systemctl disable --now sshvpn-sshd.service
 fi
 systemctl enable --now sshvpn-policy.timer
+systemctl enable --now sshvpn-usage.timer
 systemctl restart sshvpn-panel
 systemctl is-active --quiet sshvpn-panel
 

@@ -80,4 +80,50 @@
   }
 
   window.setInterval(refreshMetrics, 15000);
+
+  const usagePanel = document.querySelector("[data-usage-url]");
+  if (!usagePanel) return;
+  let usageLoading = false;
+  async function refreshUsage() {
+    if (usageLoading || document.hidden) return;
+    usageLoading = true;
+    try {
+      const response = await fetch(usagePanel.dataset.usageUrl, {
+        credentials: "same-origin", headers: { Accept: "application/json" }, cache: "no-store",
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      if (!payload.available) return;
+      let onlineAccounts = 0;
+      usagePanel.querySelectorAll("[data-account-username]").forEach((row) => {
+        const usage = payload.accounts[row.dataset.accountUsername];
+        const onlineCell = row.querySelector("[data-online-status]");
+        const usageCell = row.querySelector("[data-usage-cell]");
+        if (!usage) {
+          onlineCell.textContent = "—";
+          usageCell.textContent = "Unavailable";
+          return;
+        }
+        const status = document.createElement("span");
+        status.className = `state ${usage.connections > 0 ? "state-active" : "state-disabled"}`;
+        status.textContent = usage.connections > 0 ? `${usage.connections} online` : "Offline";
+        onlineCell.replaceChildren(status);
+        if (usage.connections > 0) onlineAccounts += 1;
+        const total = document.createElement("strong");
+        total.className = "usage-total";
+        total.textContent = usage.total;
+        const detail = document.createElement("small");
+        detail.className = "table-subtext";
+        detail.textContent = `↑ ${usage.upload} · ↓ ${usage.download}`;
+        usageCell.replaceChildren(total, detail);
+      });
+      const summary = usagePanel.querySelector("[data-online-total]");
+      if (summary) summary.textContent = `${onlineAccounts} online`;
+    } catch (_error) {
+      // Keep the previous readings if a refresh fails.
+    } finally {
+      usageLoading = false;
+    }
+  }
+  window.setInterval(refreshUsage, 15000);
 })();

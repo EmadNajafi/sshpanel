@@ -1,0 +1,7 @@
+[Unit]
+Description=Save per-account SSH VPN traffic counters
+After=sshvpn-egress.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sshvpnctl usage-snapshot

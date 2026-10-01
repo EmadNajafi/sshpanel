@@ -12,6 +12,7 @@ from django.utils import timezone
 from .models import AuditEvent, VpnAccount
 from .secrets import decrypt_password
 from .system_metrics import _cpu_metric, get_system_metrics
+from .views import format_bytes
 
 
 class AccountViewsTests(TestCase):
@@ -138,6 +139,23 @@ class AccountViewsTests(TestCase):
         helper.assert_not_called()
         self.client.post(reverse("stage_ssh_port"), {"port": "6677"})
         helper.assert_called_once_with("port-stage", port=6677)
+
+    @patch("accounts.views.call_helper")
+    def test_dashboard_and_api_show_online_connections_and_transfer(self, helper):
+        account = VpnAccount.objects.create(username="alice", created_by=self.staff)
+        helper.return_value = '{"alice": {"connections": 2, "upload_bytes": 2048, "download_bytes": 3072}}'
+        page = self.client.get(reverse("dashboard"))
+        self.assertContains(page, "2 online")
+        self.assertContains(page, "5.0 KiB")
+        response = self.client.get(reverse("account_usage"))
+        self.assertEqual(response.json()["accounts"]["alice"]["upload"], "2.0 KiB")
+        self.assertIn("no-store", response["Cache-Control"])
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("account_usage")).status_code, 302)
+
+    def test_usage_units(self):
+        self.assertEqual(format_bytes(0), "0 B")
+        self.assertEqual(format_bytes(1024), "1.0 KiB")
 
     @patch("accounts.views.call_helper")
     def test_cross_site_post_is_rejected(self, helper):

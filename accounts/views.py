@@ -22,13 +22,38 @@ from .system_metrics import get_system_metrics
 staff_required = user_passes_test(lambda user: user.is_active and user.is_staff, login_url="login")
 
 
+def format_bytes(value):
+    amount = float(value)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if amount < 1024 or unit == "TiB":
+            return f"{amount:.0f} {unit}" if unit == "B" else f"{amount:.1f} {unit}"
+        amount /= 1024
+
+
+def get_account_usage():
+    try:
+        raw = json.loads(call_helper("usage-status"))
+    except (ProvisionError, ValueError, TypeError):
+        return None
+    return {username: {
+        "connections": item["connections"],
+        "upload": format_bytes(item["upload_bytes"]),
+        "download": format_bytes(item["download_bytes"]),
+        "total": format_bytes(item["upload_bytes"] + item["download_bytes"]),
+    } for username, item in raw.items()}
+
+
 @staff_required
 def dashboard(request):
     accounts = list(VpnAccount.objects.select_related("created_by").order_by("username"))
+    usage = get_account_usage()
+    for account in accounts:
+        account.usage = usage.get(account.username) if usage is not None else None
     return render(request, "dashboard.html", {
         "accounts": accounts,
         "account_total": len(accounts),
         "account_active": sum(account.enabled and not account.is_expired for account in accounts),
+        "account_online": sum(account.usage["connections"] > 0 for account in accounts if account.usage is not None),
         "metrics": get_system_metrics(),
         "events": AuditEvent.objects.select_related("actor")[:20],
         "create_form": CreateAccountForm(),
@@ -39,6 +64,15 @@ def dashboard(request):
 @staff_required
 def system_metrics(request):
     return JsonResponse(get_system_metrics())
+
+
+@staff_required
+@require_GET
+def account_usage(request):
+    usage = get_account_usage()
+    response = JsonResponse({"accounts": usage, "available": usage is not None})
+    response["Cache-Control"] = "no-store, private"
+    return response
 
 
 def record(request, username, action, succeeded):

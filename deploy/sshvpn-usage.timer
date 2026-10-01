@@ -1,0 +1,10 @@
+[Unit]
+Description=Save SSH VPN traffic counters every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+Unit=sshvpn-usage.service
+
+[Install]
+WantedBy=timers.target

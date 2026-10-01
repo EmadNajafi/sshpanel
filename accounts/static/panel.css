@@ -97,6 +97,7 @@ h1, h2, p { margin-top: 0; }
 .account-totals { display: flex; gap: 7px; flex-wrap: wrap; }
 .account-totals span { border: 1px solid #e5ebf3; border-radius: 99px; padding: 5px 9px; color: #62718a; font-size: 11px; font-weight: 650; white-space: nowrap; }
 .account-totals .active-total { border-color: #d6f1e7; color: #178c68; background: #f0fbf7; }
+.account-totals .online-total { border-color: #d6e5ff; color: #3569c8; background: #f0f5ff; }
 .account-heading-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .create-trigger { display: inline-flex; align-items: center; gap: 9px; }
 .create-trigger span:first-child { font-size: 21px; font-weight: 400; line-height: .6; }
@@ -133,6 +134,7 @@ th, td { padding: 15px 10px; text-align: left; vertical-align: middle; border-bo
 tbody tr:last-child td { border-bottom: 0; }
 td { color: #506078; font-size: 12px; }
 .account-name { display: block; color: #25354f; font-size: 13px; font-weight: 750; }
+.usage-total { display: block; color: #25354f; font-size: 12px; white-space: nowrap; }
 .password-cell { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
 .password-cell [data-password-value] { max-width: 175px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }

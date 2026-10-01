@@ -14,6 +14,7 @@ from sshvpn_policy import (
     seed_legacy_accounts, write_policy,
 )
 from sshvpn_port import current_state, stage_port, finalize_port, cancel_port
+from sshvpn_usage import snapshot as usage_snapshot, remove_account as remove_usage_account
 
 
 ALLOWED = {"create", "disable", "enable", "delete", "password", "update"}
@@ -112,7 +113,7 @@ def disconnect_all_accounts():
 def main():
     if os.geteuid() != 0:
         return fail("Root privileges are required.")
-    if len(sys.argv) != 2 or sys.argv[1] not in ALLOWED | {"seed-legacy", "sweep", "disconnect-all", "port-stage", "port-finalize", "port-cancel", "port-status"}:
+    if len(sys.argv) != 2 or sys.argv[1] not in ALLOWED | {"seed-legacy", "sweep", "disconnect-all", "port-stage", "port-finalize", "port-cancel", "port-status", "usage-status", "usage-snapshot", "usage-sync"}:
         return fail("Invalid action.")
     try:
         if sys.argv[1] == "seed-legacy":
@@ -123,6 +124,11 @@ def main():
             return 0
         if sys.argv[1] == "disconnect-all":
             disconnect_all_accounts()
+            return 0
+        if sys.argv[1] in {"usage-status", "usage-snapshot", "usage-sync"}:
+            usage = usage_snapshot()
+            if sys.argv[1] == "usage-status":
+                print(json.dumps(usage))
             return 0
         if sys.argv[1] == "port-status":
             print(json.dumps(current_state()))
@@ -219,9 +225,17 @@ def main():
             elif action == "delete":
                 run("/usr/sbin/usermod", "--lock", username)
                 stop_user_processes(username)
+                try:
+                    usage_snapshot()
+                except (OSError, RuntimeError, ValueError):
+                    pass  # Traffic metrics must not prevent account deletion.
                 run("/usr/sbin/userdel", username)
                 policy_path(username).unlink(missing_ok=True)
                 lease_path(username).unlink(missing_ok=True)
+                try:
+                    remove_usage_account(username)
+                except (OSError, RuntimeError, ValueError):
+                    pass
     except (ValueError, KeyError, OSError, json.JSONDecodeError, RuntimeError, subprocess.TimeoutExpired) as exc:
         return fail(str(exc))
     return 0
