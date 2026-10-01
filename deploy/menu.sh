@@ -5,17 +5,51 @@ set -a
 source /etc/sshvpn/panel.env
 set +a
 
+panel_url() {
+  local scheme=http port="${PANEL_HTTP_PORT:-80}" default_port=80
+  if [[ "${PANEL_TLS_ENABLED:-0}" == "1" ]]; then
+    scheme=https
+    port="${PANEL_HTTPS_PORT:-443}"
+    default_port=443
+  fi
+  if [[ "$port" == "$default_port" ]]; then
+    printf '%s://%s%s/\n' "$scheme" "$PANEL_DOMAIN" "${PANEL_WEB_PATH:-}"
+  else
+    printf '%s://%s:%s%s/\n' "$scheme" "$PANEL_DOMAIN" "$port" "${PANEL_WEB_PATH:-}"
+  fi
+}
+
+admin_usernames() {
+  (cd /opt/ssh-vpn-panel && runuser -u sshvpn-panel -- .venv/bin/python manage.py shell --no-imports -c \
+    'from django.contrib.auth import get_user_model; print(", ".join(get_user_model().objects.filter(is_staff=True, is_active=True).order_by("username").values_list("username", flat=True)))' \
+    2>/dev/null) || true
+}
+
 show_menu() {
-  echo "1) Issue or repair SSL certificate"
-  echo "2) Renew SSL certificate"
-  echo "3) Service status"
-  echo "4) Restart panel and reload SSH"
-  echo "5) Show recent logs"
-  echo "6) Back up PostgreSQL database"
-  echo "7) Create a web administrator"
-  echo "8) Change a web administrator password"
-  echo "9) Open the web panel on this server's public IPv4 (HTTP)"
-  echo "0) Exit"
+  local reset=$'\033[0m' blue=$'\033[1;34m' cyan=$'\033[1;36m'
+  local green=$'\033[1;32m' yellow=$'\033[1;33m' magenta=$'\033[1;35m'
+  local dim=$'\033[2m' choice admins
+  if [[ ! -t 1 || -n "${NO_COLOR:-}" ]]; then
+    reset='' blue='' cyan='' green='' yellow='' magenta='' dim=''
+  fi
+  admins="$(admin_usernames)"
+  [[ -n "$admins" ]] || admins='None available'
+  printf '\n%s+------------------------------------------------------------+%s\n' "$blue" "$reset"
+  printf '%s|  SSH VPN PANEL                                SERVER MENU  |%s\n' "$blue" "$reset"
+  printf '%s+------------------------------------------------------------+%s\n' "$blue" "$reset"
+  printf '  %sPANEL ACCESS%s\n' "$cyan" "$reset"
+  printf '  Address   %s%s%s\n' "$green" "$(panel_url)" "$reset"
+  printf '  Admin     %s%s%s\n' "$green" "$admins" "$reset"
+  printf '  Password  %sNot recoverable (stored as a hash); use option 8%s\n' "$dim" "$reset"
+  printf '\n  %sCERTIFICATES%s                 %sOPERATIONS%s\n' "$yellow" "$reset" "$magenta" "$reset"
+  printf '   1  Issue or repair SSL         3  Service status\n'
+  printf '   2  Renew SSL certificate       4  Restart panel and SSH\n'
+  printf '                                 5  Recent logs\n'
+  printf '                                 6  Back up database\n'
+  printf '\n  %sADMINISTRATION%s\n' "$cyan" "$reset"
+  printf '   7  Create web administrator    8  Change admin password\n'
+  printf '   9  Publish panel on IPv4 (HTTP only)\n'
+  printf '\n   0  Exit\n\n'
   read -r -p "Choose: " choice
   case "$choice" in
     1)

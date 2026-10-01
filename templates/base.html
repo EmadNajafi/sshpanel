@@ -6,8 +6,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#101a2b">
   <title>{% block title %}SSH VPN Panel{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'panel.css' %}?v=11">
-  <script src="{% static 'panel.js' %}?v=2" defer></script>
+  <script>try { document.documentElement.dataset.theme = localStorage.getItem('sshvpn-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch (_) { document.documentElement.dataset.theme = 'light'; }</script>
+  <link rel="stylesheet" href="{% static 'panel.css' %}?v=12">
+  <script src="{% static 'panel.js' %}?v=3" defer></script>
   {% block scripts %}{% endblock %}
 </head>
 <body>
@@ -17,12 +18,13 @@
         <span class="brand-icon" aria-hidden="true">S</span>
         <span class="brand-label"><strong>SSH VPN</strong><small>Control panel</small></span>
       </a>
-      {% if user.is_authenticated %}
       <div class="header-actions">
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark mode" aria-pressed="false"><span class="theme-icon" aria-hidden="true">◐</span><span data-theme-label>Dark mode</span></button>
+      {% if user.is_authenticated %}
         <span class="admin-badge"><span class="status-dot"></span> Administrator</span>
         <button class="menu-toggle" type="button" aria-label="Open navigation menu" aria-controls="panel-menu" aria-expanded="false" data-menu-toggle><span class="menu-bars" aria-hidden="true"><span></span><span></span><span></span></span><span>Menu</span></button>
-      </div>
       {% endif %}
+      </div>
     </div>
   </header>
   {% if user.is_authenticated %}

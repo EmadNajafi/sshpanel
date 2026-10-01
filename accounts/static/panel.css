@@ -49,6 +49,9 @@ h1, h2, p { margin-top: 0; }
 .brand-label strong { font-size: 15px; letter-spacing: .015em; }
 .brand-label small { color: #9cabca; font-size: 11px; margin-top: 3px; }
 .header-actions { display: flex; align-items: center; gap: 18px; }
+.theme-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border: 1px solid #465672; border-radius: 11px; background: #21314b; color: #f5f8ff; font-size: 12px; font-weight: 750; }
+.theme-toggle:hover, .theme-toggle:focus-visible { background: #304666; border-color: #7791bd; }
+.theme-icon { font-size: 19px; line-height: 1; }
 .menu-toggle { display: inline-flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 14px; border: 1px solid #465672; border-radius: 11px; background: #21314b; color: #f5f8ff; font-size: 12px; font-weight: 750; }
 .menu-toggle:hover, .menu-toggle:focus-visible { background: #304666; border-color: #7791bd; }
 .menu-bars { display: grid; gap: 4px; width: 17px; }
@@ -296,6 +299,111 @@ td { color: #506078; font-size: 12px; }
 .login-card .muted { margin-bottom: 26px; font-size: 13px; }
 .login-form .button { margin-top: 4px; }
 
+/* A single theme setting covers the login page, dialogs, tables, and settings. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #e9f0fb;
+  --muted: #a3b2c8;
+  --border: #304158;
+  --blue: #568dff;
+  --shadow: 0 18px 45px rgba(0, 0, 0, .18);
+  color: var(--ink);
+  background: #0d1625;
+}
+:root[data-theme="dark"] .site-header { background: #09111e; }
+:root[data-theme="dark"] .metric-card,
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .login-card,
+:root[data-theme="dark"] .settings-sidebar,
+:root[data-theme="dark"] .account-dialog,
+:root[data-theme="dark"] .nav-drawer { background: #182538; color: var(--ink); }
+:root[data-theme="dark"] .nav-drawer::backdrop,
+:root[data-theme="dark"] .account-dialog::backdrop { background: rgba(1, 6, 14, .76); }
+:root[data-theme="dark"] .port-card,
+:root[data-theme="dark"] .settings-current-port,
+:root[data-theme="dark"] .settings-recovery-row,
+:root[data-theme="dark"] .drawer-profile,
+:root[data-theme="dark"] .backup-empty { background: #1d314b; border-color: #385373; }
+:root[data-theme="dark"] .port-card strong,
+:root[data-theme="dark"] .settings-current-port strong,
+:root[data-theme="dark"] .settings-detail-label,
+:root[data-theme="dark"] .port-card-label,
+:root[data-theme="dark"] .port-card small { color: #a9c8ff; }
+:root[data-theme="dark"] .drawer-link,
+:root[data-theme="dark"] .settings-nav a,
+:root[data-theme="dark"] .metric-label,
+:root[data-theme="dark"] .account-name,
+:root[data-theme="dark"] .usage-total,
+:root[data-theme="dark"] label,
+:root[data-theme="dark"] td { color: #c9d7e9; }
+:root[data-theme="dark"] .drawer-link:hover,
+:root[data-theme="dark"] .drawer-link.is-active,
+:root[data-theme="dark"] .settings-nav a:hover,
+:root[data-theme="dark"] .settings-nav a:focus-visible { background: #263e5d; border-color: #3c5e87; color: #b8d2ff; }
+:root[data-theme="dark"] .drawer-link-icon,
+:root[data-theme="dark"] .drawer-close,
+:root[data-theme="dark"] .dialog-close,
+:root[data-theme="dark"] .button-secondary,
+:root[data-theme="dark"] .drawer-signout,
+:root[data-theme="dark"] .action-button { background: #26374e; border-color: #3b4e68; color: #d0def0; }
+:root[data-theme="dark"] .drawer-link.is-active .drawer-link-icon,
+:root[data-theme="dark"] .button-edit,
+:root[data-theme="dark"] .extend-option { background: #28466c; border-color: #41658c; color: #c5dbff; }
+:root[data-theme="dark"] .button-secondary:hover,
+:root[data-theme="dark"] .drawer-signout:hover,
+:root[data-theme="dark"] .action-button:hover { background: #344b68; }
+:root[data-theme="dark"] .drawer-profile small,
+:root[data-theme="dark"] .drawer-link small,
+:root[data-theme="dark"] .drawer-section-label,
+:root[data-theme="dark"] .drawer-footer > small,
+:root[data-theme="dark"] .settings-sidebar-title,
+:root[data-theme="dark"] .settings-nav-number,
+:root[data-theme="dark"] .settings-sidebar-note,
+:root[data-theme="dark"] .settings-field-note,
+:root[data-theme="dark"] .helptext,
+:root[data-theme="dark"] .table-subtext,
+:root[data-theme="dark"] th,
+:root[data-theme="dark"] .empty-state { color: #99abc2; }
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] .copy-details-text { background: #101c2d; border-color: #40536e; color: var(--ink); }
+:root[data-theme="dark"] input::placeholder { color: #8193ab; }
+:root[data-theme="dark"] th,
+:root[data-theme="dark"] td,
+:root[data-theme="dark"] .sessions-list li,
+:root[data-theme="dark"] .audit-pagination,
+:root[data-theme="dark"] .settings-port-form,
+:root[data-theme="dark"] .drawer-footer,
+:root[data-theme="dark"] .settings-sidebar-note { border-color: #304158; }
+:root[data-theme="dark"] .metric-track { background: #304158; }
+:root[data-theme="dark"] .metric-cpu { --metric: #86aaff; --metric-bg: #243c64; }
+:root[data-theme="dark"] .metric-memory { --metric: #53d5b3; --metric-bg: #1f4b46; }
+:root[data-theme="dark"] .metric-disk { --metric: #c39cff; --metric-bg: #493c65; }
+:root[data-theme="dark"] .panel-count,
+:root[data-theme="dark"] .account-totals .online-total,
+:root[data-theme="dark"] .state-disabled { background: #2b3e57; border-color: #425776; color: #b9d2fb; }
+:root[data-theme="dark"] .account-totals span { border-color: #40536e; color: #bac9dc; }
+:root[data-theme="dark"] .account-totals .active-total,
+:root[data-theme="dark"] .state-active,
+:root[data-theme="dark"] .settings-live-badge,
+:root[data-theme="dark"] .action-button-extend { background: #1d493d; border-color: #326a58; color: #75e5ba; }
+:root[data-theme="dark"] .state-expired,
+:root[data-theme="dark"] .button-danger,
+:root[data-theme="dark"] .action-button-danger { background: #512d36; border-color: #79414e; color: #ffabb5; }
+:root[data-theme="dark"] .settings-callout,
+:root[data-theme="dark"] .backup-sensitive-note { background: #4a3928; border-color: #7a5b36; color: #ffd58d; }
+:root[data-theme="dark"] .settings-callout strong,
+:root[data-theme="dark"] .settings-callout p { color: #ffd58d; }
+:root[data-theme="dark"] .notice,
+:root[data-theme="dark"] .action-feedback { background: #1d493d; border-color: #326a58; color: #9ff0ca; }
+:root[data-theme="dark"] .notice.error,
+:root[data-theme="dark"] .action-feedback.is-error { background: #512d36; border-color: #79414e; color: #ffbbc4; }
+:root[data-theme="dark"] .settings-icon-blue { background: #294367; color: #a9c8ff; }
+:root[data-theme="dark"] .settings-icon-purple { background: #45385e; color: #d4b8ff; }
+:root[data-theme="dark"] .settings-icon-green { background: #1d493d; color: #82e6be; }
+:root[data-theme="dark"] .settings-hero { background: linear-gradient(120deg, #162943, #254979); }
+:root[data-theme="dark"] .password-details summary { color: #a9c8ff; }
+:root[data-theme="dark"] .password-details summary:hover { background: #263e5d; }
+
 @media (max-width: 720px) {
   .backup-action-grid { grid-template-columns: 1fr; }
   .settings-layout { grid-template-columns: 1fr; gap: 16px; }
@@ -317,6 +425,7 @@ td { color: #506078; font-size: 12px; }
   .admin-badge { display: none; }
 }
 @media (max-width: 520px) {
+  .theme-toggle [data-theme-label] { display: none; }
   .web-address-form { grid-template-columns: 1fr; }
   .settings-section { padding: 22px 18px; }
   .settings-password-form { grid-template-columns: 1fr; }
