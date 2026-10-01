@@ -33,7 +33,8 @@ class WebAddressTests(unittest.TestCase):
         self.assertIn("location /private-42/static/", config)
         self.assertIn("location = /private-42/login/", config)
         self.assertIn("location /private-42/", config)
-        self.assertIn("location / { return 404; }", config)
+        self.assertIn('location / { default_type text/plain; return 404 "Not Found"; }', config)
+        self.assertIn("server_tokens off;", config)
         self.assertIn("proxy_pass http://127.0.0.1:8000/;", config)
         self.assertNotIn("location = /login/", config)
 
@@ -51,6 +52,7 @@ class WebAddressTests(unittest.TestCase):
                                   ssl_directives=directives)
         self.assertIn("listen 18443 ssl;", config)
         self.assertIn("listen 80;", config)
+        self.assertEqual(config.count("server_tokens off;"), 2)
         self.assertIn("https://$host:18443$request_uri", config)
         self.assertIn("ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;", config)
         self.assertIn("location /private-42/", config)

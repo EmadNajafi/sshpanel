@@ -90,6 +90,7 @@ def nginx_config(domain, port, path, *, local_only=False, tls=False, ssl_directi
     config = f"""server {{
     listen {listen}{listen_suffix};
     server_name {domain};
+    server_tokens off;
     client_max_body_size 1100m;
     proxy_read_timeout 420s;
 {prefix_redirect}    location {static} {{ alias /opt/ssh-vpn-panel/staticfiles/; }}
@@ -106,7 +107,7 @@ def nginx_config(domain, port, path, *, local_only=False, tls=False, ssl_directi
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
     }}
-{('    location / { return 404; }' if path else '')}
+{('    location / { default_type text/plain; return 404 "Not Found"; }' if path else '')}
 {ssl_directives if tls else ''}
 }}
 """
@@ -115,6 +116,7 @@ def nginx_config(domain, port, path, *, local_only=False, tls=False, ssl_directi
         config += f"""server {{
     listen 80;
     server_name {domain};
+    server_tokens off;
     location / {{ return 301 https://$host{redirect_port}$request_uri; }}
 }}
 """

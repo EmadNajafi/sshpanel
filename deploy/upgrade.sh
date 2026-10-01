@@ -94,6 +94,20 @@ install -m 0644 "$repo_dir/deploy/sshvpn-usage.service" /etc/systemd/system/sshv
 install -m 0644 "$repo_dir/deploy/sshvpn-usage.timer" /etc/systemd/system/sshvpn-usage.timer
 install -m 0644 "$repo_dir/deploy/sshvpn-panel.service" /etc/systemd/system/sshvpn-panel.service
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/deploy/menu.sh /usr/local/bin/sshvpn-menu
+# Existing private-path sites need the same neutral response as new sites.
+python3 - <<'PY'
+from pathlib import Path
+import re
+
+site = Path("/etc/nginx/sites-available/sshvpn-panel")
+old = site.read_text(encoding="utf-8")
+updated = old.replace('location / { return 404; }',
+                      'location / { default_type text/plain; return 404 "Not Found"; }')
+if "server_tokens off;" not in updated:
+    updated = re.sub(r"(?m)^server \{$", "server {\n    server_tokens off;", updated)
+if updated != old:
+    site.write_text(updated, encoding="utf-8")
+PY
 nginx -t
 systemctl reload nginx
 /usr/sbin/sshd -t
