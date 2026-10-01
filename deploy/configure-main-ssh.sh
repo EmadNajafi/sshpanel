@@ -80,5 +80,5 @@ fi
 systemctl reload ssh
 restore=0
 trap - EXIT
-echo "VPN accounts now use the main SSH service on port $(/usr/sbin/sshd -T | awk '$1 == "port" {print $2; exit}')."
+echo "VPN accounts now use the main SSH service on port $(/usr/sbin/sshd -T | awk '$1 == "port" && !found {print $2; found=1}')."
 echo "SSH configuration backup: $backup_dir"

@@ -74,7 +74,7 @@ python3 -m venv /opt/ssh-vpn-panel/.venv
 
 db_password="$(openssl rand -hex 32)"
 secret_key="$(openssl rand -hex 48)"
-main_ssh_port="$(/usr/sbin/sshd -T | awk '$1 == "port" {print $2; exit}')"
+main_ssh_port="$(/usr/sbin/sshd -T | awk '$1 == "port" && !found {print $2; found=1}')"
 runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "CREATE ROLE sshvpn LOGIN PASSWORD '$db_password'"
 runuser -u postgres -- createdb -O sshvpn sshvpn
 install -d -m 0750 -o root -g sshvpn-panel /etc/sshvpn

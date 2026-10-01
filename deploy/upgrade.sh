@@ -48,7 +48,7 @@ if ! grep -q '^PANEL_HTTP_PORT=' /etc/sshvpn/panel.env; then
     printf '%s\n' 'PANEL_HTTP_PORT=80' >> /etc/sshvpn/panel.env
   fi
 fi
-main_ssh_port="$(/usr/sbin/sshd -T | awk '$1 == "port" {print $2; exit}')"
+main_ssh_port="$(/usr/sbin/sshd -T | awk '$1 == "port" && !found {print $2; found=1}')"
 if grep -q '^VPN_SSH_PORT=' /etc/sshvpn/panel.env; then
   sed -i -E "s/^VPN_SSH_PORT=.*/VPN_SSH_PORT=$main_ssh_port/" /etc/sshvpn/panel.env
 else
