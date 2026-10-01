@@ -5,14 +5,12 @@
   <div><p class="eyebrow">SETTINGS / DATA & RECOVERY</p><h1>Backup and restore</h1><p class="page-intro">Move your panel and VPN accounts to another Ubuntu 24.04 server.</p></div>
   <a class="button button-secondary" href="{% url 'panel_settings' %}">← Settings</a>
 </div>
-{% if not tls_enabled %}<div class="notice error" role="alert">This panel is using HTTP. Use an administrator SSH tunnel or enable HTTPS before entering a backup passphrase over an untrusted network.</div>{% endif %}
+{% if not tls_enabled %}<div class="notice error" role="alert">Backups contain sensitive account data and are not encrypted. This panel is using HTTP; use an administrator SSH tunnel or enable HTTPS before downloading or uploading a backup over an untrusted network.</div>{% endif %}
 <div class="settings-grid">
   <section class="panel settings-panel">
-    <div class="panel-heading"><div><p class="eyebrow">CREATE</p><h2>New encrypted backup</h2></div></div>
-    <p class="panel-description">Includes the complete PostgreSQL database, administrators, VPN usernames and password hashes, recoverable VPN passwords, account limits, audit history, and saved traffic totals. Server-specific IP, TLS, and SSH port settings are saved in the file but are not applied on restore.</p>
+    <div class="panel-heading"><div><p class="eyebrow">CREATE</p><h2>New backup</h2></div></div>
+    <p class="panel-description">Includes the complete PostgreSQL database, administrators, VPN usernames and password hashes, recoverable VPN passwords, account limits, audit history, and saved traffic totals. The archive is not encrypted, so keep it private. Server-specific IP, TLS, and SSH port settings are saved in the file but are not applied on restore.</p>
     <form method="post" action="{% url 'create_backup' %}" class="account-form">{% csrf_token %}
-      <p><label for="backup-passphrase">Backup passphrase</label><input id="backup-passphrase" name="passphrase" type="password" minlength="16" autocomplete="new-password" required><span class="helptext">At least 16 characters. Store this separately; it cannot be recovered.</span></p>
-      <p><label for="backup-passphrase-confirm">Confirm passphrase</label><input id="backup-passphrase-confirm" name="passphrase_confirm" type="password" minlength="16" autocomplete="new-password" required></p>
       <button class="button button-primary" type="submit">Create backup</button>
     </form>
   </section>
@@ -20,8 +18,7 @@
     <div class="panel-heading"><div><p class="eyebrow">RESTORE</p><h2>Restore from file</h2></div></div>
     <p class="panel-description">Install this panel on the destination server first, then upload the backup here. Restoring replaces its panel database and administrator accounts with those in the file. The destination web address, TLS mode, database connection, and SSH port stay local to that server. Sign in afterward with an administrator from the backup.</p>
     <form method="post" action="{% url 'restore_backup' %}" enctype="multipart/form-data" class="account-form" onsubmit="return confirm('Restore the selected backup? Current panel data and administrator accounts will be replaced. A server-side recovery copy will be created first.')">{% csrf_token %}
-      <p><label for="restore-file">Encrypted backup file</label><input id="restore-file" name="backup_file" type="file" accept=".svpb" required></p>
-      <p><label for="restore-passphrase">Backup passphrase</label><input id="restore-passphrase" name="passphrase" type="password" autocomplete="off" required></p>
+      <p><label for="restore-file">Backup file</label><input id="restore-file" name="backup_file" type="file" accept=".tar.gz,application/gzip" required></p>
       <p class="restore-confirm"><label><input type="checkbox" name="confirm_replace" value="yes" required> I understand the destination panel data will be replaced.</label></p>
       <button class="button button-secondary" type="submit">Restore backup</button>
     </form>

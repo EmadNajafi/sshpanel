@@ -263,17 +263,12 @@ def backup_settings(request):
 @staff_required
 @require_POST
 def create_backup(request):
-    passphrase = request.POST.get("passphrase", "")
-    confirmation = request.POST.get("passphrase_confirm", "")
-    if passphrase != confirmation:
-        messages.error(request, "Backup passphrases do not match.")
+    try:
+        result = call_backup("create")
+    except BackupError as exc:
+        messages.error(request, str(exc))
     else:
-        try:
-            result = call_backup("create", passphrase=passphrase)
-        except BackupError as exc:
-            messages.error(request, str(exc))
-        else:
-            messages.success(request, f"Backup created: {result['name']}. Download it and store the passphrase separately.")
+        messages.success(request, f"Backup created: {result['name']}. Download it and keep it private.")
     return redirect("backup_settings")
 
 
@@ -297,14 +292,13 @@ def download_backup(request, name):
 @require_POST
 def restore_backup(request):
     upload = request.FILES.get("backup_file")
-    passphrase = request.POST.get("passphrase", "")
     if not upload or request.POST.get("confirm_replace") != "yes":
         messages.error(request, "Choose a backup file and confirm the restore.")
         return redirect("backup_settings")
     name = None
     try:
         name = save_upload(upload)
-        result = call_backup("restore", name=name, passphrase=passphrase)
+        result = call_backup("restore", name=name)
     except (BackupError, OSError) as exc:
         messages.error(request, str(exc))
         return redirect("backup_settings")

@@ -1,5 +1,5 @@
 #!/opt/ssh-vpn-panel/.venv/bin/python
-"""Create and restore complete, encrypted SSH VPN panel backups.
+"""Create and restore complete SSH VPN panel backups.
 
 This program is root-owned and invoked only through the panel's sudo rule.
 The downloaded file contains the entire PostgreSQL database, the application
@@ -23,17 +23,12 @@ import tarfile
 import tempfile
 from datetime import datetime, timezone
 
-from cryptography.exceptions import InvalidTag
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-
-
 BACKUP_DIR = Path("/var/lib/sshvpn-panel/backups")
 UPLOAD_DIR = Path("/var/lib/sshvpn-panel/restore-uploads")
 LOCK = Path("/run/lock/sshvpn-backup.lock")
 ENV_FILE = Path("/etc/sshvpn/panel.env")
 POLICY_DIR = Path("/etc/sshvpn/accounts")
 USAGE_FILE = Path("/var/lib/sshvpn/usage.json")
-MAGIC = b"SSHPANEL1"
 CHUNK = 1024 * 1024
 USERNAME = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 MEMBERS = {"manifest.json", "database.dump", "panel.env", "accounts.json", "usage.json", "nginx.conf", "sshd_config"}
@@ -86,49 +81,6 @@ def managed_accounts():
     return sorted(records, key=lambda item: item["username"])
 
 
-def key_for(passphrase, salt):
-    if not isinstance(passphrase, str) or len(passphrase) < 16 or len(passphrase) > 1024:
-        raise ValueError("Backup passphrase must contain at least 16 characters.")
-    return hashlib.scrypt(passphrase.encode(), salt=salt, n=2**15, r=8, p=1, dklen=32, maxmem=64 * 1024 * 1024)
-
-
-def encrypt(source, target, passphrase):
-    salt, nonce = os.urandom(16), os.urandom(12)
-    cipher = Cipher(algorithms.AES(key_for(passphrase, salt)), modes.GCM(nonce)).encryptor()
-    with source.open("rb") as plain, target.open("wb") as output:
-        output.write(MAGIC + salt + nonce)
-        for block in iter(lambda: plain.read(CHUNK), b""):
-            output.write(cipher.update(block))
-        output.write(cipher.finalize())
-        output.write(cipher.tag)
-
-
-def decrypt(source, target, passphrase):
-    with source.open("rb") as encrypted, target.open("wb") as plain:
-        header = encrypted.read(len(MAGIC) + 28)
-        if len(header) != len(MAGIC) + 28 or not header.startswith(MAGIC):
-            raise ValueError("Invalid backup format.")
-        encrypted.seek(0, os.SEEK_END)
-        size = encrypted.tell()
-        if size < len(header) + 16:
-            raise ValueError("Incomplete backup file.")
-        encrypted.seek(size - 16)
-        tag = encrypted.read(16)
-        encrypted.seek(len(header))
-        remaining = size - len(header) - 16
-        cipher = Cipher(algorithms.AES(key_for(passphrase, header[len(MAGIC):len(MAGIC) + 16])), modes.GCM(header[-12:], tag)).decryptor()
-        while remaining:
-            block = encrypted.read(min(CHUNK, remaining))
-            if not block:
-                raise ValueError("Incomplete backup file.")
-            plain.write(cipher.update(block))
-            remaining -= len(block)
-        try:
-            plain.write(cipher.finalize())
-        except InvalidTag as exc:
-            raise ValueError("Wrong passphrase or damaged backup file.") from exc
-
-
 def add_bytes(archive, name, data):
     info = tarfile.TarInfo(name)
     info.size = len(data)
@@ -144,7 +96,7 @@ def file_hash(path):
     return digest.hexdigest()
 
 
-def create(passphrase):
+def create():
     BACKUP_DIR.mkdir(mode=0o750, parents=True, exist_ok=True)
     os.chown(BACKUP_DIR, 0, grp.getgrnam("sshvpn-panel").gr_gid)
     os.chmod(BACKUP_DIR, 0o750)
@@ -169,7 +121,7 @@ def create(passphrase):
         if database_names != {item["username"] for item in accounts}:
             raise RuntimeError("Database and Linux VPN accounts changed during backup; retry shortly.")
         manifest = {
-            "format": 1, "created_at": datetime.now(timezone.utc).isoformat(),
+            "format": 2, "created_at": datetime.now(timezone.utc).isoformat(),
             "account_count": len(accounts), "database_sha256": file_hash(database),
         }
         archive_path = directory / "backup.tar.gz"
@@ -181,10 +133,10 @@ def create(passphrase):
             add_bytes(archive, "usage.json", USAGE_FILE.read_bytes() if USAGE_FILE.exists() else b"{}")
             add_bytes(archive, "nginx.conf", Path("/etc/nginx/sites-available/sshvpn-panel").read_bytes())
             add_bytes(archive, "sshd_config", Path("/etc/ssh/sshd_config").read_bytes())
-        name = f"sshpanel-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{os.urandom(4).hex()}.svpb"
+        name = f"sshpanel-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{os.urandom(4).hex()}.tar.gz"
         pending = BACKUP_DIR / f".{name}.tmp"
         try:
-            encrypt(archive_path, pending, passphrase)
+            shutil.copyfile(archive_path, pending)
             os.chown(pending, 0, grp.getgrnam("sshvpn-panel").gr_gid)
             os.chmod(pending, 0o640)
             os.replace(pending, BACKUP_DIR / name)
@@ -207,7 +159,7 @@ def read_archive(path, directory):
     manifest = json.loads((directory / "manifest.json").read_text())
     accounts = json.loads((directory / "accounts.json").read_text())
     source_env = (directory / "panel.env").read_text()
-    if manifest.get("format") != 1 or not isinstance(accounts, list) or manifest.get("account_count") != len(accounts):
+    if manifest.get("format") != 2 or not isinstance(accounts, list) or manifest.get("account_count") != len(accounts):
         raise ValueError("Unsupported or incomplete backup.")
     if file_hash(directory / "database.dump") != manifest.get("database_sha256"):
         raise ValueError("Database checksum mismatch.")
@@ -236,8 +188,8 @@ def read_archive(path, directory):
     return accounts, secret
 
 
-def restore(upload_name, passphrase):
-    if not isinstance(upload_name, str) or not re.fullmatch(r"restore-[0-9a-f]{32}\.svpb", upload_name):
+def restore(upload_name):
+    if not isinstance(upload_name, str) or not re.fullmatch(r"restore-[0-9a-f]{32}\.tar\.gz", upload_name):
         raise ValueError("Invalid upload name.")
     upload = UPLOAD_DIR / upload_name
     if not upload.is_file() or upload.is_symlink():
@@ -245,9 +197,7 @@ def restore(upload_name, passphrase):
     values = env_values()
     with tempfile.TemporaryDirectory(prefix="sshpanel-restore-") as temporary:
         directory = Path(temporary)
-        plain = directory / "backup.tar.gz"
-        decrypt(upload, plain, passphrase)
-        accounts, secret = read_archive(plain, directory)
+        accounts, secret = read_archive(upload, directory)
         source_names = {item["username"] for item in accounts}
         target_accounts = managed_accounts()
         target_names = {item["username"] for item in target_accounts}
@@ -351,9 +301,9 @@ def main():
         with LOCK.open("a+") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
             if sys.argv[1] == "create":
-                print(json.dumps({"name": create(request["passphrase"])}))
+                print(json.dumps({"name": create()}))
             else:
-                print(json.dumps({"accounts": restore(request["name"], request["passphrase"])}))
+                print(json.dumps({"accounts": restore(request["name"])}))
     except (KeyError, ValueError, OSError, RuntimeError, subprocess.TimeoutExpired, tarfile.TarError, json.JSONDecodeError) as exc:
         print(str(exc), file=sys.stderr)
         return 1

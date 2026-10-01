@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 BACKUP_DIR = Path("/var/lib/sshvpn-panel/backups")
 UPLOAD_DIR = Path("/var/lib/sshvpn-panel/restore-uploads")
-BACKUP_NAME = re.compile(r"^sshpanel-\d{8}T\d{6}Z-[0-9a-f]{8}\.svpb$")
+BACKUP_NAME = re.compile(r"^sshpanel-\d{8}T\d{6}Z-[0-9a-f]{8}\.tar\.gz$")
 MAX_UPLOAD_SIZE = 1024 * 1024 * 1024
 
 
@@ -50,7 +50,7 @@ def save_upload(upload):
     if upload.size > MAX_UPLOAD_SIZE:
         raise BackupError("Backup upload exceeds the 1 GiB limit.")
     UPLOAD_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
-    name = f"restore-{uuid.uuid4().hex}.svpb"
+    name = f"restore-{uuid.uuid4().hex}.tar.gz"
     destination_path = UPLOAD_DIR / name
     try:
         with destination_path.open("xb") as destination:
