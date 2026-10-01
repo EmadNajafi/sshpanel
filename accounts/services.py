@@ -6,7 +6,7 @@ class ProvisionError(Exception):
     pass
 
 
-def call_helper(action, username=None, password=None, *, expires_at=None, max_connections=None, enabled=None, port=None):
+def call_helper(action, username=None, password=None, *, expires_at=None, max_connections=None, enabled=None, port=None, web_path=None, web_port=None):
     payload = {}
     if username is not None:
         payload["username"] = username
@@ -20,6 +20,10 @@ def call_helper(action, username=None, password=None, *, expires_at=None, max_co
         payload["enabled"] = enabled
     if port is not None:
         payload["port"] = port
+    if web_path is not None:
+        payload["path"] = web_path
+    if web_port is not None:
+        payload["port"] = web_port
     try:
         result = subprocess.run(
             ["sudo", "-n", "/usr/local/sbin/sshvpnctl", action],

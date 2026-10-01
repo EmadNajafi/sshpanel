@@ -7,9 +7,9 @@ from tempfile import TemporaryDirectory
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.urls import reverse
+from django.urls import get_script_prefix, reverse, set_script_prefix
 from django.utils import timezone
 
 from .models import AuditEvent, VpnAccount
@@ -192,6 +192,33 @@ class AccountViewsTests(TestCase):
         helper.assert_not_called()
         self.client.post(reverse("stage_ssh_port"), {"port": "6677"})
         helper.assert_called_once_with("port-stage", port=6677)
+
+    @patch("accounts.views.call_helper", return_value='{"url": "http://localhost:18080/private-42/"}')
+    def test_stage_web_address_shows_new_url_without_changing_current_request(self, helper):
+        response = self.client.post(reverse("stage_web_address"), {"path": "/private-42", "port": "18080"})
+        self.assertContains(response, "http://localhost:18080/private-42/settings/")
+        helper.assert_called_once_with("web-stage", web_path="/private-42", web_port=18080)
+
+    @patch("accounts.views.call_helper", return_value='{"url": "http://localhost:18080/private-42/"}')
+    def test_web_change_requires_staff_and_post(self, helper):
+        self.assertEqual(self.client.get(reverse("stage_web_address")).status_code, 405)
+        self.assertEqual(self.client.get(reverse("confirm_web_address")).status_code, 405)
+        self.client.logout()
+        self.assertEqual(self.client.post(reverse("stage_web_address"), {"path": "/private-42", "port": "18080"}).status_code, 302)
+        self.assertEqual(self.client.post(reverse("confirm_web_address")).status_code, 302)
+        helper.assert_not_called()
+
+    @override_settings(FORCE_SCRIPT_NAME="/private-42", STATIC_URL="/private-42/static/")
+    def test_prefixed_panel_links_and_login(self):
+        original_prefix = get_script_prefix()
+        set_script_prefix("/private-42")  # Django's test client skips WSGIHandler.__call__.
+        try:
+            page = self.client.get("/", SCRIPT_NAME="/private-42")
+        finally:
+            set_script_prefix(original_prefix)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, '/private-42/static/panel.css')
+        self.assertContains(page, 'href="/private-42/settings/"')
 
     @patch("accounts.views.call_helper")
     def test_dashboard_and_api_show_online_connections_and_transfer(self, helper):

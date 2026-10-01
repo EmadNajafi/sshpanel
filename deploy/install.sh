@@ -75,6 +75,7 @@ python3 -m venv /opt/ssh-vpn-panel/.venv
 db_password="$(openssl rand -hex 32)"
 secret_key="$(openssl rand -hex 48)"
 main_ssh_port="$(/usr/sbin/sshd -T | awk '$1 == "port" && !found {print $2; found=1}')"
+panel_path="/$(openssl rand -hex 6)"
 runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "CREATE ROLE sshvpn LOGIN PASSWORD '$db_password'"
 runuser -u postgres -- createdb -O sshvpn sshvpn
 install -d -m 0750 -o root -g sshvpn-panel /etc/sshvpn
@@ -84,6 +85,7 @@ PANEL_DOMAIN=$domain
 PANEL_EMAIL=$email
 PANEL_TLS_ENABLED=0
 PANEL_HTTP_PORT=$([[ $local_test -eq 1 ]] && echo 8080 || echo 80)
+PANEL_WEB_PATH=$panel_path
 VPN_SSH_PORT=$main_ssh_port
 DB_NAME=sshvpn
 DB_USER=sshvpn
@@ -99,6 +101,7 @@ install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_backup.py /usr/
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_policy.py /usr/local/sbin/sshvpn_policy.py
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_port.py /usr/local/sbin/sshvpn_port.py
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_usage.py /usr/local/sbin/sshvpn_usage.py
+install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_web.py /usr/local/sbin/sshvpn_web.py
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn-authz /usr/local/sbin/sshvpn-authz
 install -d -m 0700 -o root -g root /etc/sshvpn/accounts
 install -d -m 0750 -o root -g sshvpn-panel /var/lib/sshvpn-panel/backups
@@ -123,33 +126,11 @@ if [[ ! -e /usr/local/bin/menu ]]; then
   ln -s /usr/local/bin/sshvpn-menu /usr/local/bin/menu
 fi
 
-if [[ $local_test -eq 1 ]]; then
-  nginx_listen='127.0.0.1:8080'
-else
-  nginx_listen='80'
-fi
-cat > /etc/nginx/sites-available/sshvpn-panel <<EOF
-server {
-    listen $nginx_listen;
-    server_name $domain;
-    client_max_body_size 1100m;
-    proxy_read_timeout 420s;
-    location /static/ { alias /opt/ssh-vpn-panel/staticfiles/; }
-    location = /login/ {
-        limit_req zone=sshvpn_login burst=20 nodelay;
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-}
-EOF
+PYTHONPATH=/opt/ssh-vpn-panel/helper python3 - "$domain" "$([[ $local_test -eq 1 ]] && echo 8080 || echo 80)" "$panel_path" "$local_test" > /etc/nginx/sites-available/sshvpn-panel <<'PY'
+import sys
+from sshvpn_web import nginx_config
+print(nginx_config(sys.argv[1], int(sys.argv[2]), sys.argv[3], local_only=sys.argv[4] == "1"), end="")
+PY
 printf '%s\n' 'limit_req_zone $binary_remote_addr zone=sshvpn_login:10m rate=10r/m;' > /etc/nginx/conf.d/sshvpn-rate.conf
 ln -s /etc/nginx/sites-available/sshvpn-panel /etc/nginx/sites-enabled/sshvpn-panel
 nginx -t
@@ -170,9 +151,9 @@ sshvpn-configure-main-ssh
 systemctl enable --now postgresql nginx sshvpn-panel sshvpn-policy.timer sshvpn-usage.timer
 systemctl reload nginx
 if [[ $local_test -eq 1 ]]; then
-  echo "Panel HTTP: http://localhost:8080/ through an administrator SSH tunnel."
+  echo "Panel HTTP: http://localhost:8080$panel_path/ through an administrator SSH tunnel."
 else
-  echo "Panel HTTP: http://$domain/"
+  echo "Panel HTTP: http://$domain$panel_path/"
 fi
 echo "Optional SSL later: sudo menu ssl panel.example.com admin@example.com"
 echo "VPN accounts use the main SSH port shown by: sudo sshd -T | grep '^port '"

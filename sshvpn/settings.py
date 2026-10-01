@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import re
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -8,6 +9,10 @@ DEBUG = False
 TLS_ENABLED = os.environ.get("PANEL_TLS_ENABLED", "0") == "1"
 ALLOWED_HOSTS = [os.environ["PANEL_DOMAIN"]]
 HTTP_PORT = os.environ.get("PANEL_HTTP_PORT", "80")
+WEB_PATH = os.environ.get("PANEL_WEB_PATH", "").rstrip("/")
+if WEB_PATH and not re.fullmatch(r"/[A-Za-z0-9_-]{1,64}", WEB_PATH):
+    raise ValueError("Invalid PANEL_WEB_PATH.")
+FORCE_SCRIPT_NAME = WEB_PATH or None
 VPN_SSH_PORT = int(os.environ.get("VPN_SSH_PORT", "22"))
 if os.environ["PANEL_DOMAIN"] == "localhost":
     ALLOWED_HOSTS.append("127.0.0.1")
@@ -67,7 +72,7 @@ LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
-STATIC_URL = "static/"
+STATIC_URL = f"{WEB_PATH}/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "login"

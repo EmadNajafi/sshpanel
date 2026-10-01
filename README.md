@@ -41,6 +41,8 @@ For migration, install the same version of this panel on a fresh Ubuntu 24.04 se
 
 ## Install: HTTP first
 
+In **Settings → Web address**, an administrator can set a single-segment URL path and HTTP port. Existing installations keep their current address until the form is submitted. Open the new URL and confirm it there within five minutes; an unconfirmed change or a failed local health check restores the previous Nginx and panel configuration. Allow the chosen port through host and provider firewalls first. The path is an address choice, not an authentication or TLS substitute. Web address changes from the panel are available in HTTP mode; the SSL menu continues to manage HTTPS.
+
 For an existing installation, update the checkout and run `sudo bash deploy/upgrade.sh` instead of the fresh installer. If the server uses `/root/.ssh/sshpanel_deploy`, run `GIT_SSH_COMMAND='ssh -i /root/.ssh/sshpanel_deploy -o IdentitiesOnly=yes' git pull --ff-only` to update it. The upgrade backs up the database and configuration and retains the web administrator, VPN accounts, listener addresses, and current TLS mode.
 
 To make a previously loopback-only HTTP panel reachable at the server's public IPv4, run `sudo menu web-public SERVER_PUBLIC_IP` after upgrading. This switches Nginx to port 80 and updates Django's allowed host without changing VPN users or SSH ports. Allow inbound TCP 80 in the host and provider firewalls if needed. Administrator credentials are unencrypted over HTTP until you opt into SSL.
@@ -48,7 +50,7 @@ To make a previously loopback-only HTTP panel reachable at the server's public I
 1. Keep an administrator SSH session open and take a server snapshot. Give the server read access to this private GitHub repository.
 2. Clone the repository and run `sudo bash deploy/install.sh` from its root. You can pass a domain or IPv4 address as the first argument to skip the host prompt.
 3. The **first interactive prompts** ask for the web administrator username and password, including password confirmation. The password input is hidden, is sent to Django through stdin, and is stored only as a hash.
-4. Enter the domain or IPv4 address for the panel if prompted. The installer starts the panel on **HTTP port 80** and does not request a certificate.
+4. Enter the domain or IPv4 address for the panel if prompted. The installer starts the panel on **HTTP port 80** with a generated path, prints the full URL, and does not request a certificate.
 5. Test VPN forwarding and denied shell/SFTP/internal destinations on the server's existing SSH port.
 
 For example, with an IPv4 address:
@@ -71,7 +73,7 @@ Run `sudo bash deploy/install.sh --local-test`. This binds **the web panel** to 
 ssh -N -L 127.0.0.1:8080:127.0.0.1:8080 root@SERVER_IP
 ```
 
-Open `http://localhost:8080/login/` on the computer running the tunnel. The installer asks for and creates the administrator before it starts the web service. When you are ready to use a domain, point its DNS record to the server, make ports 80 and 443 reachable, and run `sudo menu ssl panel.example.com admin@example.com`. This switches the panel from the local test listener to HTTPS. A failed certificate request restores the local Nginx settings. Any preexisting Nginx sites remain active.
+Open the full `http://localhost:8080/.../` URL printed by the installer on the computer running the tunnel. The installer asks for and creates the administrator before it starts the web service. When you are ready to use a domain, point its DNS record to the server, make ports 80 and 443 reachable, and run `sudo menu ssl panel.example.com admin@example.com`. This switches the panel from the local test listener to HTTPS while retaining its path. A failed certificate request restores the local Nginx settings. Any preexisting Nginx sites remain active.
 
 `sudo menu` opens an interactive list. Direct commands include `ssl`, `renew`, `status`, `restart`, `logs`, `backup`, `admin`, and `admin-password USERNAME`.
 

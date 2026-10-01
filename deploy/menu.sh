@@ -60,7 +60,7 @@ PY
     echo "Enter a public IPv4 address." >&2
     return 1
   fi
-  if ! grep -Eq '^[[:space:]]*listen[[:space:]]+(127\.0\.0\.1:8080|80);' "$nginx_config" || \
+  if ! grep -Eq '^[[:space:]]*listen[[:space:]]+(127\.0\.0\.1:)?[0-9]+;' "$nginx_config" || \
      ! grep -q '^PANEL_DOMAIN=' "$env_file"; then
     echo "Unexpected panel configuration; no changes made." >&2
     return 1
@@ -71,7 +71,7 @@ PY
   candidate="$(mktemp)"
   cp "$nginx_config" "$nginx_backup"
   cp "$env_file" "$env_backup"
-  sed -E -e 's/listen 127\.0\.0\.1:8080;/listen 80;/' \
+  sed -E -e 's/listen (127\.0\.0\.1:)?[0-9]+;/listen 80;/' \
       -e "s/server_name [^;]*;/server_name $ip;/" "$nginx_config" > "$candidate"
   if ! grep -Eq '^[[:space:]]*listen[[:space:]]+80;' "$candidate" || \
      ! grep -Fq "server_name $ip;" "$candidate"; then
@@ -98,17 +98,17 @@ PY
     return 1
   fi
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
-    if python3 - "$ip" <<'PY' 2>/dev/null
+    if python3 - "$ip" "${PANEL_WEB_PATH:-}" <<'PY' 2>/dev/null
 import http.client
 import sys
 connection = http.client.HTTPConnection("127.0.0.1", 80, timeout=5)
-connection.request("GET", "/login/", headers={"Host": sys.argv[1]})
+connection.request("GET", sys.argv[2] + "/login/", headers={"Host": sys.argv[1]})
 response = connection.getresponse()
 sys.exit(0 if response.status == 200 else 1)
 PY
     then
       rm -f "$nginx_backup" "$env_backup" "$candidate"
-      echo "Panel HTTP is active at http://$ip/login/"
+      echo "Panel HTTP is active at http://$ip${PANEL_WEB_PATH:-}/login/"
       echo "If it is unreachable from outside, allow inbound TCP 80 in the server and cloud firewalls."
       return 0
     fi
@@ -161,7 +161,8 @@ activate_tls() {
   cp "$env_file" "$env_backup"
   if ! sed -i -e "s/^PANEL_DOMAIN=.*/PANEL_DOMAIN=$domain/" \
       -e "s/^PANEL_EMAIL=.*/PANEL_EMAIL=$email/" \
-      -e 's/^PANEL_TLS_ENABLED=.*/PANEL_TLS_ENABLED=1/' "$env_file" || \
+      -e 's/^PANEL_TLS_ENABLED=.*/PANEL_TLS_ENABLED=1/' \
+      -e 's/^PANEL_HTTP_PORT=.*/PANEL_HTTP_PORT=80/' "$env_file" || \
      ! chown root:sshvpn-panel "$env_file" || ! chmod 0640 "$env_file" || \
      ! systemctl restart sshvpn-panel; then
     install -m 0640 -o root -g sshvpn-panel "$env_backup" "$env_file"
@@ -170,7 +171,7 @@ activate_tls() {
     echo "Panel activation failed; local panel settings were restored." >&2
     return 1
   fi
-  sed -e 's/listen 127.0.0.1:8080;/listen 80;/' \
+  sed -E -e 's/listen (127\.0\.0\.1:)?[0-9]+;/listen 80;/' \
       -e "s/server_name [^;]*;/server_name $domain;/" "$nginx_config" > "$candidate"
   install -m 0644 -o root -g root "$candidate" "$nginx_config"
   rm -f "$candidate"
@@ -186,7 +187,7 @@ activate_tls() {
     return 1
   fi
   rm -f "$nginx_backup" "$env_backup"
-  echo "Panel HTTPS is active at https://$domain/"
+  echo "Panel HTTPS is active at https://$domain${PANEL_WEB_PATH:-}/"
 }
 
 create_admin() {

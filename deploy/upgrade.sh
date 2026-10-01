@@ -48,6 +48,9 @@ if ! grep -q '^PANEL_HTTP_PORT=' /etc/sshvpn/panel.env; then
     printf '%s\n' 'PANEL_HTTP_PORT=80' >> /etc/sshvpn/panel.env
   fi
 fi
+if ! grep -q '^PANEL_WEB_PATH=' /etc/sshvpn/panel.env; then
+  printf '%s\n' 'PANEL_WEB_PATH=' >> /etc/sshvpn/panel.env
+fi
 main_ssh_port="$(/usr/sbin/sshd -T | awk '$1 == "port" && !found {print $2; found=1}')"
 if grep -q '^VPN_SSH_PORT=' /etc/sshvpn/panel.env; then
   sed -i -E "s/^VPN_SSH_PORT=.*/VPN_SSH_PORT=$main_ssh_port/" /etc/sshvpn/panel.env
@@ -65,6 +68,7 @@ install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_backup.py /usr/
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_policy.py /usr/local/sbin/sshvpn_policy.py
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_port.py /usr/local/sbin/sshvpn_port.py
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_usage.py /usr/local/sbin/sshvpn_usage.py
+install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_web.py /usr/local/sbin/sshvpn_web.py
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn-authz /usr/local/sbin/sshvpn-authz
 install -d -m 0700 -o root -g root /etc/sshvpn/accounts
 install -d -m 0750 -o root -g sshvpn-panel /var/lib/sshvpn-panel/backups

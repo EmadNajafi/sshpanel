@@ -200,6 +200,15 @@ td { color: #506078; font-size: 12px; }
 .settings-current-port > div { display: flex; align-items: baseline; gap: 17px; }
 .settings-detail-label { color: #6c82a6; font-size: 10px; font-weight: 800; letter-spacing: .13em; }
 .settings-current-port strong { color: #1f55bd; font-size: 24px; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+.settings-current-web > div { min-width: 0; flex-wrap: wrap; }
+.settings-current-web strong { font-size: 16px; overflow-wrap: anywhere; letter-spacing: 0; }
+.web-address-form { display: grid; grid-template-columns: minmax(0, 2fr) minmax(135px, 1fr); gap: 16px 18px; }
+.web-address-form .settings-field-note { grid-column: 1 / -1; }
+.web-address-form > .button { justify-self: start; grid-column: 1 / -1; }
+.web-change-panel { max-width: 650px; margin: 45px auto; }
+.web-change-panel h1 { margin: 0 0 12px; font-size: 28px; }
+.web-change-panel > p:not(.eyebrow) { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.web-change-panel .button { margin: 10px 0 16px; }
 .settings-live-badge { display: inline-flex; align-items: center; gap: 9px; padding: 7px 11px; border-radius: 99px; background: #e1f7ed; color: #19835d; font-size: 11px; font-weight: 800; }
 .settings-live-badge .status-dot { box-shadow: none; background: #22b67e; }
 .settings-port-form { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding-top: 20px; border-top: 1px solid #e9eef5; }
@@ -308,6 +317,7 @@ td { color: #506078; font-size: 12px; }
   .admin-badge { display: none; }
 }
 @media (max-width: 520px) {
+  .web-address-form { grid-template-columns: 1fr; }
   .settings-section { padding: 22px 18px; }
   .settings-password-form { grid-template-columns: 1fr; }
   .settings-form-row:first-of-type { grid-column: auto; max-width: none; }

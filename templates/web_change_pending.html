@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block title %}Changing web address · SSH VPN Panel{% endblock %}
+{% block content %}
+<div class="panel web-change-panel">
+  <p class="eyebrow">PANEL ACCESS</p>
+  <h1>Open the new panel address</h1>
+  <p>The new address is being activated. Wait a few seconds, then open it and confirm the change in Settings within five minutes.</p>
+  <a class="button button-primary" href="{{ new_url }}settings/">Open new address <span aria-hidden="true">→</span></a>
+  <p class="settings-field-note">New address: <code>{{ new_url }}</code></p>
+  <p class="settings-field-note">If the new port is blocked or the page does not load, the previous address will return automatically after five minutes.</p>
+</div>
+{% endblock %}

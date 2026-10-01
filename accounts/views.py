@@ -285,11 +285,52 @@ def panel_settings(request):
         pending_port = json.loads(call_helper("port-status"))
     except (ProvisionError, ValueError):
         pending_port = None
+    try:
+        pending_web = json.loads(call_helper("web-status"))
+    except (ProvisionError, ValueError, TypeError):
+        pending_web = None
+    web_path = settings.WEB_PATH
+    web_port = settings.HTTP_PORT
+    web_scheme = "https" if settings.TLS_ENABLED else "http"
+    web_port_suffix = "" if settings.TLS_ENABLED or web_port == "80" else f":{web_port}"
     return render(request, "settings.html", {
         "password_form": PasswordChangeForm(request.user),
         "ssh_port": get_ssh_port(),
         "pending_port": pending_port,
+        "pending_web": pending_web,
+        "panel_web_path": web_path or "/",
+        "panel_web_port": web_port,
+        "panel_web_url": f"{web_scheme}://{settings.ALLOWED_HOSTS[0]}{web_port_suffix}{web_path}/",
+        "tls_enabled": settings.TLS_ENABLED,
     })
+
+
+@staff_required
+@require_POST
+def stage_web_address(request):
+    try:
+        port = int(request.POST.get("port", ""))
+        result = json.loads(call_helper("web-stage", web_path=request.POST.get("path", ""), web_port=port))
+    except (ValueError, ProvisionError) as exc:
+        record(request, "server", "web-stage", False)
+        messages.error(request, str(exc))
+        return redirect("panel_settings")
+    record(request, "server", "web-stage", True)
+    return render(request, "web_change_pending.html", {"new_url": result["url"]})
+
+
+@staff_required
+@require_POST
+def confirm_web_address(request):
+    try:
+        call_helper("web-confirm")
+    except ProvisionError as exc:
+        record(request, "server", "web-confirm", False)
+        messages.error(request, str(exc))
+    else:
+        record(request, "server", "web-confirm", True)
+        messages.success(request, "The new panel address is confirmed.")
+    return redirect("panel_settings")
 
 
 @staff_required
