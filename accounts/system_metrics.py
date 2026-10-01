@@ -24,14 +24,19 @@ def _cpu_times():
 
 def _cpu_metric():
     before_total, before_idle = _cpu_times()
-    time.sleep(0.5)
+    time.sleep(0.75)
     after_total, after_idle = _cpu_times()
     total = after_total - before_total
     used = total - (after_idle - before_idle)
-    return {
-        "percent": round(max(0, min(100, 100 * used / total)), 1) if total > 0 else None,
-        "detail": f"{os.cpu_count() or 1} CPU cores · live usage",
-    }
+    percent = round(max(0.0, min(100.0, 100.0 * used / total)), 1) if total > 0 else None
+    try:
+        load = os.getloadavg()[0]
+    except (AttributeError, OSError):
+        load = None
+    detail = f"{os.cpu_count() or 1} CPU cores"
+    if load is not None:
+        detail += f" · load {load:.2f}"
+    return {"percent": percent, "detail": detail}
 
 
 def _memory_metric():

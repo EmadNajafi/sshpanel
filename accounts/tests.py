@@ -178,6 +178,13 @@ class SystemMetricsTests(TestCase):
         self.assertEqual(_cpu_metric()["percent"], 80)
         pause.assert_called_once()
 
+    @patch("accounts.system_metrics.time.sleep")
+    @patch("accounts.system_metrics._cpu_times", side_effect=[(100, 100), (200, 200)])
+    def test_idle_cpu_is_shown_as_a_number(self, samples, pause):
+        metric = _cpu_metric()
+        self.assertEqual(metric["percent"], 0.0)
+        self.assertIsInstance(metric["percent"], float)
+
     @patch("accounts.system_metrics._cpu_metric", side_effect=OSError("proc missing"))
     @patch("accounts.system_metrics._memory_metric", return_value={"percent": 40, "detail": "Memory"})
     @patch("accounts.system_metrics._disk_metric", return_value={"percent": 60, "detail": "Disk"})
