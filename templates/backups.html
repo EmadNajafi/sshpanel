@@ -5,6 +5,7 @@
   <div><p class="eyebrow">SETTINGS / DATA & RECOVERY</p><h1>Backup and restore</h1><p class="page-intro">Move your panel and VPN accounts to another Ubuntu 24.04 server.</p></div>
   <a class="button button-secondary" href="{% url 'panel_settings' %}">← Settings</a>
 </div>
+{% if not tls_enabled %}<div class="notice error" role="alert">This panel is using HTTP. Use an administrator SSH tunnel or enable HTTPS before entering a backup passphrase over an untrusted network.</div>{% endif %}
 <div class="settings-grid">
   <section class="panel settings-panel">
     <div class="panel-heading"><div><p class="eyebrow">CREATE</p><h2>New encrypted backup</h2></div></div>

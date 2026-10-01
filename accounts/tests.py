@@ -195,7 +195,9 @@ class AccountViewsTests(TestCase):
 
     @patch("accounts.views.list_backups", return_value=[])
     def test_backup_settings_requires_staff(self, listing):
-        self.assertContains(self.client.get(reverse("backup_settings")), "Backup and restore")
+        page = self.client.get(reverse("backup_settings"))
+        self.assertContains(page, "Backup and restore")
+        self.assertContains(page, "This panel is using HTTP")
         self.client.logout()
         self.assertEqual(self.client.get(reverse("backup_settings")).status_code, 302)
         self.assertEqual(self.client.post(reverse("create_backup"), {"passphrase": "A" * 16}).status_code, 302)

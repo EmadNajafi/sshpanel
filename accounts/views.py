@@ -257,7 +257,7 @@ def backup_settings(request):
     except OSError:
         backups = []
         messages.error(request, "Backups could not be listed.")
-    return render(request, "backups.html", {"backups": backups})
+    return render(request, "backups.html", {"backups": backups, "tls_enabled": settings.TLS_ENABLED})
 
 
 @staff_required
