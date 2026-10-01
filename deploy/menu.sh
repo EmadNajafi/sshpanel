@@ -46,7 +46,7 @@ show_menu() {
 
 web_public() {
   local ip="${1:-}" nginx_config=/etc/nginx/sites-available/sshvpn-panel
-  local env_file=/etc/sshvpn/panel.env nginx_backup env_backup candidate
+  local env_file=/etc/sshvpn/panel.env nginx_backup env_backup candidate attempt
   if [[ $# -ne 1 || "${PANEL_TLS_ENABLED:-1}" != "0" ]]; then
     echo "Usage: sudo menu web-public SERVER_PUBLIC_IPV4 (HTTP installations only)" >&2
     return 1
@@ -77,6 +77,12 @@ PY
   cp "$env_file" "$env_backup"
   sed -E -e 's/listen 127\.0\.0\.1:8080;/listen 80;/' \
       -e "s/server_name [^;]*;/server_name $ip;/" "$nginx_config" > "$candidate"
+  if ! grep -Eq '^[[:space:]]*listen[[:space:]]+80;' "$candidate" || \
+     ! grep -Fq "server_name $ip;" "$candidate"; then
+    rm -f "$nginx_backup" "$env_backup" "$candidate"
+    echo "Could not prepare the public HTTP configuration; no changes made." >&2
+    return 1
+  fi
   install -m 0644 -o root -g root "$candidate" "$nginx_config"
   sed -i -e "s/^PANEL_DOMAIN=.*/PANEL_DOMAIN=$ip/" \
       -e 's/^PANEL_HTTP_PORT=.*/PANEL_HTTP_PORT=80/' "$env_file"
@@ -86,16 +92,7 @@ PY
   chown root:sshvpn-panel "$env_file"
   chmod 0640 "$env_file"
 
-  if ! nginx -t || ! systemctl restart sshvpn-panel || ! systemctl reload nginx || \
-     ! python3 - "$ip" <<'PY'
-import http.client
-import sys
-connection = http.client.HTTPConnection("127.0.0.1", 80, timeout=5)
-connection.request("GET", "/login/", headers={"Host": sys.argv[1]})
-response = connection.getresponse()
-sys.exit(0 if response.status == 200 else 1)
-PY
-  then
+  if ! nginx -t || ! systemctl restart sshvpn-panel || ! systemctl reload nginx; then
     install -m 0644 -o root -g root "$nginx_backup" "$nginx_config"
     install -m 0640 -o root -g sshvpn-panel "$env_backup" "$env_file"
     systemctl reload nginx || true
@@ -104,9 +101,30 @@ PY
     echo "Public HTTP activation failed; previous panel settings were restored." >&2
     return 1
   fi
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    if python3 - "$ip" <<'PY' 2>/dev/null
+import http.client
+import sys
+connection = http.client.HTTPConnection("127.0.0.1", 80, timeout=5)
+connection.request("GET", "/login/", headers={"Host": sys.argv[1]})
+response = connection.getresponse()
+sys.exit(0 if response.status == 200 else 1)
+PY
+    then
+      rm -f "$nginx_backup" "$env_backup" "$candidate"
+      echo "Panel HTTP is active at http://$ip/login/"
+      echo "If it is unreachable from outside, allow inbound TCP 80 in the server and cloud firewalls."
+      return 0
+    fi
+    sleep 1
+  done
+  install -m 0644 -o root -g root "$nginx_backup" "$nginx_config"
+  install -m 0640 -o root -g sshvpn-panel "$env_backup" "$env_file"
+  systemctl reload nginx || true
+  systemctl restart sshvpn-panel || true
   rm -f "$nginx_backup" "$env_backup" "$candidate"
-  echo "Panel HTTP is active at http://$ip/login/"
-  echo "If it is unreachable from outside, allow inbound TCP 80 in the server and cloud firewalls."
+  echo "Public HTTP did not answer on port 80; previous panel settings were restored." >&2
+  return 1
 }
 
 issue_ssl() {
