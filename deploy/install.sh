@@ -14,7 +14,7 @@ if ! grep -Eq '^Include /etc/ssh/sshd_config.d/\*\.conf' /etc/ssh/sshd_config; t
   echo "Main sshd does not include sshd_config.d; refusing to install." >&2; exit 1
 fi
 if [[ -e /opt/ssh-vpn-panel || -e /etc/sshvpn/panel.env ]]; then
-  echo "Existing installation found; refusing to overwrite it." >&2; exit 1
+  echo "Existing installation found. To preserve its database and accounts, run: sudo bash deploy/upgrade.sh" >&2; exit 1
 fi
 
 read -r -p "Administrator username: " admin_username

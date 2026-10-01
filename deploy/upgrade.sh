@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $EUID -ne 0 ]]; then echo "Run as root." >&2; exit 1; fi
+if (( $# != 0 )); then echo "Usage: sudo bash deploy/upgrade.sh" >&2; exit 1; fi
+if ! grep -q '^ID=ubuntu$' /etc/os-release || ! grep -q '^VERSION_ID="24.04"$' /etc/os-release; then
+  echo "This upgrade targets Ubuntu 24.04 only." >&2; exit 1
+fi
+
+repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ "$repo_dir" == /opt/ssh-vpn-panel ]]; then
+  echo "Run this upgrade from a separate Git checkout, not the live installation." >&2; exit 1
+fi
+if [[ ! -f /opt/ssh-vpn-panel/manage.py || ! -x /opt/ssh-vpn-panel/.venv/bin/python || \
+      ! -f /etc/sshvpn/panel.env || ! -f /etc/nginx/sites-available/sshvpn-panel || \
+      ! -f /etc/ssh/sshvpn_sshd_config ]]; then
+  echo "A complete existing SSH VPN panel installation was not found; refusing to change it." >&2; exit 1
+fi
+/usr/sbin/sshd -t
+/usr/sbin/sshd -t -f /etc/ssh/sshvpn_sshd_config
+main_ssh_policy="$(/usr/sbin/sshd -T)"
+vpn_ssh_policy="$(/usr/sbin/sshd -T -f /etc/ssh/sshvpn_sshd_config)"
+if ! grep -Eq '^denygroups (.* )?sshvpn( |$)' <<< "$main_ssh_policy" || \
+   ! grep -Fxq 'allowgroups sshvpn' <<< "$vpn_ssh_policy" || \
+   ! grep -Fxq 'maxsessions 0' <<< "$vpn_ssh_policy" || \
+   ! grep -Fxq 'allowtcpforwarding local' <<< "$vpn_ssh_policy" || \
+   ! grep -Fxq 'permittty no' <<< "$vpn_ssh_policy"; then
+  echo "SSH VPN restrictions are not effective; refusing to upgrade." >&2
+  exit 1
+fi
+
+# Preserve the live configuration, application code, and database before copying files.
+set -a
+source /etc/sshvpn/panel.env
+set +a
+backup_dir="/var/backups/sshvpn-panel/upgrade-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+install -d -m 0700 -o root -g root "$backup_dir"
+cp -a /etc/sshvpn/panel.env "$backup_dir/panel.env"
+cp -a /etc/nginx/sites-available/sshvpn-panel "$backup_dir/nginx-panel"
+cp -a /etc/ssh/sshvpn_sshd_config "$backup_dir/sshvpn_sshd_config"
+tar -C /opt --exclude='ssh-vpn-panel/.venv' --exclude='ssh-vpn-panel/staticfiles' \
+  -czf "$backup_dir/application.tar.gz" ssh-vpn-panel
+runuser -u postgres -- pg_dump -Fc "${DB_NAME:-sshvpn}" > "$backup_dir/database.dump"
+chmod 0600 "$backup_dir/database.dump"
+
+# Keep the existing administrator, VPN accounts, listener addresses, and TLS mode.
+rsync -a --exclude='.git' --exclude='.venv' --exclude='.env' \
+  --exclude='staticfiles' --exclude='__pycache__' "$repo_dir/" /opt/ssh-vpn-panel/
+chown -R root:root /opt/ssh-vpn-panel
+/opt/ssh-vpn-panel/.venv/bin/pip install --no-cache-dir -r /opt/ssh-vpn-panel/requirements.txt
+
+if ! grep -q '^PANEL_HTTP_PORT=' /etc/sshvpn/panel.env; then
+  if grep -Eq '^[[:space:]]*listen[[:space:]]+127\.0\.0\.1:8080;' /etc/nginx/sites-available/sshvpn-panel; then
+    printf '%s\n' 'PANEL_HTTP_PORT=8080' >> /etc/sshvpn/panel.env
+  else
+    printf '%s\n' 'PANEL_HTTP_PORT=80' >> /etc/sshvpn/panel.env
+  fi
+fi
+chown root:sshvpn-panel /etc/sshvpn/panel.env
+chmod 0640 /etc/sshvpn/panel.env
+set -a
+source /etc/sshvpn/panel.env
+set +a
+
+install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpnctl /usr/local/sbin/sshvpnctl
+install -m 0755 -o root -g root /opt/ssh-vpn-panel/deploy/menu.sh /usr/local/bin/sshvpn-menu
+nginx -t
+/usr/sbin/sshd -t
+/usr/sbin/sshd -t -f /etc/ssh/sshvpn_sshd_config
+cd /opt/ssh-vpn-panel
+runuser -u sshvpn-panel -- .venv/bin/python manage.py check
+runuser -u sshvpn-panel -- .venv/bin/python manage.py migrate --noinput
+.venv/bin/python manage.py collectstatic --noinput
+systemctl restart sshvpn-panel
+systemctl is-active --quiet sshvpn-panel
+
+echo "Upgrade complete. Existing accounts and web administrator were retained."
+echo "Backup: $backup_dir"
+echo "Panel URL and SSL mode remain as configured before this upgrade."
