@@ -1,17 +1,21 @@
 from datetime import timedelta
+import json
 
 from django.contrib import messages
+from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.decorators import user_passes_test
 from django.conf import settings
 from django.db import IntegrityError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 from django.utils import timezone
 
 from .forms import CreateAccountForm, EditAccountForm, PasswordForm
 from .models import AuditEvent, VpnAccount
-from .services import ProvisionError, call_helper
+from .services import ProvisionError, call_helper, get_ssh_port
+from .secrets import decrypt_password, encrypt_password
 from .system_metrics import get_system_metrics
 
 
@@ -28,7 +32,7 @@ def dashboard(request):
         "metrics": get_system_metrics(),
         "events": AuditEvent.objects.select_related("actor")[:20],
         "create_form": CreateAccountForm(),
-        "vpn_ssh_port": settings.VPN_SSH_PORT,
+        "vpn_ssh_port": get_ssh_port(),
     })
 
 
@@ -65,6 +69,7 @@ def create_account(request):
             VpnAccount.objects.create(
                 username=username, created_by=request.user,
                 expires_at=expires_at, max_connections=max_connections,
+                password_ciphertext=encrypt_password(form.cleaned_data["password"]),
             )
         except IntegrityError:
             call_helper("delete", username)
@@ -110,7 +115,11 @@ def edit_account(request, pk):
     else:
         account.expires_at = expires_at
         account.max_connections = max_connections
-        account.save(update_fields=["expires_at", "max_connections"])
+        fields = ["expires_at", "max_connections"]
+        if password is not None:
+            account.password_ciphertext = encrypt_password(password)
+            fields.append("password_ciphertext")
+        account.save(update_fields=fields)
         record(request, account.username, "update", True)
         messages.success(request, f"Updated {account.username}.")
     return redirect("dashboard")
@@ -168,6 +177,90 @@ def reset_password(request, pk):
         record(request, account.username, "password", False)
         messages.error(request, str(exc))
     else:
+        account.password_ciphertext = encrypt_password(form.cleaned_data["password"])
+        account.save(update_fields=["password_ciphertext"])
         record(request, account.username, "password", True)
         messages.success(request, f"Changed password for {account.username}.")
     return redirect("dashboard")
+
+
+@staff_required
+@require_GET
+def account_password(request, pk):
+    account = get_object_or_404(VpnAccount, pk=pk)
+    response = JsonResponse({"password": decrypt_password(account.password_ciphertext)})
+    response["Cache-Control"] = "no-store, private"
+    return response
+
+
+@staff_required
+def panel_settings(request):
+    try:
+        pending_port = json.loads(call_helper("port-status"))
+    except (ProvisionError, ValueError):
+        pending_port = None
+    return render(request, "settings.html", {
+        "password_form": PasswordChangeForm(request.user),
+        "ssh_port": get_ssh_port(),
+        "pending_port": pending_port,
+    })
+
+
+@staff_required
+@require_POST
+def change_admin_password(request):
+    form = PasswordChangeForm(request.user, request.POST)
+    if form.is_valid():
+        user = form.save()
+        update_session_auth_hash(request, user)
+        messages.success(request, "Administrator password changed.")
+    else:
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                messages.error(request, error)
+    return redirect("panel_settings")
+
+
+@staff_required
+@require_POST
+def stage_ssh_port(request):
+    try:
+        port = int(request.POST.get("port", ""))
+        if not 1 <= port <= 65535:
+            raise ValueError("Enter a valid TCP port (1–65535).")
+        call_helper("port-stage", port=port)
+    except (ValueError, ProvisionError) as exc:
+        record(request, "server", "port-stage", False)
+        messages.error(request, str(exc))
+    else:
+        record(request, "server", "port-stage", True)
+        messages.success(request, f"Port {port} is listening. Test a new SSH connection before closing the old port.")
+    return redirect("panel_settings")
+
+
+@staff_required
+@require_POST
+def finalize_ssh_port(request):
+    try:
+        result = json.loads(call_helper("port-finalize"))
+    except (ProvisionError, ValueError) as exc:
+        record(request, "server", "port-finalize", False)
+        messages.error(request, str(exc))
+    else:
+        record(request, "server", "port-finalize", True)
+        messages.success(request, f"SSH now uses port {result['new']}. The old port is closed.")
+    return redirect("panel_settings")
+
+
+@staff_required
+@require_POST
+def cancel_ssh_port(request):
+    try:
+        call_helper("port-cancel")
+    except ProvisionError as exc:
+        record(request, "server", "port-cancel", False)
+        messages.error(request, str(exc))
+    else:
+        record(request, "server", "port-cancel", True)
+        messages.success(request, "Port change canceled; the original SSH port is active.")
+    return redirect("panel_settings")

@@ -1,4 +1,30 @@
 (() => {
+  document.querySelectorAll("[data-reveal-password]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const value = button.closest(".password-cell").querySelector("[data-password-value]");
+      if (button.dataset.visible === "true") {
+        value.textContent = "••••••";
+        button.textContent = "Show";
+        button.dataset.visible = "false";
+        return;
+      }
+      button.disabled = true;
+      try {
+        const response = await fetch(button.dataset.passwordUrl, {
+          credentials: "same-origin", headers: { Accept: "application/json" }, cache: "no-store",
+        });
+        if (!response.ok) throw new Error("Request failed");
+        const data = await response.json();
+        value.textContent = data.password ?? "Unavailable — set a new password";
+        button.textContent = "Hide";
+        button.dataset.visible = "true";
+      } catch (_error) {
+        value.textContent = "Could not load password";
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
   document.querySelectorAll("[data-open-dialog]").forEach((button) => {
     button.addEventListener("click", () => document.getElementById(button.dataset.openDialog).showModal());
   });

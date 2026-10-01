@@ -4,9 +4,9 @@ A web panel for password based OpenSSH SOCKS and local forwarding accounts on Ub
 
 ## Components
 
-- Django staff sign in, account creation with active days and simultaneous VPN connection limit, disabling, enabling, password reset, deletion, and audit events.
+- Django staff sign in, account creation and editing with active days and simultaneous VPN connection limit, disabling, enabling, password reset, deletion, and audit events.
 - Dashboard cards show server CPU, available-memory usage, and root-filesystem disk usage. They refresh every 15 seconds while the dashboard is open and are accessible only to staff.
-- PostgreSQL for metadata. VPN passwords are sent to the Linux account helper and are not stored in the database.
+- PostgreSQL for metadata. New and changed VPN passwords are encrypted before storage and can be revealed by a signed-in staff administrator. Existing passwords created before this feature cannot be recovered from Linux hashes; set a new password to make them available in the list.
 - A root owned helper with a fixed set of allowed operations; the web service can run only that helper through sudo.
 - Nginx and Gunicorn for the panel, VPN accounts on the server's existing SSH port, and a `menu` command for administration and later SSL issuance.
 - An nftables output policy for VPN forwarding sockets that blocks this host, loopback, private, link local, and other nonpublic destination ranges. Ubuntu's local DNS stub is allowed on port 53.
@@ -20,6 +20,10 @@ At account creation, enter the Linux login name, VPN password, number of active 
 The PAM hook is added only once to `/etc/pam.d/sshd`, before the normal account rules, and bypasses Linux users outside the `sshvpn` group. Its previous file is saved under `/var/backups/sshvpn-panel`. Earlier VPN accounts receive an unlimited policy on upgrade; new accounts receive the selected limits. The hook and the timer must both be working for the limits to be enforced.
 
 The installer keeps the SSH port already configured on the server; it does not open another listener. The egress policy blocks VPN forwarding to this host and private networks. Review existing firewall and cloud network rules for the SSH port. On servers with public address translation, test that forwarding cannot reach the server through its external address. The managed SSH block is appended to `/etc/ssh/sshd_config`; keep it at the end when editing SSH settings later. The installer and upgrade back up SSH configuration before changing it and validate it before reloading the service.
+
+The hamburger menu opens **Settings**. There an administrator can change their own password using the current password, or stage a new shared SSH port. Staging keeps the original port active, validates SSH configuration and verifies that the new port is listening locally. Open a separate SSH connection through the new port from outside the server, then confirm in Settings to close the old port. Cancel restores the original port. Host and provider firewalls may need a rule for the new port. Keep a working administrator session open while changing ports.
+
+The credential display uses a server-side encrypted database field; its encryption key is derived from `DJANGO_SECRET_KEY` in `/etc/sshvpn/panel.env`. Preserve that value in backups. Revealed passwords are served only to authenticated staff with `Cache-Control: no-store`. Enable HTTPS before revealing passwords over an untrusted network; the initial HTTP mode does not encrypt browser traffic.
 
 ## Install: HTTP first
 

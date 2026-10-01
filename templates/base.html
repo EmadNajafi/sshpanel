@@ -6,7 +6,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#101a2b">
   <title>{% block title %}SSH VPN Panel{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'panel.css' %}?v=3">
+  <link rel="stylesheet" href="{% static 'panel.css' %}?v=4">
+  <script src="{% static 'panel.js' %}?v=1" defer></script>
   {% block scripts %}{% endblock %}
 </head>
 <body>
@@ -19,10 +20,12 @@
       {% if user.is_authenticated %}
       <div class="header-actions">
         <span class="admin-badge"><span class="status-dot"></span> Administrator</span>
+        <button class="menu-toggle" type="button" aria-label="Open menu" aria-controls="panel-menu" aria-expanded="false" data-menu-toggle><span></span><span></span><span></span></button>
         <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="header-signout" type="submit">Sign out</button></form>
       </div>
       {% endif %}
     </div>
+    {% if user.is_authenticated %}<nav id="panel-menu" class="panel-menu" hidden aria-label="Panel navigation"><a href="{% url 'dashboard' %}">Dashboard</a><a href="{% url 'panel_settings' %}">Settings</a></nav>{% endif %}
   </header>
   <main class="{% block main_class %}app-shell{% endblock %}">
     {% for message in messages %}<div class="notice {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}

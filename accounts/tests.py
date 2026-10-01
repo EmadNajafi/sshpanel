@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import AuditEvent, VpnAccount
+from .secrets import decrypt_password
 from .system_metrics import _cpu_metric, get_system_metrics
 
 
@@ -31,6 +32,8 @@ class AccountViewsTests(TestCase):
         self.assertEqual(kwargs["max_connections"], 2)
         self.assertAlmostEqual(kwargs["expires_at"], account.expires_at.timestamp(), delta=1)
         self.assertEqual(account.max_connections, 2)
+        self.assertNotEqual("abc", account.password_ciphertext)
+        self.assertEqual(decrypt_password(account.password_ciphertext), "abc")
         self.client.post(reverse("disable_account", args=[account.pk]))
         account.refresh_from_db()
         self.assertFalse(account.enabled)
@@ -65,6 +68,7 @@ class AccountViewsTests(TestCase):
         account.refresh_from_db()
         self.assertEqual(account.max_connections, 4)
         self.assertGreater(account.expires_at, old_expiry)
+        self.assertEqual(decrypt_password(account.password_ciphertext), "a")
         args, kwargs = helper.call_args
         self.assertEqual(args, ("update", "alice", "a"))
         self.assertEqual(kwargs["max_connections"], 4)
@@ -104,6 +108,36 @@ class AccountViewsTests(TestCase):
         response = self.client.post(reverse("create_account"), {"username": "vpn_alice", "password": "strong-password-123"})
         self.assertEqual(response.status_code, 302)
         helper.assert_not_called()
+
+    def test_password_reveal_requires_staff_and_is_not_cached(self):
+        account = VpnAccount.objects.create(username="alice", created_by=self.staff)
+        response = self.client.get(reverse("account_password", args=[account.pk]))
+        self.assertIsNone(response.json()["password"])
+        self.assertIn("no-store", response["Cache-Control"])
+        from .secrets import encrypt_password
+        account.password_ciphertext = encrypt_password("secret-test")
+        account.save(update_fields=["password_ciphertext"])
+        self.assertEqual(self.client.get(reverse("account_password", args=[account.pk])).json()["password"], "secret-test")
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("account_password", args=[account.pk])).status_code, 302)
+
+    def test_admin_can_change_own_password_and_keep_session(self):
+        response = self.client.post(reverse("change_admin_password"), {
+            "old_password": "correct-long-password",
+            "new_password1": "new-admin-password-long",
+            "new_password2": "new-admin-password-long",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.staff.refresh_from_db()
+        self.assertTrue(self.staff.check_password("new-admin-password-long"))
+        self.assertEqual(self.client.get(reverse("panel_settings")).status_code, 200)
+
+    @patch("accounts.views.call_helper", return_value='{"old": 5656, "new": 6677}')
+    def test_stage_port_validates_input(self, helper):
+        self.client.post(reverse("stage_ssh_port"), {"port": "0"})
+        helper.assert_not_called()
+        self.client.post(reverse("stage_ssh_port"), {"port": "6677"})
+        helper.assert_called_once_with("port-stage", port=6677)
 
     @patch("accounts.views.call_helper")
     def test_cross_site_post_is_rejected(self, helper):

@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Settings · SSH VPN Panel{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">CONTROL PANEL</p><h1>Settings</h1><p class="page-intro">Manage administrator access and the server SSH port.</p></div></div>
+<div class="settings-grid">
+  <section class="panel settings-panel">
+    <div class="panel-heading"><div><p class="eyebrow">SERVER ACCESS</p><h2>SSH port</h2></div></div>
+    <p class="panel-description">Current port: <strong>{{ ssh_port }}</strong>. This is shared by administrators and VPN users.</p>
+    {% if pending_port %}
+      <div class="notice">Ports {{ pending_port.old }} and {{ pending_port.new }} are active. Open a new SSH connection to port {{ pending_port.new }} before confirming. Your current connection is not enough to verify the new port.</div>
+      <div class="dialog-actions">
+        <form method="post" action="{% url 'cancel_ssh_port' %}">{% csrf_token %}<button class="button button-secondary" type="submit">Cancel change</button></form>
+        <form method="post" action="{% url 'finalize_ssh_port' %}" onsubmit="return confirm('Have you connected to the new SSH port {{ pending_port.new }} from outside the server? The old port will close.')">{% csrf_token %}<button class="button button-primary" type="submit">Confirm new port</button></form>
+      </div>
+    {% else %}
+      <form method="post" action="{% url 'stage_ssh_port' %}" class="account-form">{% csrf_token %}
+        <p><label for="new-ssh-port">New SSH port</label><input id="new-ssh-port" name="port" type="number" min="1" max="65535" required><span class="helptext">The old port stays active until you test and confirm the new one.</span></p>
+        <button class="button button-primary" type="submit">Start port change</button>
+      </form>
+    {% endif %}
+  </section>
+  <section class="panel settings-panel">
+    <div class="panel-heading"><div><p class="eyebrow">ADMINISTRATOR</p><h2>Change panel password</h2></div></div>
+    <form method="post" action="{% url 'change_admin_password' %}" class="account-form">{% csrf_token %}
+      {{ password_form.as_p }}
+      <button class="button button-primary" type="submit">Change password</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

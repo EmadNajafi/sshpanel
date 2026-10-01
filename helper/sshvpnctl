@@ -13,6 +13,7 @@ from sshvpn_policy import (
     GROUP, POLICY_DIR, USERNAME, lease_path, policy_path, read_policy,
     seed_legacy_accounts, write_policy,
 )
+from sshvpn_port import current_state, stage_port, finalize_port, cancel_port
 
 
 ALLOWED = {"create", "disable", "enable", "delete", "password", "update"}
@@ -111,7 +112,7 @@ def disconnect_all_accounts():
 def main():
     if os.geteuid() != 0:
         return fail("Root privileges are required.")
-    if len(sys.argv) != 2 or sys.argv[1] not in ALLOWED | {"seed-legacy", "sweep", "disconnect-all"}:
+    if len(sys.argv) != 2 or sys.argv[1] not in ALLOWED | {"seed-legacy", "sweep", "disconnect-all", "port-stage", "port-finalize", "port-cancel", "port-status"}:
         return fail("Invalid action.")
     try:
         if sys.argv[1] == "seed-legacy":
@@ -122,6 +123,18 @@ def main():
             return 0
         if sys.argv[1] == "disconnect-all":
             disconnect_all_accounts()
+            return 0
+        if sys.argv[1] == "port-status":
+            print(json.dumps(current_state()))
+            return 0
+        if sys.argv[1] in {"port-stage", "port-finalize", "port-cancel"}:
+            if sys.argv[1] == "port-stage":
+                body = json.loads(sys.stdin.read(4097))
+                print(json.dumps(stage_port(body["port"])))
+            elif sys.argv[1] == "port-finalize":
+                print(json.dumps(finalize_port()))
+            else:
+                print(json.dumps(cancel_port()))
             return 0
         body = sys.stdin.read(4097)
         if len(body) > 4096:

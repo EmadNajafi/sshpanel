@@ -24,13 +24,13 @@ def _cpu_times():
 
 def _cpu_metric():
     before_total, before_idle = _cpu_times()
-    time.sleep(0.1)
+    time.sleep(0.5)
     after_total, after_idle = _cpu_times()
     total = after_total - before_total
     used = total - (after_idle - before_idle)
     return {
-        "percent": max(0, min(100, _percent(used, total))) if total > 0 else None,
-        "detail": f"{os.cpu_count() or 1} CPU cores",
+        "percent": round(max(0, min(100, 100 * used / total)), 1) if total > 0 else None,
+        "detail": f"{os.cpu_count() or 1} CPU cores · live usage",
     }
 
 

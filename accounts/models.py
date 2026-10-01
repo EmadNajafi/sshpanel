@@ -10,6 +10,7 @@ class VpnAccount(models.Model):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     expires_at = models.DateTimeField(null=True, blank=True)
     max_connections = models.PositiveIntegerField(null=True, blank=True)
+    password_ciphertext = models.TextField(blank=True)
 
     def __str__(self):
         return self.username

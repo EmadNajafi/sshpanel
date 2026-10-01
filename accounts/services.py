@@ -6,8 +6,10 @@ class ProvisionError(Exception):
     pass
 
 
-def call_helper(action, username, password=None, *, expires_at=None, max_connections=None, enabled=None):
-    payload = {"username": username}
+def call_helper(action, username=None, password=None, *, expires_at=None, max_connections=None, enabled=None, port=None):
+    payload = {}
+    if username is not None:
+        payload["username"] = username
     if password is not None:
         payload["password"] = password
     if expires_at is not None:
@@ -16,6 +18,8 @@ def call_helper(action, username, password=None, *, expires_at=None, max_connect
         payload["max_connections"] = max_connections
     if enabled is not None:
         payload["enabled"] = enabled
+    if port is not None:
+        payload["port"] = port
     try:
         result = subprocess.run(
             ["sudo", "-n", "/usr/local/sbin/sshvpnctl", action],
@@ -26,3 +30,18 @@ def call_helper(action, username, password=None, *, expires_at=None, max_connect
         raise ProvisionError("The account service is unavailable.") from exc
     if result.returncode != 0:
         raise ProvisionError(result.stderr.strip() or "The account operation failed.")
+    return result.stdout.strip()
+
+
+def get_ssh_port():
+    try:
+        result = subprocess.run(
+            ["/usr/sbin/sshd", "-T"], text=True, capture_output=True, timeout=5, check=True,
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith("port "):
+                return int(line.split()[1])
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+    from django.conf import settings
+    return settings.VPN_SSH_PORT
