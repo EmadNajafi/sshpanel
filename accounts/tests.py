@@ -1,6 +1,9 @@
 from unittest.mock import patch
+from io import StringIO
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import Client, TestCase
 from django.urls import reverse
 
@@ -44,3 +47,19 @@ class AccountViewsTests(TestCase):
         response = csrf_client.post(reverse("create_account"), {"username": "vpn_alice", "password": "strong-password-123"})
         self.assertEqual(response.status_code, 403)
         helper.assert_not_called()
+
+
+class InitialAdminTests(TestCase):
+    def test_creates_admin_from_stdin_without_storing_plaintext(self):
+        with patch("sys.stdin", StringIO("emad\nlong-secret-password-123\n")):
+            call_command("initial_admin", stdout=StringIO())
+        admin = get_user_model().objects.get(username="emad")
+        self.assertTrue(admin.is_staff and admin.is_superuser)
+        self.assertTrue(admin.check_password("long-secret-password-123"))
+        self.assertNotIn("long-secret-password-123", admin.password)
+
+    def test_rejects_short_admin_password(self):
+        with patch("sys.stdin", StringIO("emad\nshort\n")):
+            with self.assertRaises(CommandError):
+                call_command("initial_admin", stdout=StringIO())
+        self.assertFalse(get_user_model().objects.filter(username="emad").exists())

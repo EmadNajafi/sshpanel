@@ -90,7 +90,7 @@ activate_tls() {
     return 1
   fi
   sed -e 's/listen 127.0.0.1:8080;/listen 80;/' \
-      -e "s/server_name localhost;/server_name $domain;/" "$nginx_config" > "$candidate"
+      -e "s/server_name [^;]*;/server_name $domain;/" "$nginx_config" > "$candidate"
   install -m 0644 -o root -g root "$candidate" "$nginx_config"
   rm -f "$candidate"
 

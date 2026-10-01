@@ -5,11 +5,16 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
 DEBUG = False
-TLS_ENABLED = os.environ.get("PANEL_TLS_ENABLED", "1") == "1"
+TLS_ENABLED = os.environ.get("PANEL_TLS_ENABLED", "0") == "1"
 ALLOWED_HOSTS = [os.environ["PANEL_DOMAIN"]]
-if not TLS_ENABLED:
+HTTP_PORT = os.environ.get("PANEL_HTTP_PORT", "80")
+if os.environ["PANEL_DOMAIN"] == "localhost":
     ALLOWED_HOSTS.append("127.0.0.1")
-CSRF_TRUSTED_ORIGINS = [f"https://{os.environ['PANEL_DOMAIN']}"] if TLS_ENABLED else ["http://localhost:8080", "http://127.0.0.1:8080"]
+if TLS_ENABLED:
+    CSRF_TRUSTED_ORIGINS = [f"https://{os.environ['PANEL_DOMAIN']}"]
+else:
+    port_suffix = "" if HTTP_PORT == "80" else f":{HTTP_PORT}"
+    CSRF_TRUSTED_ORIGINS = [f"http://{host}{port_suffix}" for host in ALLOWED_HOSTS]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
