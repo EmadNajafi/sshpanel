@@ -144,38 +144,6 @@
     event.target.querySelector("[data-copy-details]").value = "";
   });
 
-  const grid = document.querySelector("[data-metrics-url]");
-  if (!grid) return;
-
-  let loading = false;
-  async function refreshMetrics() {
-    if (loading || document.hidden) return;
-    loading = true;
-    try {
-      const response = await fetch(grid.dataset.metricsUrl, {
-        credentials: "same-origin",
-        headers: { Accept: "application/json" },
-      });
-      if (!response.ok) return;
-      const metrics = await response.json();
-      for (const name of ["cpu", "memory", "disk"]) {
-        const card = grid.querySelector(`[data-metric="${name}"]`);
-        const metric = metrics[name];
-        if (!card || !metric) continue;
-        const value = Number.isFinite(metric.percent) ? Math.max(0, Math.min(100, metric.percent)) : null;
-        card.querySelector("[data-metric-value]").textContent = value === null ? "—" : `${value}%`;
-        card.querySelector("[data-metric-bar]").style.width = `${value ?? 0}%`;
-        card.querySelector("[data-metric-detail]").textContent = metric.detail;
-      }
-    } catch (_error) {
-      // Keep the last snapshot if the server cannot answer a refresh.
-    } finally {
-      loading = false;
-    }
-  }
-
-  window.setInterval(refreshMetrics, 15000);
-
   const usagePanel = document.querySelector("[data-usage-url]");
   if (!usagePanel) return;
   let usageLoading = false;
@@ -188,8 +156,8 @@
       });
       if (!response.ok) return;
       const payload = await response.json();
+      if (payload.summary) window.dispatchEvent(new CustomEvent("sshvpn:account-summary", { detail: payload.summary }));
       if (!payload.available) return;
-      let onlineAccounts = 0;
       usagePanel.querySelectorAll("[data-account-username]").forEach((row) => {
         const usage = payload.accounts[row.dataset.accountUsername];
         const onlineCell = row.querySelector("[data-online-status]");
@@ -211,7 +179,6 @@
         status.textContent = usage.connections > 0 ? `${usage.connections} online` : "Offline";
         onlineCell.replaceChildren(status);
         nameButton.disabled = !isOnline;
-        if (isOnline) onlineAccounts += 1;
         const total = document.createElement("strong");
         total.className = "usage-total";
         total.textContent = usage.total;
@@ -220,14 +187,13 @@
         detail.textContent = `↑ ${usage.upload} · ↓ ${usage.download}`;
         usageCell.replaceChildren(total, detail);
       });
-      const summary = usagePanel.querySelector("[data-online-total]");
-      if (summary) summary.textContent = `${onlineAccounts} online`;
     } catch (_error) {
       // Keep the previous readings if a refresh fails.
     } finally {
       usageLoading = false;
     }
   }
+  refreshUsage();
   window.setInterval(refreshUsage, 15000);
 
   const sessionsDialog = document.getElementById("sessions-dialog");

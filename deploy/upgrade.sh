@@ -37,7 +37,7 @@ chmod 0600 "$backup_dir/database.dump"
 
 # Keep the existing administrator, VPN accounts, listener addresses, and TLS mode.
 rsync -a --exclude='.git' --exclude='.venv' --exclude='.env' \
-  --exclude='staticfiles' --exclude='__pycache__' "$repo_dir/" /opt/ssh-vpn-panel/
+  --exclude='staticfiles' --exclude='__pycache__' --exclude='frontend/node_modules' "$repo_dir/" /opt/ssh-vpn-panel/
 chown -R root:root /opt/ssh-vpn-panel
 /opt/ssh-vpn-panel/.venv/bin/pip install --no-cache-dir -r /opt/ssh-vpn-panel/requirements.txt
 

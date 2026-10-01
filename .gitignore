@@ -5,3 +5,4 @@ __pycache__/
 *.sqlite3
 staticfiles/
 .pytest_cache/
+frontend/node_modules/

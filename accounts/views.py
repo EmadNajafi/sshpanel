@@ -47,20 +47,32 @@ def get_account_usage():
         return None
 
 
+def account_summary(accounts, usage, now):
+    inactive = sum(not account.enabled or (account.expires_at is not None and account.expires_at <= now)
+                   for account in accounts)
+    return {
+        "total": len(accounts),
+        "online": (sum(usage.get(account.username, {}).get("connections", 0) > 0 for account in accounts)
+                   if usage is not None else None),
+        "inactive": inactive,
+    }
+
+
 @staff_required
 def dashboard(request):
     accounts = list(VpnAccount.objects.select_related("created_by").order_by("username"))
     usage = get_account_usage()
     now = timezone.now()
+    summary = account_summary(accounts, usage, now)
     for account in accounts:
         account.usage = usage.get(account.username) if usage is not None else None
         account.days_remaining = (max(0, math.ceil((account.expires_at - now).total_seconds() / 86400))
                                   if account.expires_at is not None else None)
     return render(request, "dashboard.html", {
         "accounts": accounts,
-        "account_total": len(accounts),
-        "account_active": sum(account.enabled and not account.is_expired for account in accounts),
-        "account_online": sum(account.usage["connections"] > 0 for account in accounts if account.usage is not None),
+        "account_total": summary["total"],
+        "account_online": summary["online"],
+        "account_inactive": summary["inactive"],
         "metrics": get_system_metrics(),
         "create_form": CreateAccountForm(),
         "vpn_ssh_port": get_ssh_port(),
@@ -76,14 +88,18 @@ def audit_log(request):
 
 @staff_required
 def system_metrics(request):
-    return JsonResponse(get_system_metrics())
+    response = JsonResponse(get_system_metrics())
+    response["Cache-Control"] = "no-store, private"
+    return response
 
 
 @staff_required
 @require_GET
 def account_usage(request):
     usage = get_account_usage()
-    response = JsonResponse({"accounts": usage, "available": usage is not None})
+    accounts = list(VpnAccount.objects.only("username", "enabled", "expires_at"))
+    response = JsonResponse({"accounts": usage, "available": usage is not None,
+                             "summary": account_summary(accounts, usage, timezone.now())})
     response["Cache-Control"] = "no-store, private"
     return response
 

@@ -24,6 +24,7 @@
   };
   button.addEventListener("click", () => {
     menu.showModal();
+    window.dispatchEvent(new Event("sshvpn:menu-open"));
     button.setAttribute("aria-expanded", "true");
     button.setAttribute("aria-label", "Close navigation menu");
   });

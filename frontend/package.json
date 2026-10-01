@@ -1,0 +1,14 @@
+{
+  "name": "sshvpn-panel-ui",
+  "private": true,
+  "scripts": {
+    "build": "node build.cjs"
+  },
+  "dependencies": {
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "esbuild-wasm": "0.25.12"
+  }
+}

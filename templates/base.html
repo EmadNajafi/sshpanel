@@ -7,8 +7,9 @@
   <meta name="theme-color" content="#101a2b">
   <title>{% block title %}SSH VPN Panel{% endblock %}</title>
   <script>try { document.documentElement.dataset.theme = localStorage.getItem('sshvpn-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch (_) { document.documentElement.dataset.theme = 'light'; }</script>
-  <link rel="stylesheet" href="{% static 'panel.css' %}?v=12">
-  <script src="{% static 'panel.js' %}?v=3" defer></script>
+  <link rel="stylesheet" href="{% static 'panel.css' %}?v=13">
+  <script src="{% static 'panel.js' %}?v=4" defer></script>
+  {% if user.is_authenticated %}<script src="{% static 'overview-react.js' %}?v=1" defer></script>{% endif %}
   {% block scripts %}{% endblock %}
 </head>
 <body>
@@ -38,6 +39,17 @@
         <a class="drawer-link {% if request.resolver_match.url_name == 'audit_log' %}is-active{% endif %}" href="{% url 'audit_log' %}" {% if request.resolver_match.url_name == 'audit_log' %}aria-current="page"{% endif %}><span class="drawer-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 4h10a2 2 0 0 1 2 2v14H8a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4Z"/><path d="M4 16a4 4 0 0 1 4-4h12M9 8h7"/></svg></span><span><strong>Audit log</strong><small>Account activity history</small></span></a>
         <a class="drawer-link {% if request.resolver_match.url_name == 'panel_settings' or request.resolver_match.url_name == 'backup_settings' %}is-active{% endif %}" href="{% url 'panel_settings' %}" {% if request.resolver_match.url_name == 'panel_settings' or request.resolver_match.url_name == 'backup_settings' %}aria-current="page"{% endif %}><span class="drawer-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="white"/><circle cx="15" cy="17" r="2" fill="white"/></svg></span><span><strong>Settings</strong><small>Access, port, and backups</small></span></a>
       </nav>
+      <div class="drawer-health" aria-label="Server resource usage">
+        <p class="drawer-section-label">SERVER RESOURCES <span class="drawer-live-dot" aria-hidden="true"></span></p>
+        <div id="server-resources-root" data-metrics-url="{% url 'system_metrics' %}"
+             data-cpu="{{ metrics.cpu.percent|default_if_none:'' }}" data-cpu-detail="{{ metrics.cpu.detail|default:'' }}"
+             data-memory="{{ metrics.memory.percent|default_if_none:'' }}" data-memory-detail="{{ metrics.memory.detail|default:'' }}"
+             data-disk="{{ metrics.disk.percent|default_if_none:'' }}" data-disk-detail="{{ metrics.disk.detail|default:'' }}">
+          <div class="drawer-resource drawer-resource-fallback"><span>CPU</span><strong>{% if metrics and metrics.cpu.percent is not None %}{{ metrics.cpu.percent }}%{% else %}—{% endif %}</strong></div>
+          <div class="drawer-resource drawer-resource-fallback"><span>RAM</span><strong>{% if metrics and metrics.memory.percent is not None %}{{ metrics.memory.percent }}%{% else %}—{% endif %}</strong></div>
+          <div class="drawer-resource drawer-resource-fallback"><span>Disk</span><strong>{% if metrics and metrics.disk.percent is not None %}{{ metrics.disk.percent }}%{% else %}—{% endif %}</strong></div>
+        </div>
+      </div>
       <div class="drawer-footer"><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="drawer-signout" type="submit"><span>Sign out</span><span aria-hidden="true">↗</span></button></form><small>SSH VPN control panel</small></div>
     </div>
   </dialog>

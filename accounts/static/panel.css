@@ -98,20 +98,30 @@ h1, h2, p { margin-top: 0; }
 .port-card strong { color: #1a50ba; font-size: 27px; line-height: 1.1; letter-spacing: -.04em; }
 .port-card small { color: #5d75a1; font-size: 11px; }
 
-.metrics-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-bottom: 20px; }
-.metric-card, .panel, .login-card { background: #fff; border: 1px solid var(--border); box-shadow: var(--shadow); }
-.metric-card { min-width: 0; border-radius: 18px; padding: 22px 24px 19px; }
-.metric-top { display: flex; align-items: center; gap: 11px; }
-.metric-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; font-weight: 800; font-size: 10px; letter-spacing: .06em; }
-.metric-cpu { --metric: #497cf0; --metric-bg: #eaf0ff; }
-.metric-memory { --metric: #15ad8b; --metric-bg: #e7f8f2; }
-.metric-disk { --metric: #a56be8; --metric-bg: #f3ebff; }
-.metric-icon { color: var(--metric); background: var(--metric-bg); }
-.metric-label { font-size: 13px; font-weight: 700; color: #465670; }
-.metric-number { margin: 18px 0 14px; font-size: clamp(27px, 2.5vw, 36px); line-height: 1; font-weight: 750; letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
-.metric-track { height: 7px; width: 100%; border-radius: 99px; background: #edf1f7; overflow: hidden; }
-.metric-track span { display: block; height: 100%; border-radius: inherit; background: var(--metric); transition: width .4s ease; }
-.metric-detail { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
+.panel, .login-card { background: #fff; border: 1px solid var(--border); box-shadow: var(--shadow); }
+.summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-bottom: 20px; }
+.summary-card { position: relative; display: grid; align-content: start; min-height: 169px; padding: 23px 25px; overflow: hidden; border: 1px solid var(--border); border-radius: 18px; background: #fff; box-shadow: var(--shadow); }
+.summary-card::after { content: ""; position: absolute; right: -26px; bottom: -60px; width: 150px; height: 150px; border-radius: 50%; background: var(--summary-wash); }
+.summary-total { --summary-color: #356de5; --summary-wash: #eff4ff; }
+.summary-online { --summary-color: #139774; --summary-wash: #e9f9f3; }
+.summary-inactive { --summary-color: #a66b37; --summary-wash: #fff4e8; }
+.summary-icon { display: grid; place-items: center; width: 39px; height: 39px; margin-bottom: 14px; border-radius: 11px; background: var(--summary-wash); color: var(--summary-color); font-size: 22px; font-weight: 700; }
+.summary-label { color: #52627b; font-size: 12px; font-weight: 750; }
+.summary-value { position: relative; z-index: 1; color: var(--ink); font-size: clamp(30px, 3vw, 39px); line-height: 1.15; letter-spacing: -.05em; font-variant-numeric: tabular-nums; }
+.summary-detail { position: relative; z-index: 1; margin-top: 3px; color: var(--muted); font-size: 11px; }
+.drawer-health { margin: 27px 0 24px; padding-top: 20px; border-top: 1px solid #e7edf5; }
+.drawer-health .drawer-section-label { display: flex; align-items: center; gap: 8px; }
+.drawer-live-dot { width: 6px; height: 6px; border-radius: 50%; background: #34c998; }
+.drawer-resource-list, #server-resources-root { display: grid; gap: 9px; }
+.drawer-resource { display: grid; gap: 7px; padding: 11px 13px; border: 1px solid #e4ebf5; border-radius: 12px; background: #f7f9fd; }
+.drawer-resource-head, .drawer-resource-fallback { display: flex; justify-content: space-between; align-items: center; }
+.drawer-resource-head span, .drawer-resource > span { color: #60718d; font-size: 11px; font-weight: 750; }
+.drawer-resource-head strong, .drawer-resource > strong { color: var(--ink); font-size: 15px; font-variant-numeric: tabular-nums; }
+.drawer-resource-track { height: 5px; overflow: hidden; border-radius: 99px; background: #e5ecf5; }
+.drawer-resource-track span { display: block; height: 100%; border-radius: inherit; background: #527fe9; transition: width .35s ease; }
+.drawer-resource-memory .drawer-resource-track span { background: #24ad89; }
+.drawer-resource-disk .drawer-resource-track span { background: #ad7ce5; }
+.drawer-resource small { color: #8391a6; font-size: 10px; }
 
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
 .panel { border-radius: 18px; padding: 24px; min-width: 0; }
@@ -311,7 +321,7 @@ td { color: #506078; font-size: 12px; }
   background: #0d1625;
 }
 :root[data-theme="dark"] .site-header { background: #09111e; }
-:root[data-theme="dark"] .metric-card,
+:root[data-theme="dark"] .summary-card,
 :root[data-theme="dark"] .panel,
 :root[data-theme="dark"] .login-card,
 :root[data-theme="dark"] .settings-sidebar,
@@ -331,7 +341,7 @@ td { color: #506078; font-size: 12px; }
 :root[data-theme="dark"] .port-card small { color: #a9c8ff; }
 :root[data-theme="dark"] .drawer-link,
 :root[data-theme="dark"] .settings-nav a,
-:root[data-theme="dark"] .metric-label,
+:root[data-theme="dark"] .summary-label,
 :root[data-theme="dark"] .account-name,
 :root[data-theme="dark"] .usage-total,
 :root[data-theme="dark"] label,
@@ -374,10 +384,15 @@ td { color: #506078; font-size: 12px; }
 :root[data-theme="dark"] .settings-port-form,
 :root[data-theme="dark"] .drawer-footer,
 :root[data-theme="dark"] .settings-sidebar-note { border-color: #304158; }
-:root[data-theme="dark"] .metric-track { background: #304158; }
-:root[data-theme="dark"] .metric-cpu { --metric: #86aaff; --metric-bg: #243c64; }
-:root[data-theme="dark"] .metric-memory { --metric: #53d5b3; --metric-bg: #1f4b46; }
-:root[data-theme="dark"] .metric-disk { --metric: #c39cff; --metric-bg: #493c65; }
+:root[data-theme="dark"] .summary-total { --summary-color: #a9c8ff; --summary-wash: #263f66; }
+:root[data-theme="dark"] .summary-online { --summary-color: #85e5c0; --summary-wash: #21493e; }
+:root[data-theme="dark"] .summary-inactive { --summary-color: #f1c58e; --summary-wash: #4c3c32; }
+:root[data-theme="dark"] .drawer-health { border-color: #304158; }
+:root[data-theme="dark"] .drawer-resource { background: #213149; border-color: #354862; }
+:root[data-theme="dark"] .drawer-resource-head span,
+:root[data-theme="dark"] .drawer-resource > span,
+:root[data-theme="dark"] .drawer-resource small { color: #a8b9ce; }
+:root[data-theme="dark"] .drawer-resource-track { background: #34455d; }
 :root[data-theme="dark"] .panel-count,
 :root[data-theme="dark"] .account-totals .online-total,
 :root[data-theme="dark"] .state-disabled { background: #2b3e57; border-color: #425776; color: #b9d2fb; }
@@ -418,9 +433,9 @@ td { color: #506078; font-size: 12px; }
   .app-shell { padding: 25px 16px 50px; }
   .page-heading { align-items: stretch; flex-direction: column; }
   .port-card { width: 100%; }
-  .metrics-grid { grid-template-columns: 1fr; gap: 11px; }
-  .metric-card { padding: 17px 19px; }
-  .metric-number { margin: 13px 0; }
+  .summary-grid { grid-template-columns: 1fr; gap: 11px; }
+  .summary-card { min-height: 135px; padding: 17px 19px; }
+  .summary-icon { margin-bottom: 7px; }
   .panel { padding: 20px 16px; }
   .admin-badge { display: none; }
 }

@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}Overview · SSH VPN Panel{% endblock %}
-{% block scripts %}<script src="{% static 'dashboard.js' %}?v=8" defer></script>{% endblock %}
+{% block scripts %}<script src="{% static 'dashboard.js' %}?v=9" defer></script>{% endblock %}
 {% block content %}
 <svg class="action-icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
   <symbol id="action-edit" viewBox="0 0 24 24"><path d="m4 16-.5 4.5L8 20l11-11-4-4L4 16Zm9.5-9.5 4 4M13 20h7"/></symbol>
@@ -16,7 +16,7 @@
   <div>
     <p class="eyebrow">SERVER OVERVIEW</p>
     <h1>Dashboard</h1>
-    <p class="page-intro">Manage SSH tunnel accounts and keep an eye on server resources.</p>
+    <p class="page-intro">Manage SSH tunnel accounts and see who's connected right now.</p>
   </div>
   <div class="port-card" data-ssh-port="{{ vpn_ssh_port }}">
     <span class="port-card-label">VPN SSH PORT</span>
@@ -25,33 +25,19 @@
   </div>
 </div>
 
-<section class="metrics-grid" aria-label="Server resource usage" data-metrics-url="{% url 'system_metrics' %}">
-  <article class="metric-card metric-cpu" data-metric="cpu">
-    <div class="metric-top"><span class="metric-icon">CPU</span><span class="metric-label">Processor</span></div>
-    <div class="metric-number" data-metric-value>{% if metrics.cpu.percent is not None %}{{ metrics.cpu.percent }}%{% else %}—{% endif %}</div>
-    <div class="metric-track" aria-hidden="true"><span data-metric-bar style="width:{{ metrics.cpu.percent|default_if_none:0 }}%"></span></div>
-    <p class="metric-detail" data-metric-detail>{{ metrics.cpu.detail }}</p>
-  </article>
-  <article class="metric-card metric-memory" data-metric="memory">
-    <div class="metric-top"><span class="metric-icon">RAM</span><span class="metric-label">Memory</span></div>
-    <div class="metric-number" data-metric-value>{% if metrics.memory.percent is not None %}{{ metrics.memory.percent }}%{% else %}—{% endif %}</div>
-    <div class="metric-track" aria-hidden="true"><span data-metric-bar style="width:{{ metrics.memory.percent|default_if_none:0 }}%"></span></div>
-    <p class="metric-detail" data-metric-detail>{{ metrics.memory.detail }}</p>
-  </article>
-  <article class="metric-card metric-disk" data-metric="disk">
-    <div class="metric-top"><span class="metric-icon">SSD</span><span class="metric-label">Disk storage</span></div>
-    <div class="metric-number" data-metric-value>{% if metrics.disk.percent is not None %}{{ metrics.disk.percent }}%{% else %}—{% endif %}</div>
-    <div class="metric-track" aria-hidden="true"><span data-metric-bar style="width:{{ metrics.disk.percent|default_if_none:0 }}%"></span></div>
-    <p class="metric-detail" data-metric-detail>{{ metrics.disk.detail }}</p>
-  </article>
-</section>
+<div id="account-overview-root" data-total="{{ account_total }}" data-online="{{ account_online|default_if_none:'' }}" data-inactive="{{ account_inactive }}">
+  <section class="summary-grid" aria-label="VPN account overview">
+    <article class="summary-card summary-total"><span class="summary-icon" aria-hidden="true">◎</span><span class="summary-label">Total users</span><strong class="summary-value">{{ account_total }}</strong><span class="summary-detail">All VPN accounts</span></article>
+    <article class="summary-card summary-online"><span class="summary-icon" aria-hidden="true">↗</span><span class="summary-label">Online now</span><strong class="summary-value">{{ account_online|default_if_none:'—' }}</strong><span class="summary-detail">Connected users, updated live</span></article>
+    <article class="summary-card summary-inactive"><span class="summary-icon" aria-hidden="true">◌</span><span class="summary-label">Inactive users</span><strong class="summary-value">{{ account_inactive }}</strong><span class="summary-detail">Disabled or expired</span></article>
+  </section>
+</div>
 
 <div class="dashboard-grid">
   <section class="panel accounts-panel" data-usage-url="{% url 'account_usage' %}">
     <div class="panel-heading">
       <div><p class="eyebrow">YOUR USERS</p><h2>VPN accounts</h2></div>
       <div class="account-heading-actions">
-        <div class="account-totals"><span>{{ account_total }} total</span><span class="active-total">{{ account_active }} active</span><span class="online-total" data-online-total>{{ account_online }} online</span></div>
         <button class="button button-primary create-trigger" type="button" data-open-dialog="create-account-dialog" aria-label="Create VPN account"><span aria-hidden="true">+</span><span>New user</span></button>
       </div>
     </div>
