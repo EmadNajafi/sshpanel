@@ -61,6 +61,7 @@ function ServerResources({ element }) {
         if (active) setMetrics(next);
       } catch (_) { /* Keep the last reading during a network interruption. */ }
     };
+    refresh();
     window.addEventListener("sshvpn:menu-open", refresh);
     const timer = window.setInterval(() => {
       if (document.getElementById("panel-menu")?.open) refresh();
