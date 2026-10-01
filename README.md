@@ -4,7 +4,7 @@ A web panel for password based OpenSSH SOCKS and local forwarding accounts on Ub
 
 ## Components
 
-- Django staff sign in, account creation and editing with active days and simultaneous VPN connection limit, disabling, enabling, password reset, deletion, and audit events.
+- Django staff sign in, account creation and editing with active days and simultaneous VPN connection limit, quick 30/60/90-day renewal, traffic reset, disabling, enabling, password reset, deletion, and audit events. Row actions use labeled icons; the copy action includes host, SSH port, username, password, expiry, and connection limit.
 - Dashboard cards show server CPU, available-memory usage, and root-filesystem disk usage. They refresh every 15 seconds while the dashboard is open and are accessible only to staff.
 - The account list shows live SSH tunnel connection counts and per-account upload, download and combined traffic. Readings refresh every 15 seconds. A root-owned counter snapshot persists totals across panel restarts and server reboots.
 - PostgreSQL for metadata. New and changed VPN passwords are encrypted before storage and can be revealed by a signed-in staff administrator. Existing passwords created before this feature cannot be recovered from Linux hashes; set a new password to make them available in the list.
@@ -22,6 +22,8 @@ At account creation, enter the Linux login name, VPN password, number of active 
 The PAM hook is added only once to `/etc/pam.d/sshd`, before the normal account rules, and bypasses Linux users outside the `sshvpn` group. Its previous file is saved under `/var/backups/sshvpn-panel`. Earlier VPN accounts receive an unlimited policy on upgrade; new accounts receive the selected limits. The hook and the timer must both be working for the limits to be enforced.
 
 Online status counts live VPN SSH transports admitted by the PAM hook. Existing connections made before traffic tracking was installed may need to reconnect before they appear online. Network usage starts at the time this feature is installed; past traffic cannot be reconstructed. The counters track IP packets from each VPN user's forwarding sockets, including packet overhead and a small amount of DNS traffic, so they are an approximation of VPN transfer rather than exact application payload. Counter totals are saved on each panel refresh and every minute by `sshvpn-usage.timer`; an abrupt reboot can lose traffic since the last snapshot.
+
+Reset traffic starts a new accounting period at zero using the current network counters as its baseline. It does not disconnect the user's active VPN sessions. Renewal adds days to a future expiry; an expired account starts counting from the renewal time. If the account was otherwise enabled, renewal makes it usable again. Passwords created before encrypted password storage was added cannot be copied until they are changed in the panel. On HTTP, the copy button uses the browser's selection based clipboard fallback and offers a manual copy dialog if clipboard access is blocked.
 
 Click an online account name or its online badge to see the source IP of each active SSH connection. The server records the address supplied by OpenSSH to the PAM account hook; it is the address seen by the VPS, which may be a NAT or upstream proxy address. Already active connections created before IP tracking was installed show an unavailable address until they reconnect. Addresses are only returned to signed-in staff and are not saved as a connection history.
 

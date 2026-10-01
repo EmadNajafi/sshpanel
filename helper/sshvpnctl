@@ -14,10 +14,10 @@ from sshvpn_policy import (
     seed_legacy_accounts, write_policy,
 )
 from sshvpn_port import current_state, stage_port, finalize_port, cancel_port
-from sshvpn_usage import snapshot as usage_snapshot, remove_account as remove_usage_account
+from sshvpn_usage import snapshot as usage_snapshot, reset_account as reset_usage_account, remove_account as remove_usage_account
 
 
-ALLOWED = {"create", "disable", "enable", "delete", "password", "update"}
+ALLOWED = {"create", "disable", "enable", "delete", "password", "update", "usage-reset"}
 
 
 def fail(message):
@@ -178,7 +178,9 @@ def main():
                 raise
         else:
             managed_user(username, group_id)
-            if action == "update":
+            if action == "usage-reset":
+                reset_usage_account(username)
+            elif action == "update":
                 policy = read_policy(username)
                 expires_at = request.get("expires_at", policy["expires_at"])
                 max_connections = request.get("max_connections", policy["max_connections"])
@@ -206,7 +208,7 @@ def main():
                     write_policy(username, policy["expires_at"], policy["max_connections"])
                     run("/usr/sbin/usermod", "--password", old_hash, username)
                     raise
-                if password is not None or policy["expires_at"] != expires_at or policy["max_connections"] != max_connections:
+                if password is not None or policy["max_connections"] != max_connections:
                     run("/usr/bin/pkill", "-u", username, ok=(0, 1))
             elif action == "disable":
                 run("/usr/sbin/usermod", "--lock", username)

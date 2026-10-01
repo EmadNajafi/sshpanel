@@ -1,15 +1,24 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}Overview · SSH VPN Panel{% endblock %}
-{% block scripts %}<script src="{% static 'dashboard.js' %}?v=6" defer></script>{% endblock %}
+{% block scripts %}<script src="{% static 'dashboard.js' %}?v=7" defer></script>{% endblock %}
 {% block content %}
+<svg class="action-icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="action-edit" viewBox="0 0 24 24"><path d="m4 16-.5 4.5L8 20l11-11-4-4L4 16Zm9.5-9.5 4 4M13 20h7"/></symbol>
+  <symbol id="action-extend" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-9 3v6m-3-3h6"/></symbol>
+  <symbol id="action-reset" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 9m0-5v5h5m3-2v5l3 2"/></symbol>
+  <symbol id="action-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+  <symbol id="action-pause" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 8v8m6-8v8"/></symbol>
+  <symbol id="action-play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4V8Z"/></symbol>
+  <symbol id="action-delete" viewBox="0 0 24 24"><path d="M4 7h16m-14 0 1 14h10l1-14M9 7V4h6v3m-5 4v6m4-6v6"/></symbol>
+</svg>
 <div class="page-heading">
   <div>
     <p class="eyebrow">SERVER OVERVIEW</p>
     <h1>Dashboard</h1>
     <p class="page-intro">Manage SSH tunnel accounts and keep an eye on server resources.</p>
   </div>
-  <div class="port-card">
+  <div class="port-card" data-ssh-port="{{ vpn_ssh_port }}">
     <span class="port-card-label">VPN SSH PORT</span>
     <strong>{{ vpn_ssh_port }}</strong>
     <small>Uses the server's main SSH service</small>
@@ -57,14 +66,17 @@
             <td>{% if account.is_expired %}<span class="state state-expired">Expired</span>{% elif account.enabled %}<span class="state state-active">Active</span>{% else %}<span class="state state-disabled">Disabled</span>{% endif %}</td>
             <td data-online-status>{% if account.usage is None %}<span class="muted">—</span>{% elif account.usage.connections %}<button class="state state-active online-trigger" type="button" data-session-trigger>{{ account.usage.connections }} online</button>{% else %}<span class="state state-disabled">Offline</span>{% endif %}</td>
             <td data-usage-cell>{% if account.usage is None %}<span class="muted">Unavailable</span>{% else %}<strong class="usage-total">{{ account.usage.total }}</strong><small class="table-subtext">↑ {{ account.usage.upload }} · ↓ {{ account.usage.download }}</small>{% endif %}</td>
-            <td class="nowrap">{{ account.expires_at|date:"Y-m-d H:i"|default:"Unlimited" }}</td>
+            <td class="nowrap" data-expiry-cell>{{ account.expires_at|date:"Y-m-d H:i"|default:"Unlimited" }}</td>
             <td>{{ account.max_connections|default:"Unlimited" }}</td>
             <td>
-              <div class="row-actions">
-                {% if account.enabled %}<form method="post" action="{% url 'disable_account' account.pk %}">{% csrf_token %}<button class="button button-small button-secondary" type="submit">Disable</button></form>
-                {% elif not account.is_expired %}<form method="post" action="{% url 'enable_account' account.pk %}">{% csrf_token %}<button class="button button-small button-secondary" type="submit">Enable</button></form>{% endif %}
-                <button class="button button-small button-edit" type="button" data-edit-account data-action="{% url 'edit_account' account.pk %}" data-username="{{ account.username }}" data-expires="{{ account.expires_at|date:'Y-m-d H:i'|default:'Unlimited' }}" data-connections="{{ account.max_connections|default_if_none:'' }}">Edit</button>
-                <form method="post" action="{% url 'delete_account' account.pk %}" onsubmit="return confirm('Delete {{ account.username|escapejs }}?')">{% csrf_token %}<button class="button button-small button-danger" type="submit">Delete</button></form>
+              <div class="row-actions" role="group" aria-label="Actions for {{ account.username }}">
+                <button class="action-button" type="button" data-edit-account data-action="{% url 'edit_account' account.pk %}" data-username="{{ account.username }}" data-expires="{{ account.expires_at|date:'Y-m-d H:i'|default:'Unlimited' }}" data-connections="{{ account.max_connections|default_if_none:'' }}" aria-label="Edit {{ account.username }}" title="Edit"><svg><use href="#action-edit"/></svg></button>
+                <button class="action-button action-button-extend" type="button" data-extend-account data-action="{% url 'extend_account' account.pk %}" data-username="{{ account.username }}" aria-label="Extend {{ account.username }}" title="Extend validity"><svg><use href="#action-extend"/></svg></button>
+                <form method="post" action="{% url 'reset_account_traffic' account.pk %}" onsubmit="return confirm('Reset traffic for {{ account.username|escapejs }}?')">{% csrf_token %}<button class="action-button" type="submit" aria-label="Reset traffic for {{ account.username }}" title="Reset traffic"><svg><use href="#action-reset"/></svg></button></form>
+                <button class="action-button" type="button" data-copy-account data-password-url="{% url 'account_password' account.pk %}" data-connections="{{ account.max_connections|default_if_none:'' }}" aria-label="Copy connection details for {{ account.username }}" title="Copy connection details"><svg><use href="#action-copy"/></svg></button>
+                {% if account.enabled %}<form method="post" action="{% url 'disable_account' account.pk %}">{% csrf_token %}<button class="action-button" type="submit" aria-label="Disable {{ account.username }}" title="Disable"><svg><use href="#action-pause"/></svg></button></form>
+                {% elif not account.is_expired %}<form method="post" action="{% url 'enable_account' account.pk %}">{% csrf_token %}<button class="action-button" type="submit" aria-label="Enable {{ account.username }}" title="Enable"><svg><use href="#action-play"/></svg></button></form>{% endif %}
+                <form method="post" action="{% url 'delete_account' account.pk %}" onsubmit="return confirm('Delete {{ account.username|escapejs }}?')">{% csrf_token %}<button class="action-button action-button-danger" type="submit" aria-label="Delete {{ account.username }}" title="Delete"><svg><use href="#action-delete"/></svg></button></form>
               </div>
             </td>
           </tr>
@@ -74,6 +86,25 @@
     </div>
   </section>
 </div>
+<div class="action-feedback" role="status" aria-live="polite" data-action-feedback hidden></div>
+
+<dialog id="extend-account-dialog" class="account-dialog extend-dialog" aria-labelledby="extend-dialog-title">
+  <div class="dialog-heading"><div><p class="eyebrow">QUICK RENEWAL</p><h2 id="extend-dialog-title">Extend <span data-extend-name></span></h2></div><button type="button" class="dialog-close" data-close-dialog aria-label="Close">×</button></div>
+  <p class="panel-description">Days are added to the current expiry. Expired accounts start from today.</p>
+  <form method="post" data-extend-form>{% csrf_token %}
+    <div class="extend-options">
+      <button class="extend-option" type="submit" name="days" value="30"><strong>30</strong><span>days</span></button>
+      <button class="extend-option" type="submit" name="days" value="60"><strong>60</strong><span>days</span></button>
+      <button class="extend-option" type="submit" name="days" value="90"><strong>90</strong><span>days</span></button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="copy-account-dialog" class="account-dialog" aria-labelledby="copy-dialog-title">
+  <div class="dialog-heading"><div><p class="eyebrow">CONNECTION DETAILS</p><h2 id="copy-dialog-title">Copy manually</h2></div><button type="button" class="dialog-close" data-close-dialog aria-label="Close">×</button></div>
+  <p class="panel-description">Automatic clipboard access is unavailable in this browser. Select and copy the details below.</p>
+  <textarea class="copy-details-text" data-copy-details readonly aria-label="Connection details"></textarea>
+</dialog>
 
 <dialog id="sessions-dialog" class="account-dialog" aria-labelledby="sessions-dialog-title">
   <div class="dialog-heading"><div><p class="eyebrow">LIVE CONNECTIONS</p><h2 id="sessions-dialog-title"><span data-sessions-name></span> IP addresses</h2></div><button type="button" class="dialog-close" data-close-dialog aria-label="Close">×</button></div>

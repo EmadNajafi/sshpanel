@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from .models import AuditEvent, VpnAccount
 from .secrets import decrypt_password
+from .services import ProvisionError
 from .system_metrics import _cpu_metric, get_system_metrics
 from .views import format_bytes
 
@@ -94,6 +95,55 @@ class AccountViewsTests(TestCase):
         self.assertEqual(account.expires_at, old_expiry)
         self.assertEqual(account.max_connections, 3)
         self.assertIsNone(helper.call_args.kwargs["expires_at"])
+
+    @patch("accounts.views.call_helper")
+    def test_quick_extend_adds_to_future_expiry_or_starts_from_now(self, helper):
+        future = timezone.now() + timedelta(days=5)
+        account = VpnAccount.objects.create(username="alice", created_by=self.staff, expires_at=future, max_connections=2)
+        self.client.post(reverse("extend_account", args=[account.pk]), {"days": "30"})
+        account.refresh_from_db()
+        self.assertEqual(account.expires_at, future + timedelta(days=30))
+        self.assertEqual(helper.call_args.args, ("update", "alice"))
+        self.assertEqual(helper.call_args.kwargs["max_connections"], 2)
+        self.assertAlmostEqual(helper.call_args.kwargs["expires_at"], account.expires_at.timestamp(), delta=1)
+
+        account.expires_at = timezone.now() - timedelta(days=1)
+        account.save(update_fields=["expires_at"])
+        before = timezone.now()
+        self.client.post(reverse("extend_account", args=[account.pk]), {"days": "60"})
+        account.refresh_from_db()
+        self.assertGreaterEqual(account.expires_at, before + timedelta(days=60))
+        self.assertLessEqual(account.expires_at, timezone.now() + timedelta(days=60))
+
+    @patch("accounts.views.call_helper")
+    def test_quick_extend_rejects_other_days_and_preserves_expiry_on_failure(self, helper):
+        future = timezone.now() + timedelta(days=5)
+        account = VpnAccount.objects.create(username="alice", created_by=self.staff, expires_at=future)
+        for days in ("0", "31", "abc", ""):
+            self.client.post(reverse("extend_account", args=[account.pk]), {"days": days})
+        helper.assert_not_called()
+        helper.side_effect = ProvisionError("failed")
+        self.client.post(reverse("extend_account", args=[account.pk]), {"days": "90"})
+        account.refresh_from_db()
+        self.assertEqual(account.expires_at, future)
+        self.assertTrue(AuditEvent.objects.filter(username="alice", action="extend", succeeded=False).exists())
+
+    @patch("accounts.views.call_helper")
+    def test_traffic_reset_uses_privileged_helper(self, helper):
+        account = VpnAccount.objects.create(username="alice", created_by=self.staff)
+        self.assertEqual(self.client.post(reverse("reset_account_traffic", args=[account.pk])).status_code, 302)
+        helper.assert_called_once_with("usage-reset", "alice")
+        self.assertTrue(AuditEvent.objects.filter(username="alice", action="usage-reset", succeeded=True).exists())
+
+    @patch("accounts.views.call_helper")
+    def test_new_actions_require_staff_and_post(self, helper):
+        account = VpnAccount.objects.create(username="alice", created_by=self.staff)
+        for route in ("extend_account", "reset_account_traffic"):
+            self.assertEqual(self.client.get(reverse(route, args=[account.pk])).status_code, 405)
+        self.client.logout()
+        for route in ("extend_account", "reset_account_traffic"):
+            self.assertEqual(self.client.post(reverse(route, args=[account.pk])).status_code, 302)
+        helper.assert_not_called()
 
     @patch("accounts.views.call_helper")
     def test_invalid_edit_does_not_reach_helper(self, helper):

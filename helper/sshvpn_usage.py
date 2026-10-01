@@ -196,6 +196,26 @@ def snapshot():
     return _locked(collect)
 
 
+def reset_account(username):
+    """Start a new accounting period without disturbing live VPN sessions."""
+    if not USERNAME.fullmatch(username):
+        raise ValueError("Invalid username.")
+
+    def reset():
+        state = _read_state()
+        accounts = _sync(state)
+        if username not in accounts:
+            raise ValueError("Account does not exist.")
+        counters = _counter_values(table_data())
+        entry = state[username]
+        for direction, counter in zip(("up", "down"), _counter_names(username)):
+            entry[direction] = 0
+            entry[f"last_{direction}"] = counters.get(counter, 0)
+        _save_state(state)
+
+    return _locked(reset)
+
+
 def remove_account(username):
     if not USERNAME.fullmatch(username):
         raise ValueError("Invalid username.")

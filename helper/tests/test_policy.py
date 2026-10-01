@@ -19,8 +19,13 @@ for module_name in ("fcntl", "pwd", "grp"):
             sys.modules[module_name].LOCK_EX = 2
             sys.modules[module_name].flock = lambda *_: None
 
+if not hasattr(sys.modules["fcntl"], "flock"):
+    sys.modules["fcntl"].LOCK_EX = 2
+    sys.modules["fcntl"].flock = lambda *_: None
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import sshvpn_policy as policy  # noqa: E402
+import sshvpn_usage as usage  # noqa: E402
 
 
 class PolicyTests(unittest.TestCase):
@@ -64,6 +69,20 @@ class PolicyTests(unittest.TestCase):
             self.assertTrue(policy.admit_connection("alice", 101, now=1000, remote_ip="not-an-ip"))
         leases = json.loads(policy.lease_path("alice").read_text())
         self.assertIsNone(leases[0]["ip"])
+
+
+class UsageResetTests(unittest.TestCase):
+    def test_reset_uses_current_counter_as_new_baseline(self):
+        state = {"alice": {"up": 800, "down": 1200, "last_up": 400, "last_down": 600}}
+        with patch.object(usage, "_locked", side_effect=lambda action: action()), \
+             patch.object(usage, "_read_state", return_value=state), \
+             patch.object(usage, "_sync", return_value={"alice": 1001}), \
+             patch.object(usage, "table_data", return_value=[]), \
+             patch.object(usage, "_counter_values", return_value={"up_alice": 950, "down_alice": 1350}), \
+             patch.object(usage, "_save_state") as save:
+            usage.reset_account("alice")
+        self.assertEqual(state["alice"], {"up": 0, "down": 0, "last_up": 950, "last_down": 1350})
+        save.assert_called_once_with(state)
 
 
 if __name__ == "__main__":

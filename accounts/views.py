@@ -168,6 +168,45 @@ def edit_account(request, pk):
     return redirect("dashboard")
 
 
+@staff_required
+@require_POST
+def extend_account(request, pk):
+    account = get_object_or_404(VpnAccount, pk=pk)
+    try:
+        days = int(request.POST.get("days", ""))
+        if days not in (30, 60, 90):
+            raise ValueError("Choose 30, 60, or 90 days.")
+        now = timezone.now()
+        expires_at = max(account.expires_at or now, now) + timedelta(days=days)
+        call_helper("update", account.username,
+                    expires_at=int(expires_at.timestamp()),
+                    max_connections=account.max_connections, enabled=account.enabled)
+    except (ValueError, ProvisionError) as exc:
+        record(request, account.username, "extend", False)
+        messages.error(request, str(exc))
+    else:
+        account.expires_at = expires_at
+        account.save(update_fields=["expires_at"])
+        record(request, account.username, "extend", True)
+        messages.success(request, f"Added {days} days to {account.username}.")
+    return redirect("dashboard")
+
+
+@staff_required
+@require_POST
+def reset_account_traffic(request, pk):
+    account = get_object_or_404(VpnAccount, pk=pk)
+    try:
+        call_helper("usage-reset", account.username)
+    except ProvisionError as exc:
+        record(request, account.username, "usage-reset", False)
+        messages.error(request, str(exc))
+    else:
+        record(request, account.username, "usage-reset", True)
+        messages.success(request, f"Traffic reset for {account.username}.")
+    return redirect("dashboard")
+
+
 def account_action(request, pk, action, enabled=None):
     account = get_object_or_404(VpnAccount, pk=pk)
     try:

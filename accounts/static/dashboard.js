@@ -49,6 +49,89 @@
     });
   });
 
+  const extendDialog = document.getElementById("extend-account-dialog");
+  document.querySelectorAll("[data-extend-account]").forEach((button) => {
+    button.addEventListener("click", () => {
+      extendDialog.querySelector("[data-extend-name]").textContent = button.dataset.username;
+      extendDialog.querySelector("[data-extend-form]").action = button.dataset.action;
+      extendDialog.showModal();
+    });
+  });
+
+  const feedback = document.querySelector("[data-action-feedback]");
+  let feedbackTimer;
+  function showFeedback(message, isError = false) {
+    feedback.textContent = message;
+    feedback.classList.toggle("is-error", isError);
+    feedback.hidden = false;
+    window.clearTimeout(feedbackTimer);
+    feedbackTimer = window.setTimeout(() => { feedback.hidden = true; }, 4000);
+  }
+
+  async function copyText(value) {
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(value);
+        return true;
+      } catch (_error) {
+        // HTTP panels use the selection based browser fallback below.
+      }
+    }
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.append(textarea);
+    textarea.focus();
+    textarea.select();
+    let copied = false;
+    try { copied = document.execCommand("copy"); } catch (_error) { /* show manual fallback */ }
+    textarea.remove();
+    return copied;
+  }
+
+  document.querySelectorAll("[data-copy-account]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const row = button.closest("[data-account-username]");
+      button.disabled = true;
+      try {
+        const response = await fetch(button.dataset.passwordUrl, {
+          credentials: "same-origin", headers: { Accept: "application/json" }, cache: "no-store",
+        });
+        if (!response.ok) throw new Error("Could not load the password.");
+        const { password } = await response.json();
+        if (password === null || password === undefined) throw new Error("Password unavailable. Set a new password first.");
+        const details = [
+          `Host: ${window.location.hostname}`,
+          `SSH port: ${document.querySelector("[data-ssh-port]").dataset.sshPort}`,
+          `Username: ${row.dataset.accountUsername}`,
+          `Password: ${password}`,
+          `Expires: ${row.querySelector("[data-expiry-cell]").textContent.trim()}`,
+          `Connection limit: ${button.dataset.connections || "Unlimited"}`,
+        ].join("\n");
+        if (await copyText(details)) {
+          showFeedback(`Connection details for ${row.dataset.accountUsername} copied.`);
+        } else {
+          const dialog = document.getElementById("copy-account-dialog");
+          const field = dialog.querySelector("[data-copy-details]");
+          field.value = details;
+          dialog.showModal();
+          field.focus();
+          field.select();
+          showFeedback("Select and copy the connection details.", true);
+        }
+      } catch (error) {
+        showFeedback(error.message, true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+  document.getElementById("copy-account-dialog").addEventListener("close", (event) => {
+    event.target.querySelector("[data-copy-details]").value = "";
+  });
+
   const grid = document.querySelector("[data-metrics-url]");
   if (!grid) return;
 
