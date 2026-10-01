@@ -1,4 +1,28 @@
 (() => {
+  document.querySelectorAll("[data-open-dialog]").forEach((button) => {
+    button.addEventListener("click", () => document.getElementById(button.dataset.openDialog).showModal());
+  });
+  document.querySelectorAll("[data-close-dialog]").forEach((button) => {
+    button.addEventListener("click", () => button.closest("dialog").close());
+  });
+  document.querySelectorAll("dialog.account-dialog").forEach((dialog) => {
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+  });
+  const editDialog = document.getElementById("edit-account-dialog");
+  document.querySelectorAll("[data-edit-account]").forEach((button) => {
+    button.addEventListener("click", () => {
+      editDialog.querySelector("[data-edit-name]").textContent = button.dataset.username;
+      editDialog.querySelector("[data-edit-expires]").textContent = button.dataset.expires;
+      const form = editDialog.querySelector("[data-edit-form]");
+      form.action = button.dataset.action;
+      form.reset();
+      form.elements.max_connections.value = button.dataset.connections;
+      editDialog.showModal();
+    });
+  });
+
   const grid = document.querySelector("[data-metrics-url]");
   if (!grid) return;
 

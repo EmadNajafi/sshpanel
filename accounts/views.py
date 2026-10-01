@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from django.utils import timezone
 
-from .forms import CreateAccountForm, PasswordForm
+from .forms import CreateAccountForm, EditAccountForm, PasswordForm
 from .models import AuditEvent, VpnAccount
 from .services import ProvisionError, call_helper
 from .system_metrics import get_system_metrics
@@ -28,7 +28,6 @@ def dashboard(request):
         "metrics": get_system_metrics(),
         "events": AuditEvent.objects.select_related("actor")[:20],
         "create_form": CreateAccountForm(),
-        "password_form": PasswordForm(),
         "vpn_ssh_port": settings.VPN_SSH_PORT,
     })
 
@@ -76,6 +75,44 @@ def create_account(request):
     else:
         record(request, username, "create", True)
         messages.success(request, f"Created {username}.")
+    return redirect("dashboard")
+
+
+@staff_required
+@require_POST
+def edit_account(request, pk):
+    account = get_object_or_404(VpnAccount, pk=pk)
+    form = EditAccountForm(request.POST)
+    if not form.is_valid():
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                messages.error(request, error)
+        return redirect("dashboard")
+
+    days = form.cleaned_data["valid_days"]
+    expires_at = timezone.now() + timedelta(days=days) if days is not None else account.expires_at
+    max_connections = form.cleaned_data["max_connections"]
+    if max_connections is None:
+        max_connections = account.max_connections
+    password = form.cleaned_data["password"] or None
+    if max_connections == account.max_connections and expires_at == account.expires_at and password is None:
+        messages.info(request, f"No changes to {account.username}.")
+        return redirect("dashboard")
+    try:
+        call_helper(
+            "update", account.username, password,
+            expires_at=int(expires_at.timestamp()) if days is not None else None,
+            max_connections=max_connections, enabled=account.enabled,
+        )
+    except ProvisionError as exc:
+        record(request, account.username, "update", False)
+        messages.error(request, str(exc))
+    else:
+        account.expires_at = expires_at
+        account.max_connections = max_connections
+        account.save(update_fields=["expires_at", "max_connections"])
+        record(request, account.username, "update", True)
+        messages.success(request, f"Updated {account.username}.")
     return redirect("dashboard")
 
 

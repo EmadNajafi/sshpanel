@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}Overview · SSH VPN Panel{% endblock %}
-{% block scripts %}<script src="{% static 'dashboard.js' %}?v=2" defer></script>{% endblock %}
+{% block scripts %}<script src="{% static 'dashboard.js' %}?v=3" defer></script>{% endblock %}
 {% block content %}
 <div class="page-heading">
   <div>
@@ -38,22 +38,13 @@
 </section>
 
 <div class="dashboard-grid">
-  <section class="panel create-panel">
-    <div class="panel-heading">
-      <div><p class="eyebrow">ACCOUNT SETUP</p><h2>Create account</h2></div>
-      <span class="panel-count">+</span>
-    </div>
-    <p class="panel-description">New accounts can use SSH tunnel and SOCKS forwarding. Shell and SFTP are blocked.</p>
-    <form method="post" action="{% url 'create_account' %}" class="account-form">{% csrf_token %}
-      {{ create_form.as_p }}
-      <button class="button button-primary button-wide" type="submit">Create account</button>
-    </form>
-  </section>
-
   <section class="panel accounts-panel">
     <div class="panel-heading">
       <div><p class="eyebrow">YOUR USERS</p><h2>VPN accounts</h2></div>
-      <div class="account-totals"><span>{{ account_total }} total</span><span class="active-total">{{ account_active }} active</span></div>
+      <div class="account-heading-actions">
+        <div class="account-totals"><span>{{ account_total }} total</span><span class="active-total">{{ account_active }} active</span></div>
+        <button class="button button-primary create-trigger" type="button" data-open-dialog="create-account-dialog" aria-label="Create VPN account"><span aria-hidden="true">+</span><span>New user</span></button>
+      </div>
     </div>
     <div class="table-scroll">
       <table>
@@ -69,17 +60,37 @@
               <div class="row-actions">
                 {% if account.enabled %}<form method="post" action="{% url 'disable_account' account.pk %}">{% csrf_token %}<button class="button button-small button-secondary" type="submit">Disable</button></form>
                 {% elif not account.is_expired %}<form method="post" action="{% url 'enable_account' account.pk %}">{% csrf_token %}<button class="button button-small button-secondary" type="submit">Enable</button></form>{% endif %}
-                <details class="password-details"><summary>Reset password</summary><form method="post" action="{% url 'reset_password' account.pk %}">{% csrf_token %}{{ password_form.as_p }}<button class="button button-small button-primary" type="submit">Save</button></form></details>
+                <button class="button button-small button-edit" type="button" data-edit-account data-action="{% url 'edit_account' account.pk %}" data-username="{{ account.username }}" data-expires="{{ account.expires_at|date:'Y-m-d H:i'|default:'Unlimited' }}" data-connections="{{ account.max_connections|default_if_none:'' }}">Edit</button>
                 <form method="post" action="{% url 'delete_account' account.pk %}" onsubmit="return confirm('Delete {{ account.username|escapejs }}?')">{% csrf_token %}<button class="button button-small button-danger" type="submit">Delete</button></form>
               </div>
             </td>
           </tr>
-        {% empty %}<tr><td colspan="5" class="empty-state">No accounts yet. Create your first one using the form.</td></tr>{% endfor %}
+        {% empty %}<tr><td colspan="5" class="empty-state">No accounts yet. Use the + New user button to create one.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>
   </section>
 </div>
+
+<dialog id="create-account-dialog" class="account-dialog" aria-labelledby="create-dialog-title">
+  <div class="dialog-heading"><div><p class="eyebrow">NEW VPN USER</p><h2 id="create-dialog-title">Create account</h2></div><button type="button" class="dialog-close" data-close-dialog aria-label="Close">×</button></div>
+  <p class="panel-description">SSH tunnel and SOCKS forwarding only. Shell and SFTP are blocked.</p>
+  <form method="post" action="{% url 'create_account' %}" class="account-form">{% csrf_token %}
+    {{ create_form.as_p }}
+    <div class="dialog-actions"><button class="button button-secondary" type="button" data-close-dialog>Cancel</button><button class="button button-primary" type="submit">Create account</button></div>
+  </form>
+</dialog>
+
+<dialog id="edit-account-dialog" class="account-dialog" aria-labelledby="edit-dialog-title">
+  <div class="dialog-heading"><div><p class="eyebrow">ACCOUNT SETTINGS</p><h2 id="edit-dialog-title">Edit <span data-edit-name></span></h2></div><button type="button" class="dialog-close" data-close-dialog aria-label="Close">×</button></div>
+  <p class="panel-description">Username stays the same. Current expiry: <strong data-edit-expires></strong>.</p>
+  <form method="post" class="account-form" data-edit-form>{% csrf_token %}
+    <p><label for="edit-password">New password</label><input id="edit-password" type="password" name="password" maxlength="256" autocomplete="new-password"><span class="helptext">Leave blank to keep the current password.</span></p>
+    <p><label for="edit-valid-days">New validity (days)</label><input id="edit-valid-days" type="number" name="valid_days" min="1" max="36500"><span class="helptext">Leave blank to keep the current expiry. Enter days to count from now.</span></p>
+    <p><label for="edit-connections">Simultaneous connections</label><input id="edit-connections" type="number" name="max_connections" min="1" max="10000"><span class="helptext">Leave blank to keep the current limit.</span></p>
+    <div class="dialog-actions"><button class="button button-secondary" type="button" data-close-dialog>Cancel</button><button class="button button-primary" type="submit">Save changes</button></div>
+  </form>
+</dialog>
 
 <section class="panel activity-panel">
   <div class="panel-heading"><div><p class="eyebrow">AUDIT LOG</p><h2>Recent activity</h2></div></div>

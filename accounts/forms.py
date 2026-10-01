@@ -32,3 +32,25 @@ class PasswordForm(forms.Form):
         if any(character in value for character in "\r\n\x00"):
             raise forms.ValidationError("The password cannot contain a line break or NUL character.")
         return value
+
+
+class EditAccountForm(forms.Form):
+    password = forms.CharField(
+        required=False, max_length=256, strip=False, widget=forms.PasswordInput,
+        label="New password", help_text="Leave blank to keep the current password.",
+    )
+    valid_days = forms.IntegerField(
+        required=False, min_value=1, max_value=36500,
+        label="New validity (days)",
+        help_text="Leave blank to keep the current expiry. Enter days to count from now.",
+    )
+    max_connections = forms.IntegerField(
+        required=False, min_value=1, max_value=10000, label="Simultaneous connections",
+        help_text="Leave blank to keep the current limit.",
+    )
+
+    def clean_password(self):
+        value = self.cleaned_data["password"]
+        if any(character in value for character in "\r\n\x00"):
+            raise forms.ValidationError("The password cannot contain a line break or NUL character.")
+        return value

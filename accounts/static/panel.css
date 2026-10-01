@@ -81,7 +81,7 @@ h1, h2, p { margin-top: 0; }
 .metric-track span { display: block; height: 100%; border-radius: inherit; background: var(--metric); transition: width .4s ease; }
 .metric-detail { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
 
-.dashboard-grid { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
 .panel { border-radius: 18px; padding: 24px; min-width: 0; }
 .panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; }
 .panel-heading h2 { margin: 0; font-size: 20px; letter-spacing: -.03em; }
@@ -90,6 +90,19 @@ h1, h2, p { margin-top: 0; }
 .account-totals { display: flex; gap: 7px; flex-wrap: wrap; }
 .account-totals span { border: 1px solid #e5ebf3; border-radius: 99px; padding: 5px 9px; color: #62718a; font-size: 11px; font-weight: 650; white-space: nowrap; }
 .account-totals .active-total { border-color: #d6f1e7; color: #178c68; background: #f0fbf7; }
+.account-heading-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.create-trigger { display: inline-flex; align-items: center; gap: 9px; }
+.create-trigger span:first-child { font-size: 21px; font-weight: 400; line-height: .6; }
+.button-edit { background: #edf3ff; color: #3266c7; }
+.button-edit:hover { background: #dce9ff; }
+.account-dialog { width: min(100% - 32px, 480px); max-height: min(88vh, 800px); overflow-y: auto; border: 1px solid var(--border); border-radius: 18px; padding: 26px; color: var(--ink); background: #fff; box-shadow: 0 28px 80px rgba(12, 27, 50, .25); }
+.account-dialog::backdrop { background: rgba(13, 29, 51, .56); }
+.dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; margin-bottom: 13px; }
+.dialog-heading h2 { margin: 0; font-size: 24px; letter-spacing: -.03em; }
+.dialog-close { width: 32px; height: 32px; flex: 0 0 32px; border: 0; border-radius: 9px; background: #f0f4f9; color: #53657e; font-size: 24px; line-height: 1; }
+.dialog-close:hover { background: #e4ebf4; }
+.account-dialog .panel-description { margin-bottom: 20px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 22px; }
 
 .account-form p, .login-form p { margin: 0 0 17px; }
 label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 750; color: #33425a; }
@@ -151,12 +164,6 @@ td { color: #506078; font-size: 12px; }
 .login-card .muted { margin-bottom: 26px; font-size: 13px; }
 .login-form .button { margin-top: 4px; }
 
-@media (max-width: 1080px) {
-  .dashboard-grid { grid-template-columns: 1fr; }
-  .create-panel { max-width: none; }
-  .account-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
-  .account-form .button { grid-column: 1 / -1; }
-}
 @media (max-width: 720px) {
   .site-header-inner { padding: 0 18px; }
   .app-shell { padding: 25px 16px 50px; }
@@ -169,8 +176,8 @@ td { color: #506078; font-size: 12px; }
   .admin-badge { display: none; }
 }
 @media (max-width: 520px) {
-  .account-form { grid-template-columns: 1fr; }
   .account-totals { display: none; }
+  .account-dialog { padding: 21px 17px; }
   .login-card { padding: 28px 23px; }
   .brand-label small { display: none; }
 }

@@ -15,7 +15,7 @@ from sshvpn_policy import (
 )
 
 
-ALLOWED = {"create", "disable", "enable", "delete", "password"}
+ALLOWED = {"create", "disable", "enable", "delete", "password", "update"}
 
 
 def fail(message):
@@ -159,7 +159,37 @@ def main():
                 raise
         else:
             managed_user(username, group_id)
-            if action == "disable":
+            if action == "update":
+                policy = read_policy(username)
+                expires_at = request.get("expires_at", policy["expires_at"])
+                max_connections = request.get("max_connections", policy["max_connections"])
+                enabled = request.get("enabled")
+                password = request.get("password")
+                if enabled is not True and enabled is not False:
+                    raise ValueError("Invalid account status.")
+                if expires_at is not None and (type(expires_at) is not int or expires_at <= int(time.time())):
+                    raise ValueError("Expiry must be in the future.")
+                if "max_connections" in request and (type(max_connections) is not int or not 1 <= max_connections <= 10000):
+                    raise ValueError("Invalid connection limit.")
+                if password is not None and (not isinstance(password, str) or not 1 <= len(password) <= 256 or any(c in password for c in "\n\r\x00")):
+                    raise ValueError("Invalid password.")
+                old_hash = spwd.getspnam(username).sp_pwdp
+                try:
+                    if password is not None:
+                        set_password(username, password)
+                    write_policy(username, expires_at, max_connections)
+                    if enabled:
+                        if old_hash.startswith("!"):
+                            run("/usr/sbin/usermod", "--unlock", username)
+                    elif not spwd.getspnam(username).sp_pwdp.startswith("!"):
+                        run("/usr/sbin/usermod", "--lock", username)
+                except Exception:
+                    write_policy(username, policy["expires_at"], policy["max_connections"])
+                    run("/usr/sbin/usermod", "--password", old_hash, username)
+                    raise
+                if password is not None or policy["expires_at"] != expires_at or policy["max_connections"] != max_connections:
+                    run("/usr/bin/pkill", "-u", username, ok=(0, 1))
+            elif action == "disable":
                 run("/usr/sbin/usermod", "--lock", username)
                 run("/usr/bin/pkill", "-u", username, ok=(0, 1))
             elif action == "enable":

@@ -1,11 +1,13 @@
 from unittest.mock import patch
 from io import StringIO
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import Client, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import AuditEvent, VpnAccount
 from .system_metrics import _cpu_metric, get_system_metrics
@@ -50,6 +52,52 @@ class AccountViewsTests(TestCase):
         helper.assert_called_once_with("password", "alice", "a")
 
     @patch("accounts.views.call_helper")
+    def test_edit_account_updates_limits_and_password(self, helper):
+        old_expiry = timezone.now() + timedelta(days=2)
+        account = VpnAccount.objects.create(
+            username="alice", created_by=self.staff, expires_at=old_expiry,
+            max_connections=2,
+        )
+        response = self.client.post(reverse("edit_account", args=[account.pk]), {
+            "password": "a", "valid_days": "10", "max_connections": "4",
+        })
+        self.assertEqual(response.status_code, 302)
+        account.refresh_from_db()
+        self.assertEqual(account.max_connections, 4)
+        self.assertGreater(account.expires_at, old_expiry)
+        args, kwargs = helper.call_args
+        self.assertEqual(args, ("update", "alice", "a"))
+        self.assertEqual(kwargs["max_connections"], 4)
+        self.assertEqual(kwargs["enabled"], True)
+        self.assertAlmostEqual(kwargs["expires_at"], account.expires_at.timestamp(), delta=1)
+        self.assertTrue(AuditEvent.objects.filter(action="update", succeeded=True).exists())
+
+    @patch("accounts.views.call_helper")
+    def test_edit_account_keeps_expiry_when_valid_days_blank(self, helper):
+        old_expiry = timezone.now() + timedelta(days=2)
+        account = VpnAccount.objects.create(
+            username="alice", created_by=self.staff, expires_at=old_expiry,
+            max_connections=2,
+        )
+        self.client.post(reverse("edit_account", args=[account.pk]), {
+            "password": "", "valid_days": "", "max_connections": "3",
+        })
+        account.refresh_from_db()
+        self.assertEqual(account.expires_at, old_expiry)
+        self.assertEqual(account.max_connections, 3)
+        self.assertIsNone(helper.call_args.kwargs["expires_at"])
+
+    @patch("accounts.views.call_helper")
+    def test_invalid_edit_does_not_reach_helper(self, helper):
+        account = VpnAccount.objects.create(username="alice", created_by=self.staff, max_connections=2)
+        self.client.post(reverse("edit_account", args=[account.pk]), {
+            "password": "bad\npassword", "valid_days": "-2", "max_connections": "0",
+        })
+        helper.assert_not_called()
+        account.refresh_from_db()
+        self.assertEqual(account.max_connections, 2)
+
+    @patch("accounts.views.call_helper")
     def test_non_staff_cannot_create_account(self, helper):
         user = get_user_model().objects.create_user("viewer", password="correct-long-password")
         self.client.force_login(user)
@@ -75,6 +123,9 @@ class AccountViewsTests(TestCase):
         response = self.client.get(reverse("dashboard"))
         self.assertContains(response, "Server resource usage")
         self.assertContains(response, "20%")
+        self.assertContains(response, 'id="create-account-dialog"')
+        self.assertContains(response, 'id="edit-account-dialog"')
+        self.assertNotContains(response, 'class="panel create-panel"')
         response = self.client.get(reverse("system_metrics"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["memory"]["percent"], 40)
