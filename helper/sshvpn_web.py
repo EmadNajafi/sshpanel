@@ -11,6 +11,7 @@ import ssl
 import subprocess
 import sys
 import tempfile
+import time
 
 
 ENV_FILE = Path("/etc/sshvpn/panel.env")
@@ -240,17 +241,23 @@ def apply_change(token):
         _command("/usr/sbin/nginx", "-t")
         _command("/usr/bin/systemctl", "restart", "sshvpn-panel")
         _command("/usr/bin/systemctl", "reload", "nginx")
-        if state["tls"]:
-            connection = _LocalHTTPSConnection(state["domain"], state["port"], timeout=8,
-                                               context=ssl.create_default_context())
-        else:
-            connection = http.client.HTTPConnection("127.0.0.1", state["port"], timeout=8)
-        try:
-            connection.request("GET", f'{state["path"]}/login/', headers={"Host": state["domain"]})
-            if connection.getresponse().status != 200:
+        for attempt in range(12):
+            if state["tls"]:
+                connection = _LocalHTTPSConnection(state["domain"], state["port"], timeout=5,
+                                                   context=ssl.create_default_context())
+            else:
+                connection = http.client.HTTPConnection("127.0.0.1", state["port"], timeout=5)
+            try:
+                connection.request("GET", f'{state["path"]}/login/', headers={"Host": state["domain"]})
+                if connection.getresponse().status == 200:
+                    break
+            except (OSError, http.client.HTTPException):
+                pass
+            finally:
+                connection.close()
+            if attempt == 11:
                 raise RuntimeError("The new panel login page did not respond.")
-        finally:
-            connection.close()
+            time.sleep(1)
         state["phase"] = "awaiting-confirmation"
         _save_state(state)
         _command("/usr/bin/systemd-run", f"--unit=sshvpn-web-rollback-{token}", "--on-active=5m",

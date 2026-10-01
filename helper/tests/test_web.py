@@ -121,12 +121,13 @@ class WebAddressTests(unittest.TestCase):
                  patch.object(web, "_port_available", return_value=True), patch.object(web, "_command"):
                 web.stage_change("/private-42", 18080)
             token = json.loads((state_dir / "state.json").read_text())["token"]
+            responses = iter((502, 200))
             class Connection:
                 def request(self, *args, **kwargs):
                     pass
 
                 def getresponse(self):
-                    return type("Response", (), {"status": 200})()
+                    return type("Response", (), {"status": next(responses)})()
 
                 def close(self):
                     pass
@@ -136,12 +137,14 @@ class WebAddressTests(unittest.TestCase):
                  patch.object(web, "_port_available", return_value=True), \
                  patch.object(web, "_write_owned", side_effect=lambda path, content: path.write_text(content)), \
                  patch.object(web, "_command") as command, \
+                 patch.object(web.time, "sleep") as pause, \
                  patch.object(web.http.client, "HTTPConnection", return_value=Connection()):
                 web.apply_change(token)
                 self.assertEqual(web.status()["phase"], "awaiting-confirmation")
                 self.assertIn("PANEL_WEB_PATH=/private-42", env_file.read_text())
                 self.assertEqual(web.confirm_change()["url"], "http://example.com:18080/private-42/")
                 self.assertFalse(state_dir.exists())
+                pause.assert_called_once_with(1)
                 self.assertTrue(any(call.args[0] == "/usr/bin/systemd-run" for call in command.call_args_list))
 
 
