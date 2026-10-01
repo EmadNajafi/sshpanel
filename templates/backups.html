@@ -1,35 +1,39 @@
 {% extends 'base.html' %}
 {% block title %}Backups · SSH VPN Panel{% endblock %}
 {% block content %}
-<div class="page-heading">
-  <div><p class="eyebrow">SETTINGS / DATA & RECOVERY</p><h1>Backup and restore</h1><p class="page-intro">Move your panel and VPN accounts to another Ubuntu 24.04 server.</p></div>
-  <a class="button button-secondary" href="{% url 'panel_settings' %}">← Settings</a>
-</div>
-{% if not tls_enabled %}<div class="notice error" role="alert">Backups contain sensitive account data and are not encrypted. This panel is using HTTP; use an administrator SSH tunnel or enable HTTPS before downloading or uploading a backup over an untrusted network.</div>{% endif %}
-<div class="settings-grid">
-  <section class="panel settings-panel">
-    <div class="panel-heading"><div><p class="eyebrow">CREATE</p><h2>New backup</h2></div></div>
-    <p class="panel-description">Includes the complete PostgreSQL database, administrators, VPN usernames and password hashes, recoverable VPN passwords, account limits, audit history, and saved traffic totals. The archive is not encrypted, so keep it private. Server-specific IP, TLS, and SSH port settings are saved in the file but are not applied on restore.</p>
-    <form method="post" action="{% url 'create_backup' %}" class="account-form">{% csrf_token %}
-      <button class="button button-primary" type="submit">Create backup</button>
-    </form>
+<div class="settings-page">
+  <div class="settings-hero">
+    <div><p class="eyebrow">SETTINGS / DATA & RECOVERY</p><h1>Backup and restore</h1><p>Keep a complete copy of the panel or move it to another Ubuntu 24.04 server.</p></div>
+    <a class="button button-secondary" href="{% url 'panel_settings' %}">← Back to settings</a>
+  </div>
+  {% if not tls_enabled %}<div class="notice error" role="alert">Backups contain sensitive account data and are not encrypted. This panel is using HTTP; use an administrator SSH tunnel or enable HTTPS before downloading or uploading a backup over an untrusted network.</div>{% endif %}
+
+  <div class="backup-action-grid">
+    <section class="panel settings-section backup-action">
+      <div class="settings-section-head"><span class="settings-section-icon settings-icon-blue" aria-hidden="true">01</span><div><p class="eyebrow">EXPORT</p><h2>Create a backup</h2><p>Download a full copy of this panel.</p></div></div>
+      <p class="backup-action-copy">Includes the full PostgreSQL database, administrators, VPN account details and password hashes, account limits, audit history, and saved traffic totals.</p>
+      <p class="backup-sensitive-note">The archive is not encrypted. Store it privately.</p>
+      <form method="post" action="{% url 'create_backup' %}">{% csrf_token %}<button class="button button-primary" type="submit">Create backup</button></form>
+    </section>
+
+    <section class="panel settings-section backup-action">
+      <div class="settings-section-head"><span class="settings-section-icon settings-icon-purple" aria-hidden="true">02</span><div><p class="eyebrow">IMPORT</p><h2>Restore from file</h2><p>Bring panel data onto an installed server.</p></div></div>
+      <p class="backup-action-copy">Restoring replaces the destination panel database and administrator accounts. Its web address, TLS mode, database connection, and SSH port stay local.</p>
+      <form method="post" action="{% url 'restore_backup' %}" enctype="multipart/form-data" class="backup-restore-form" onsubmit="return confirm('Restore the selected backup? Current panel data and administrator accounts will be replaced. A server-side recovery copy will be created first.')">{% csrf_token %}
+        <p><label for="restore-file">Backup file (.tar.gz)</label><input id="restore-file" name="backup_file" type="file" accept=".tar.gz,application/gzip" required></p>
+        <p class="restore-confirm"><label><input type="checkbox" name="confirm_replace" value="yes" required> Replace this panel's data with the backup</label></p>
+        <button class="button button-secondary" type="submit">Restore backup</button>
+      </form>
+    </section>
+  </div>
+
+  <section class="panel settings-section backup-list-panel">
+    <div class="settings-section-head"><span class="settings-section-icon settings-icon-green" aria-hidden="true">03</span><div><p class="eyebrow">SAVED ON THIS SERVER</p><h2>Available backups</h2><p>Download a copy to keep outside this server.</p></div></div>
+    {% if backups %}
+      <div class="table-scroll"><table><thead><tr><th>File</th><th>Created</th><th>Size</th><th></th></tr></thead><tbody>
+      {% for backup in backups %}<tr><td><strong class="account-name">{{ backup.name }}</strong></td><td class="nowrap">{{ backup.created|date:"Y-m-d H:i" }} UTC</td><td>{{ backup.size|filesizeformat }}</td><td><a class="button button-secondary" href="{% url 'download_backup' backup.name %}">Download</a></td></tr>{% endfor %}
+      </tbody></table></div>
+    {% else %}<div class="backup-empty">No backups on this server yet. Create one above, then download it.</div>{% endif %}
   </section>
-  <section class="panel settings-panel">
-    <div class="panel-heading"><div><p class="eyebrow">RESTORE</p><h2>Restore from file</h2></div></div>
-    <p class="panel-description">Install this panel on the destination server first, then upload the backup here. Restoring replaces its panel database and administrator accounts with those in the file. The destination web address, TLS mode, database connection, and SSH port stay local to that server. Sign in afterward with an administrator from the backup.</p>
-    <form method="post" action="{% url 'restore_backup' %}" enctype="multipart/form-data" class="account-form" onsubmit="return confirm('Restore the selected backup? Current panel data and administrator accounts will be replaced. A server-side recovery copy will be created first.')">{% csrf_token %}
-      <p><label for="restore-file">Backup file</label><input id="restore-file" name="backup_file" type="file" accept=".tar.gz,application/gzip" required></p>
-      <p class="restore-confirm"><label><input type="checkbox" name="confirm_replace" value="yes" required> I understand the destination panel data will be replaced.</label></p>
-      <button class="button button-secondary" type="submit">Restore backup</button>
-    </form>
-  </section>
 </div>
-<section class="panel backup-list-panel">
-  <div class="panel-heading"><div><p class="eyebrow">SAVED ON THIS SERVER</p><h2>Available backups</h2></div></div>
-  {% if backups %}
-    <div class="table-scroll"><table><thead><tr><th>File</th><th>Created</th><th>Size</th><th></th></tr></thead><tbody>
-    {% for backup in backups %}<tr><td><strong class="account-name">{{ backup.name }}</strong></td><td class="nowrap">{{ backup.created|date:"Y-m-d H:i" }} UTC</td><td>{{ backup.size|filesizeformat }}</td><td><a class="button button-secondary" href="{% url 'download_backup' backup.name %}">Download</a></td></tr>{% endfor %}
-    </tbody></table></div>
-  {% else %}<p class="panel-description">No backups have been created on this server yet.</p>{% endif %}
-</section>
 {% endblock %}
