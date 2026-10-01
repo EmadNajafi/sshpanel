@@ -4,13 +4,28 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>SSH VPN Panel</title>
-  <link rel="stylesheet" href="{% static 'panel.css' %}">
+  <meta name="theme-color" content="#101a2b">
+  <title>{% block title %}SSH VPN Panel{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'panel.css' %}?v=2">
+  {% block scripts %}{% endblock %}
 </head>
 <body>
-  <header><strong>SSH VPN Panel</strong>{% if user.is_authenticated %}<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Sign out</button></form>{% endif %}</header>
-  <main>
-    {% for message in messages %}<div class="notice {{ message.tags }}">{{ message }}</div>{% endfor %}
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="{% url 'dashboard' %}">
+        <span class="brand-icon" aria-hidden="true">S</span>
+        <span class="brand-label"><strong>SSH VPN</strong><small>Control panel</small></span>
+      </a>
+      {% if user.is_authenticated %}
+      <div class="header-actions">
+        <span class="admin-badge"><span class="status-dot"></span> Administrator</span>
+        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="header-signout" type="submit">Sign out</button></form>
+      </div>
+      {% endif %}
+    </div>
+  </header>
+  <main class="{% block main_class %}app-shell{% endblock %}">
+    {% for message in messages %}<div class="notice {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
     {% block content %}{% endblock %}
   </main>
 </body>

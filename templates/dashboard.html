@@ -1,27 +1,92 @@
 {% extends 'base.html' %}
+{% load static %}
+{% block title %}Overview · SSH VPN Panel{% endblock %}
+{% block scripts %}<script src="{% static 'dashboard.js' %}?v=2" defer></script>{% endblock %}
 {% block content %}
-<h1>VPN accounts</h1>
-<p>These accounts use the server's main SSH port for local forwarding and SOCKS. Shell, commands and SFTP are blocked for VPN accounts.</p>
-<p><strong>VPN SSH port: {{ vpn_ssh_port }}</strong>. Set your client to SSH tunnel/SOCKS mode and use this port with the account username and password.</p>
-<section class="card">
-  <h2>Create account</h2>
-  <form method="post" action="{% url 'create_account' %}">{% csrf_token %}
-    {{ create_form.as_p }}
-    <button type="submit">Create account</button>
-  </form>
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">SERVER OVERVIEW</p>
+    <h1>Dashboard</h1>
+    <p class="page-intro">Manage SSH tunnel accounts and keep an eye on server resources.</p>
+  </div>
+  <div class="port-card">
+    <span class="port-card-label">VPN SSH PORT</span>
+    <strong>{{ vpn_ssh_port }}</strong>
+    <small>Uses the server's main SSH service</small>
+  </div>
+</div>
+
+<section class="metrics-grid" aria-label="Server resource usage" data-metrics-url="{% url 'system_metrics' %}">
+  <article class="metric-card metric-cpu" data-metric="cpu">
+    <div class="metric-top"><span class="metric-icon">CPU</span><span class="metric-label">Processor</span></div>
+    <div class="metric-number" data-metric-value>{% if metrics.cpu.percent is not None %}{{ metrics.cpu.percent }}%{% else %}—{% endif %}</div>
+    <div class="metric-track" aria-hidden="true"><span data-metric-bar style="width:{{ metrics.cpu.percent|default_if_none:0 }}%"></span></div>
+    <p class="metric-detail" data-metric-detail>{{ metrics.cpu.detail }}</p>
+  </article>
+  <article class="metric-card metric-memory" data-metric="memory">
+    <div class="metric-top"><span class="metric-icon">RAM</span><span class="metric-label">Memory</span></div>
+    <div class="metric-number" data-metric-value>{% if metrics.memory.percent is not None %}{{ metrics.memory.percent }}%{% else %}—{% endif %}</div>
+    <div class="metric-track" aria-hidden="true"><span data-metric-bar style="width:{{ metrics.memory.percent|default_if_none:0 }}%"></span></div>
+    <p class="metric-detail" data-metric-detail>{{ metrics.memory.detail }}</p>
+  </article>
+  <article class="metric-card metric-disk" data-metric="disk">
+    <div class="metric-top"><span class="metric-icon">SSD</span><span class="metric-label">Disk storage</span></div>
+    <div class="metric-number" data-metric-value>{% if metrics.disk.percent is not None %}{{ metrics.disk.percent }}%{% else %}—{% endif %}</div>
+    <div class="metric-track" aria-hidden="true"><span data-metric-bar style="width:{{ metrics.disk.percent|default_if_none:0 }}%"></span></div>
+    <p class="metric-detail" data-metric-detail>{{ metrics.disk.detail }}</p>
+  </article>
 </section>
-<section class="card">
-  <h2>Accounts</h2>
-  <div class="table-scroll"><table><thead><tr><th>Username</th><th>Status</th><th>Expires</th><th>Concurrent</th><th>Created</th><th>Actions</th></tr></thead><tbody>
-  {% for account in accounts %}
-    <tr><td>{{ account.username }}</td><td>{% if account.is_expired %}Expired{% elif account.enabled %}Enabled{% else %}Disabled{% endif %}</td><td>{{ account.expires_at|default:"Unlimited" }}</td><td>{{ account.max_connections|default:"Unlimited" }}</td><td>{{ account.created_at }}</td><td class="actions">
-      {% if account.enabled %}<form method="post" action="{% url 'disable_account' account.pk %}">{% csrf_token %}<button>Disable</button></form>
-      {% else %}<form method="post" action="{% url 'enable_account' account.pk %}">{% csrf_token %}<button>Enable</button></form>{% endif %}
-      <details><summary>Change password</summary><form method="post" action="{% url 'reset_password' account.pk %}">{% csrf_token %}{{ password_form.as_p }}<button>Save</button></form></details>
-      <form method="post" action="{% url 'delete_account' account.pk %}" onsubmit="return confirm('Delete {{ account.username }}?')">{% csrf_token %}<button class="danger">Delete</button></form>
-    </td></tr>
-  {% empty %}<tr><td colspan="6">No accounts yet.</td></tr>{% endfor %}
-  </tbody></table></div>
+
+<div class="dashboard-grid">
+  <section class="panel create-panel">
+    <div class="panel-heading">
+      <div><p class="eyebrow">ACCOUNT SETUP</p><h2>Create account</h2></div>
+      <span class="panel-count">+</span>
+    </div>
+    <p class="panel-description">New accounts can use SSH tunnel and SOCKS forwarding. Shell and SFTP are blocked.</p>
+    <form method="post" action="{% url 'create_account' %}" class="account-form">{% csrf_token %}
+      {{ create_form.as_p }}
+      <button class="button button-primary button-wide" type="submit">Create account</button>
+    </form>
+  </section>
+
+  <section class="panel accounts-panel">
+    <div class="panel-heading">
+      <div><p class="eyebrow">YOUR USERS</p><h2>VPN accounts</h2></div>
+      <div class="account-totals"><span>{{ account_total }} total</span><span class="active-total">{{ account_active }} active</span></div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Account</th><th>Status</th><th>Expires</th><th>Connections</th><th>Actions</th></tr></thead>
+        <tbody>
+        {% for account in accounts %}
+          <tr>
+            <td><strong class="account-name">{{ account.username }}</strong><small class="table-subtext">Created {{ account.created_at|date:"Y-m-d" }}</small></td>
+            <td>{% if account.is_expired %}<span class="state state-expired">Expired</span>{% elif account.enabled %}<span class="state state-active">Active</span>{% else %}<span class="state state-disabled">Disabled</span>{% endif %}</td>
+            <td class="nowrap">{{ account.expires_at|date:"Y-m-d H:i"|default:"Unlimited" }}</td>
+            <td>{{ account.max_connections|default:"Unlimited" }}</td>
+            <td>
+              <div class="row-actions">
+                {% if account.enabled %}<form method="post" action="{% url 'disable_account' account.pk %}">{% csrf_token %}<button class="button button-small button-secondary" type="submit">Disable</button></form>
+                {% elif not account.is_expired %}<form method="post" action="{% url 'enable_account' account.pk %}">{% csrf_token %}<button class="button button-small button-secondary" type="submit">Enable</button></form>{% endif %}
+                <details class="password-details"><summary>Reset password</summary><form method="post" action="{% url 'reset_password' account.pk %}">{% csrf_token %}{{ password_form.as_p }}<button class="button button-small button-primary" type="submit">Save</button></form></details>
+                <form method="post" action="{% url 'delete_account' account.pk %}" onsubmit="return confirm('Delete {{ account.username|escapejs }}?')">{% csrf_token %}<button class="button button-small button-danger" type="submit">Delete</button></form>
+              </div>
+            </td>
+          </tr>
+        {% empty %}<tr><td colspan="5" class="empty-state">No accounts yet. Create your first one using the form.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<section class="panel activity-panel">
+  <div class="panel-heading"><div><p class="eyebrow">AUDIT LOG</p><h2>Recent activity</h2></div></div>
+  <ul class="activity-list">
+  {% for event in events %}
+    <li><span class="activity-indicator {% if event.succeeded %}activity-success{% else %}activity-failed{% endif %}"></span><span><strong>{{ event.action|capfirst }} {{ event.username }}</strong><small>by {{ event.actor|default:"System" }} · {{ event.created_at|date:"Y-m-d H:i" }}</small></span><span class="activity-result">{% if event.succeeded %}Success{% else %}Failed{% endif %}</span></li>
+  {% empty %}<li class="empty-state">No activity yet.</li>{% endfor %}
+  </ul>
 </section>
-<section class="card"><h2>Recent activity</h2><ul>{% for event in events %}<li>{{ event.created_at }} — {{ event.actor }} — {{ event.action }} {{ event.username }} — {% if event.succeeded %}OK{% else %}Failed{% endif %}</li>{% empty %}<li>No activity yet.</li>{% endfor %}</ul></section>
 {% endblock %}

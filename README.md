@@ -5,6 +5,7 @@ A web panel for password based OpenSSH SOCKS and local forwarding accounts on Ub
 ## Components
 
 - Django staff sign in, account creation with active days and simultaneous VPN connection limit, disabling, enabling, password reset, deletion, and audit events.
+- Dashboard cards show server CPU, available-memory usage, and root-filesystem disk usage. They refresh every 15 seconds while the dashboard is open and are accessible only to staff.
 - PostgreSQL for metadata. VPN passwords are sent to the Linux account helper and are not stored in the database.
 - A root owned helper with a fixed set of allowed operations; the web service can run only that helper through sudo.
 - Nginx and Gunicorn for the panel, VPN accounts on the server's existing SSH port, and a `menu` command for administration and later SSL issuance.

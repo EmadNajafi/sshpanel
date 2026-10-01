@@ -8,6 +8,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from .models import AuditEvent, VpnAccount
+from .system_metrics import _cpu_metric, get_system_metrics
 
 
 class AccountViewsTests(TestCase):
@@ -63,6 +64,42 @@ class AccountViewsTests(TestCase):
         response = csrf_client.post(reverse("create_account"), {"username": "vpn_alice", "password": "strong-password-123"})
         self.assertEqual(response.status_code, 403)
         helper.assert_not_called()
+
+    @patch("accounts.views.get_system_metrics")
+    def test_dashboard_and_metrics_are_staff_only(self, metrics):
+        metrics.return_value = {
+            "cpu": {"percent": 20, "detail": "2 CPU cores"},
+            "memory": {"percent": 40, "detail": "1.0 GiB of 2.0 GiB"},
+            "disk": {"percent": 60, "detail": "6.0 GiB of 10.0 GiB"},
+        }
+        response = self.client.get(reverse("dashboard"))
+        self.assertContains(response, "Server resource usage")
+        self.assertContains(response, "20%")
+        response = self.client.get(reverse("system_metrics"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["memory"]["percent"], 40)
+
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("system_metrics")).status_code, 302)
+        viewer = get_user_model().objects.create_user("viewer", password="correct-long-password")
+        self.client.force_login(viewer)
+        self.assertEqual(self.client.get(reverse("system_metrics")).status_code, 302)
+
+
+class SystemMetricsTests(TestCase):
+    @patch("accounts.system_metrics.time.sleep")
+    @patch("accounts.system_metrics._cpu_times", side_effect=[(100, 80), (200, 100)])
+    def test_cpu_usage_from_two_samples(self, samples, pause):
+        self.assertEqual(_cpu_metric()["percent"], 80)
+        pause.assert_called_once()
+
+    @patch("accounts.system_metrics._cpu_metric", side_effect=OSError("proc missing"))
+    @patch("accounts.system_metrics._memory_metric", return_value={"percent": 40, "detail": "Memory"})
+    @patch("accounts.system_metrics._disk_metric", return_value={"percent": 60, "detail": "Disk"})
+    def test_unavailable_metric_does_not_break_dashboard(self, disk, memory, cpu):
+        metrics = get_system_metrics()
+        self.assertIsNone(metrics["cpu"]["percent"])
+        self.assertEqual(metrics["memory"]["percent"], 40)
 
 
 class InitialAdminTests(TestCase):

@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
 from django.conf import settings
 from django.db import IntegrityError
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from django.utils import timezone
@@ -11,6 +12,7 @@ from django.utils import timezone
 from .forms import CreateAccountForm, PasswordForm
 from .models import AuditEvent, VpnAccount
 from .services import ProvisionError, call_helper
+from .system_metrics import get_system_metrics
 
 
 staff_required = user_passes_test(lambda user: user.is_active and user.is_staff, login_url="login")
@@ -18,13 +20,22 @@ staff_required = user_passes_test(lambda user: user.is_active and user.is_staff,
 
 @staff_required
 def dashboard(request):
+    accounts = list(VpnAccount.objects.select_related("created_by").order_by("username"))
     return render(request, "dashboard.html", {
-        "accounts": VpnAccount.objects.select_related("created_by").order_by("username"),
+        "accounts": accounts,
+        "account_total": len(accounts),
+        "account_active": sum(account.enabled and not account.is_expired for account in accounts),
+        "metrics": get_system_metrics(),
         "events": AuditEvent.objects.select_related("actor")[:20],
         "create_form": CreateAccountForm(),
         "password_form": PasswordForm(),
         "vpn_ssh_port": settings.VPN_SSH_PORT,
     })
+
+
+@staff_required
+def system_metrics(request):
+    return JsonResponse(get_system_metrics())
 
 
 def record(request, username, action, succeeded):

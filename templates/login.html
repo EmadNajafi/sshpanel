@@ -1,11 +1,16 @@
 {% extends 'base.html' %}
+{% block title %}Sign in · SSH VPN Panel{% endblock %}
+{% block main_class %}login-shell{% endblock %}
 {% block content %}
-<section class="card narrow">
-  <h1>Administrator sign in</h1>
+<section class="login-card">
+  <div class="login-symbol" aria-hidden="true">S</div>
+  <p class="eyebrow">ADMIN ACCESS</p>
+  <h1>Welcome back</h1>
+  <p class="muted">Sign in to manage VPN accounts and monitor your server.</p>
   {% if form.errors %}<p class="notice error">Invalid username or password.</p>{% endif %}
-  <form method="post">{% csrf_token %}
+  <form method="post" class="login-form">{% csrf_token %}
     {{ form.as_p }}
-    <button type="submit">Sign in</button>
+    <button class="button button-primary button-wide" type="submit">Sign in</button>
   </form>
 </section>
 {% endblock %}
