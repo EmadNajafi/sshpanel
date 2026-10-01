@@ -101,12 +101,4 @@
   </form>
 </dialog>
 
-<section class="panel activity-panel">
-  <div class="panel-heading"><div><p class="eyebrow">AUDIT LOG</p><h2>Recent activity</h2></div></div>
-  <ul class="activity-list">
-  {% for event in events %}
-    <li><span class="activity-indicator {% if event.succeeded %}activity-success{% else %}activity-failed{% endif %}"></span><span><strong>{{ event.action|capfirst }} {{ event.username }}</strong><small>by {{ event.actor|default:"System" }} · {{ event.created_at|date:"Y-m-d H:i" }}</small></span><span class="activity-result">{% if event.succeeded %}Success{% else %}Failed{% endif %}</span></li>
-  {% empty %}<li class="empty-state">No activity yet.</li>{% endfor %}
-  </ul>
-</section>
 {% endblock %}

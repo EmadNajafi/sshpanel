@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import user_passes_test
 from django.conf import settings
 from django.db import IntegrityError
 from django.http import JsonResponse
+from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
 from django.utils import timezone
@@ -56,10 +57,16 @@ def dashboard(request):
         "account_active": sum(account.enabled and not account.is_expired for account in accounts),
         "account_online": sum(account.usage["connections"] > 0 for account in accounts if account.usage is not None),
         "metrics": get_system_metrics(),
-        "events": AuditEvent.objects.select_related("actor")[:20],
         "create_form": CreateAccountForm(),
         "vpn_ssh_port": get_ssh_port(),
     })
+
+
+@staff_required
+def audit_log(request):
+    events = AuditEvent.objects.select_related("actor")
+    page = Paginator(events, 25).get_page(request.GET.get("page"))
+    return render(request, "audit_log.html", {"page": page})
 
 
 @staff_required

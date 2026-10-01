@@ -160,6 +160,36 @@ class AccountViewsTests(TestCase):
         self.assertEqual(format_bytes(0), "0 B")
         self.assertEqual(format_bytes(1024), "1.0 KiB")
 
+    @patch("accounts.views.get_system_metrics")
+    @patch("accounts.views.get_account_usage", return_value={})
+    def test_audit_log_is_in_menu_and_not_dashboard(self, usage, metrics):
+        metrics.return_value = {}
+        AuditEvent.objects.create(actor=self.staff, username="alice", action="create", succeeded=True)
+        dashboard = self.client.get(reverse("dashboard"))
+        self.assertContains(dashboard, 'href="/audit-log/"')
+        self.assertNotContains(dashboard, "Recent activity")
+        audit = self.client.get(reverse("audit_log"))
+        self.assertContains(audit, "alice")
+        self.assertContains(audit, 'aria-current="page"')
+        self.assertEqual(audit.context["page"].paginator.count, 1)
+
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("audit_log")).status_code, 302)
+        viewer = get_user_model().objects.create_user("viewer", password="correct-long-password")
+        self.client.force_login(viewer)
+        self.assertEqual(self.client.get(reverse("audit_log")).status_code, 302)
+
+    def test_audit_log_paginates(self):
+        AuditEvent.objects.bulk_create([
+            AuditEvent(actor=self.staff, username=f"user{i}", action="create", succeeded=True)
+            for i in range(26)
+        ])
+        first = self.client.get(reverse("audit_log"))
+        second = self.client.get(reverse("audit_log") + "?page=2")
+        self.assertEqual(len(first.context["page"]), 25)
+        self.assertEqual(len(second.context["page"]), 1)
+        self.assertContains(first, 'href="?page=2"')
+
     @patch("accounts.views.call_helper")
     def test_cross_site_post_is_rejected(self, helper):
         csrf_client = Client(enforce_csrf_checks=True)

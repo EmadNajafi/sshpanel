@@ -3,15 +3,20 @@
   const menu = document.getElementById("panel-menu");
   if (!button || !menu) return;
   const close = () => {
-    menu.hidden = true;
-    button.setAttribute("aria-expanded", "false");
+    if (menu.open) menu.close();
   };
   button.addEventListener("click", () => {
-    menu.hidden = !menu.hidden;
-    button.setAttribute("aria-expanded", String(!menu.hidden));
+    menu.showModal();
+    button.setAttribute("aria-expanded", "true");
+    button.setAttribute("aria-label", "Close navigation menu");
   });
-  document.addEventListener("keydown", (event) => { if (event.key === "Escape") close(); });
-  document.addEventListener("click", (event) => {
-    if (!menu.contains(event.target) && !button.contains(event.target)) close();
+  menu.querySelector("[data-menu-close]").addEventListener("click", close);
+  menu.addEventListener("close", () => {
+    button.setAttribute("aria-expanded", "false");
+    button.setAttribute("aria-label", "Open navigation menu");
+    button.focus();
+  });
+  menu.addEventListener("click", (event) => {
+    if (event.target === menu) close();
   });
 })();

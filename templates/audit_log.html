@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}Audit log · SSH VPN Panel{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><p class="eyebrow">ACCOUNT ACTIVITY</p><h1>Audit log</h1><p class="page-intro">A record of account changes made through the panel.</p></div>
+  <a class="button button-secondary" href="{% url 'dashboard' %}">← Dashboard</a>
+</div>
+<section class="panel audit-panel">
+  <div class="panel-heading"><div><p class="eyebrow">RECENT EVENTS</p><h2>History</h2></div><span class="audit-count">{{ page.paginator.count }} events</span></div>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Time</th><th>Account</th><th>Action</th><th>Administrator</th><th>Result</th></tr></thead>
+      <tbody>
+        {% for event in page %}
+          <tr>
+            <td class="nowrap">{{ event.created_at|date:"Y-m-d H:i" }}</td>
+            <td><strong class="account-name">{{ event.username }}</strong></td>
+            <td>{{ event.action|capfirst }}</td>
+            <td>{{ event.actor|default:"System" }}</td>
+            <td>{% if event.succeeded %}<span class="state state-active">Success</span>{% else %}<span class="state state-expired">Failed</span>{% endif %}</td>
+          </tr>
+        {% empty %}<tr><td colspan="5" class="empty-state">No activity has been recorded yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page.paginator.num_pages > 1 %}
+    <nav class="audit-pagination" aria-label="Audit log pages">
+      {% if page.has_previous %}<a class="button button-secondary" href="?page={{ page.previous_page_number }}">← Newer</a>{% else %}<span></span>{% endif %}
+      <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}<a class="button button-secondary" href="?page={{ page.next_page_number }}">Older →</a>{% else %}<span></span>{% endif %}
+    </nav>
+  {% endif %}
+</section>
+{% endblock %}
