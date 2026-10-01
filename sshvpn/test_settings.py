@@ -4,6 +4,7 @@ DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memor
 WEB_PATH = ""
 FORCE_SCRIPT_NAME = None
 STATIC_URL = "/static/"
+TLS_ENABLED = False
 SECURE_SSL_REDIRECT = False
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
