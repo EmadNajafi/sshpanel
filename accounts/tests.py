@@ -720,6 +720,16 @@ class InitialAdminTests(TestCase):
         self.assertTrue(get_user_model().objects.get(username="1").check_password("2"))
         self.assertTrue(self.client.login(username="1", password="2"))
 
+    def test_accepts_english_username_with_symbols(self):
+        with patch("sys.stdin", StringIO("emad.test+1@example.com\n2\n")):
+            call_command("initial_admin", stdout=StringIO())
+        self.assertTrue(self.client.login(username="emad.test+1@example.com", password="2"))
+
+    def test_trims_unintended_whitespace_around_admin_username(self):
+        with patch("sys.stdin", StringIO(" admin \r\n2\n")):
+            call_command("initial_admin", stdout=StringIO())
+        self.assertTrue(self.client.login(username="admin", password="2"))
+
     def test_rejects_non_english_admin_username(self):
         with patch("sys.stdin", StringIO("مدیر\n2\n")):
             with self.assertRaises(CommandError):

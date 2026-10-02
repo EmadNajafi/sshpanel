@@ -22,8 +22,8 @@ read -r -s -p "Administrator password: " admin_password
 echo
 read -r -s -p "Confirm administrator password: " admin_confirmation
 echo
-if [[ ! "$admin_username" =~ ^[A-Za-z0-9_]{1,150}$ ]]; then
-  echo "Administrator username must use English letters, digits or underscore (1-150 characters)." >&2; exit 1
+if ! python3 -c 'import sys; name = sys.argv[1].strip(); sys.exit(0 if name and len(name) <= 150 and all(32 <= ord(char) <= 126 for char in name) else 1)' "$admin_username"; then
+  echo "Enter a nonempty English-keyboard username (maximum 150 characters)." >&2; exit 1
 fi
 if [[ -z "$admin_password" || ${#admin_password} -gt 4096 || "$admin_password" != "$admin_confirmation" ]]; then
   echo "Administrator passwords must match and cannot be empty (maximum 4096 characters)." >&2; exit 1
