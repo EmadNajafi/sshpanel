@@ -1,6 +1,6 @@
 # SSH VPN Panel
 
-A web panel for password based OpenSSH SOCKS and local forwarding accounts on Ubuntu 24.04. The private GitHub repository requires your own GitHub access on each server before cloning.
+A web panel for password based OpenSSH SOCKS and local forwarding accounts on Ubuntu 24.04. The public repository can be installed directly on a new server.
 
 ## Components
 
@@ -15,7 +15,7 @@ A web panel for password based OpenSSH SOCKS and local forwarding accounts on Ub
 
 ## Security model
 
-VPN users belong to `sshvpn`. A `Match Group sshvpn` block at the end of the main SSH configuration permits password authentication and local forwarding for that group, while `MaxSessions 0` prevents shell, command, and SFTP sessions. Administrator SSH accounts keep their existing authentication and port. Clients must use a forwarding only connection, such as `ssh -N -D 1080 -p YOUR_EXISTING_SSH_PORT vpn_alice@server.example.com`. On the current test VPS that port is 5656.
+VPN users belong to `sshvpn`. A `Match Group sshvpn` block at the end of the main SSH configuration permits password authentication and local forwarding for that group, while `MaxSessions 0` prevents shell, command, and SFTP sessions. Administrator SSH accounts keep their existing authentication and port. Clients must use a forwarding only connection, such as `ssh -N -D 1080 -p YOUR_EXISTING_SSH_PORT vpn_alice@server.example.com`.
 
 At account creation, enter the Linux login name, VPN password, number of active days, and maximum simultaneous SSH connections. The expiration clock starts when the account is created. A PAM account hook denies new VPN logins after expiration or when the connection limit is reached. A systemd timer runs every minute to lock expired Linux accounts and disconnect their existing tunnels. The limit counts SSH transport connections, not people or individual SOCKS requests; someone sharing credentials can open many SOCKS requests through one connection. VPN passwords may be shorter than 12 characters, including one character. Empty passwords, line breaks and NUL are rejected, as are duplicate or invalid Linux login names. The separate web administrator password still requires at least 12 characters.
 
@@ -43,27 +43,25 @@ For migration, install the same version of this panel on a fresh Ubuntu 24.04 se
 
 In **Settings → Web address**, an administrator can set a single-segment URL path and the current HTTP or HTTPS listener port. Existing installations keep their current address until the form is submitted. Open the new URL and confirm it there within five minutes; an unconfirmed change or a failed local health check restores the previous Nginx and panel configuration. Allow the chosen port through host and provider firewalls first. HTTPS changes preserve the installed certificate and keep port 80 for renewal. The path is an address choice, not an authentication or TLS substitute.
 
-For an existing installation, update the checkout and run `sudo bash deploy/upgrade.sh` instead of the fresh installer. If the server uses `/root/.ssh/sshpanel_deploy`, run `GIT_SSH_COMMAND='ssh -i /root/.ssh/sshpanel_deploy -o IdentitiesOnly=yes' git pull --ff-only` to update it. The upgrade backs up the database and configuration and retains the web administrator, VPN accounts, listener addresses, and current TLS mode.
+For an existing installation, update the checkout with `git pull --ff-only` and run `sudo bash deploy/upgrade.sh` instead of the fresh installer. The upgrade backs up the database and configuration and retains the web administrator, VPN accounts, listener addresses, and current TLS mode.
 
 To make a previously loopback-only HTTP panel reachable at the server's public IPv4, run `sudo menu web-public SERVER_PUBLIC_IP` after upgrading. This switches Nginx to port 80 and updates Django's allowed host without changing VPN users or SSH ports. Allow inbound TCP 80 in the host and provider firewalls if needed. Administrator credentials are unencrypted over HTTP until you opt into SSL.
 
-1. Keep an administrator SSH session open and take a server snapshot. Give the server read access to this private GitHub repository.
-2. Clone the repository and run `sudo bash deploy/install.sh` from its root. You can pass a domain or IPv4 address as the first argument to skip the host prompt.
+1. Keep an administrator SSH session open and take a server snapshot. Open a root shell with `sudo -i` if needed.
+2. Run the bootstrap command below. It clones the public repository to `/root/sshpanel` and runs `deploy/install.sh`. You can pass a domain or IPv4 address after the process substitution to skip the host prompt.
 3. The **first interactive prompts** ask for the web administrator username and password, including password confirmation. The password input is hidden, is sent to Django through stdin, and is stored only as a hash.
 4. Enter the domain or IPv4 address for the panel if prompted. The installer starts the panel on **HTTP port 80** with a generated path, prints the full URL, and does not request a certificate.
 5. Test VPN forwarding and denied shell/SFTP/internal destinations on the server's existing SSH port.
 
-For example, with an IPv4 address:
+For example, from an interactive root shell (the IPv4 address is optional):
 
 ```sh
-git clone git@github.com:EmadNajafi/sshpanel.git
-cd sshpanel
-sudo bash deploy/install.sh 203.0.113.10
+bash <(curl -fsSL --ipv4 https://raw.githubusercontent.com/EmadNajafi/sshpanel/main/install.sh) 203.0.113.10
 ```
 
 When you choose to use HTTPS later, point your domain to the server, allow ports 80 and 443, and run `sudo menu ssl panel.example.com admin@example.com`. A failed certificate request restores the previous HTTP configuration. Until HTTPS is enabled, administrator credentials travel over HTTP; use a trusted network or an SSH tunnel.
 
-The installer targets Ubuntu 24.04, refuses to replace an existing `/opt/ssh-vpn-panel`, and does not change the existing administrator SSH port or firewall. The server needs an authenticated SSH key or another GitHub credential to clone this private repository.
+The installer targets Ubuntu 24.04, refuses to replace an existing `/opt/ssh-vpn-panel`, and does not change the existing administrator SSH port or firewall. It installs Git if needed, downloads all project files from GitHub, and runs entirely on the destination server. No GitHub credentials are required.
 
 ## Local test without a domain or SSL
 
@@ -79,6 +77,6 @@ Open the full `http://localhost:8080/.../` URL printed by the installer on the c
 
 ## Verification
 
-On the test VPS (Ubuntu 24.04), the shared-port configuration was tested on the existing SSH port 5656 with a disposable password account. Password authentication and public TCP forwarding succeeded; shell sessions, forwarding to the server's loopback SSH port, and a second concurrent login at a limit of one were denied. The disposable account was deleted afterward. A new administrator SSH connection still succeeded, and the former port 2222 listener was stopped. The web operations create, disable, enable, reset password, and delete passed against PostgreSQL and Linux accounts. The current HTTP-first installer has not been run from scratch on that VPS.
+On an Ubuntu 24.04 test VPS, the shared-port configuration was tested with a disposable password account. Password authentication and public TCP forwarding succeeded; shell sessions, forwarding to the server's loopback SSH port, and a second concurrent login at a limit of one were denied. The disposable account was deleted afterward. A new administrator SSH connection still succeeded. The web operations create, disable, enable, reset password, and delete passed against PostgreSQL and Linux accounts.
 
 Each new server needs its own verification, particularly if it uses public address translation or an existing firewall. The installer does not automatically expose the web panel in local test mode.

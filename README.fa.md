@@ -1,6 +1,6 @@
 # پنل SSH VPN
 
-این پنل برای مدیریت حساب‌های تونل SSH و SOCKS روی Ubuntu 24.04 است. کاربران VPN از همان پورت SSH سرور برای تونل استفاده می‌کنند، ولی امکان شِل، اجرای دستور و SFTP ندارند. وب پنل با Django، PostgreSQL، Gunicorn و Nginx اجرا می‌شود. مخزن خصوصی است و هر سرور برای دریافت آن باید دسترسی خواندن گیت‌هاب داشته باشد.
+این پنل برای مدیریت حساب‌های تونل SSH و SOCKS روی Ubuntu 24.04 است. کاربران VPN از همان پورت SSH سرور برای تونل استفاده می‌کنند، ولی امکان شِل، اجرای دستور و SFTP ندارند. وب پنل با Django، PostgreSQL، Gunicorn و Nginx اجرا می‌شود. مخزن عمومی است و نصب روی سرور جدید به دسترسی حساب گیت‌هاب نیاز ندارد.
 
 کارت‌های بالای داشبورد تعداد کل حساب‌ها، تعداد کاربران آنلاین (هر حساب فقط یک‌بار، حتی با چند اتصال) و تعداد حساب‌های غیرفعال یا منقضی‌شده را نشان می‌دهند. آمار CPU، RAM و دیسک به منوی همبرگری منتقل شده است. این دو بخش با React ساخته شده‌اند؛ فایل آمادهٔ آن همراه مخزن نصب می‌شود و VPS برای اجرای پنل به Node.js یا CDN نیاز ندارد. برای تغییر کد رابط در `frontend/`، دستور `pnpm install --frozen-lockfile && pnpm build` را اجرا و فایل ساخته‌شده را commit کنید.
 
@@ -40,19 +40,17 @@
 
 رابط فارسی از فونت محلی [Vazirmatn](https://github.com/rastikerdar/vazirmatn) نسخهٔ 33.003 استفاده می‌کند. مجوز SIL Open Font License آن در `accounts/static/fonts/OFL.txt` قرار دارد.
 
-نصب تازه روی سرور ابتدا با HTTP بالا می‌آید و نام کاربری و رمز مدیر در آغاز نصب پرسیده می‌شود:
+برای نصب تازه، ابتدا در ترمینال تعاملی سرور دستور `sudo -i` را اجرا کنید؛ سپس این دستور را بزنید. IP یا دامنهٔ آخر دستور اختیاری است و اگر آن را ننویسید، نصاب از شما می‌پرسد. نام کاربری و رمز مدیر هم در ابتدای نصب روی همان سرور پرسیده می‌شوند:
 
 ```bash
-git clone git@github.com:EmadNajafi/sshpanel.git
-cd sshpanel
-sudo bash deploy/install.sh SERVER_PUBLIC_IP
+bash <(curl -fsSL --ipv4 https://raw.githubusercontent.com/EmadNajafi/sshpanel/main/install.sh) SERVER_PUBLIC_IP
 ```
 
-برای نصب موجود، دوباره نصب نکنید. در همان مخزن روی سرور اجرا کنید:
+این دستور کل مخزن را در `/root/sshpanel` روی سرور مقصد دریافت می‌کند و نصاب اصلی را اجرا می‌کند. نصب تازه ابتدا با HTTP بالا می‌آید و SSL اختیاری است. برای نصب موجود، دوباره نصب نکنید؛ در همان مخزن روی سرور اجرا کنید:
 
 ```bash
 cd /root/sshpanel
-GIT_SSH_COMMAND='ssh -i /root/.ssh/sshpanel_deploy -o IdentitiesOnly=yes' git pull --ff-only
+git pull --ff-only
 sudo bash deploy/upgrade.sh
 ```
 
