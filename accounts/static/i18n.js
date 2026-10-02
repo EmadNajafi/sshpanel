@@ -95,7 +95,7 @@
     "SSH access": "دسترسی SSH", "Web address": "نشانی وب", "Backup & recovery": "پشتیبان‌گیری و بازیابی",
     "Panel services are managed on this server.": "سرویس‌های پنل روی همین سرور مدیریت می‌شوند.",
     "SERVER CONNECTION": "اتصال سرور", "One SSH port serves administrators and VPN users.": "مدیران و کاربران VPN از یک پورت SSH استفاده می‌کنند.",
-    "CURRENT PORT": "پورت فعلی", "Port change in progress": "تغییر پورت در حال انجام",
+    "CURRENT PORT": "پورت فعلی", "UDPGW TCP PORT": "پورت TCP درگاه UDP", "Via SSH tunnel": "از طریق تونل SSH", "Port change in progress": "تغییر پورت در حال انجام",
     "Cancel change": "لغو تغییر", "Change SSH port": "تغییر پورت SSH",
     "The current port stays open until you test and confirm the new one.": "پورت فعلی تا زمان آزمایش و تأیید پورت جدید باز می‌ماند.",
     "New port": "پورت جدید", "Start change": "شروع تغییر",

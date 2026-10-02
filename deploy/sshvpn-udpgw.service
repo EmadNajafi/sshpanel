@@ -1,0 +1,22 @@
+[Unit]
+Description=SSH VPN local UDP gateway
+After=network-online.target sshvpn-egress.service
+Wants=network-online.target
+Requires=sshvpn-egress.service
+
+[Service]
+Type=simple
+User=sshvpn-udpgw
+Group=sshvpn-udpgw
+ExecStart=/usr/local/libexec/sshvpn-badvpn-udpgw --listen-addr 127.0.0.1:__UDPGW_PORT__ --max-clients 2048 --max-connections-for-client 256
+Restart=on-failure
+RestartSec=2s
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

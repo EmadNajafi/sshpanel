@@ -30,6 +30,8 @@ if [[ -f /etc/ssh/sshvpn_sshd_config ]]; then
 fi
 cp -a /etc/pam.d/sshd "$backup_dir/pam-sshd"
 cp -a /etc/systemd/system/sshvpn-panel.service "$backup_dir/sshvpn-panel.service"
+if [[ -f /etc/sshvpn/egress.nft ]]; then cp -a /etc/sshvpn/egress.nft "$backup_dir/egress.nft"; fi
+if [[ -f /etc/systemd/system/sshvpn-udpgw.service ]]; then cp -a /etc/systemd/system/sshvpn-udpgw.service "$backup_dir/sshvpn-udpgw.service"; fi
 tar -C /opt --exclude='ssh-vpn-panel/.venv' --exclude='ssh-vpn-panel/staticfiles' \
   -czf "$backup_dir/application.tar.gz" ssh-vpn-panel
 runuser -u postgres -- pg_dump -Fc "${DB_NAME:-sshvpn}" > "$backup_dir/database.dump"
@@ -54,6 +56,10 @@ fi
 if ! grep -q '^PANEL_HTTPS_PORT=' /etc/sshvpn/panel.env; then
   printf '%s\n' 'PANEL_HTTPS_PORT=443' >> /etc/sshvpn/panel.env
 fi
+if ! grep -q '^VPN_UDPGW_PORT=' /etc/sshvpn/panel.env; then
+  printf '%s\n' 'VPN_UDPGW_PORT=7302' >> /etc/sshvpn/panel.env
+fi
+udpgw_port="$(sed -n 's/^VPN_UDPGW_PORT=//p' /etc/sshvpn/panel.env | head -n 1)"
 main_ssh_port="$(/usr/sbin/sshd -T | awk '$1 == "port" && !found {print $2; found=1}')"
 if grep -q '^VPN_SSH_PORT=' /etc/sshvpn/panel.env; then
   sed -i -E "s/^VPN_SSH_PORT=.*/VPN_SSH_PORT=$main_ssh_port/" /etc/sshvpn/panel.env
@@ -94,6 +100,9 @@ install -m 0644 "$repo_dir/deploy/sshvpn-policy.timer" /etc/systemd/system/sshvp
 install -m 0644 "$repo_dir/deploy/sshvpn-usage.service" /etc/systemd/system/sshvpn-usage.service
 install -m 0644 "$repo_dir/deploy/sshvpn-usage.timer" /etc/systemd/system/sshvpn-usage.timer
 install -m 0644 "$repo_dir/deploy/sshvpn-panel.service" /etc/systemd/system/sshvpn-panel.service
+old_egress_checksum="$(sha256sum /etc/sshvpn/egress.nft 2>/dev/null | cut -d' ' -f1)"
+bash "$repo_dir/deploy/install-udpgw.sh" "$udpgw_port"
+new_egress_checksum="$(sha256sum /etc/sshvpn/egress.nft | cut -d' ' -f1)"
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/deploy/menu.sh /usr/local/bin/sshvpn-menu
 # Existing private-path sites need the same neutral response as new sites.
 python3 - <<'PY'
@@ -120,7 +129,10 @@ runuser -u sshvpn-panel -- .venv/bin/python manage.py migrate --noinput
 /usr/local/sbin/sshvpnctl seed-legacy
 sshvpn-install-pam-hook "$backup_dir/pam-sshd"
 systemctl daemon-reload
-systemctl enable --now sshvpn-egress
+if [[ "$old_egress_checksum" != "$new_egress_checksum" ]] || ! systemctl is-active --quiet sshvpn-egress; then
+  systemctl restart sshvpn-egress
+fi
+systemctl enable sshvpn-egress
 /usr/local/sbin/sshvpnctl usage-sync
 sshvpn-configure-main-ssh "$backup_dir"
 if systemctl cat sshvpn-sshd.service >/dev/null 2>&1; then
@@ -128,6 +140,9 @@ if systemctl cat sshvpn-sshd.service >/dev/null 2>&1; then
 fi
 systemctl enable --now sshvpn-policy.timer
 systemctl enable --now sshvpn-usage.timer
+systemctl enable sshvpn-udpgw.service
+systemctl restart sshvpn-udpgw.service
+systemctl is-active --quiet sshvpn-udpgw.service
 systemctl restart sshvpn-panel
 systemctl is-active --quiet sshvpn-panel
 if git -C "$repo_dir" rev-parse --verify HEAD >/dev/null 2>&1; then

@@ -619,6 +619,7 @@ def panel_settings(request):
     return render(request, "settings.html", {
         "password_form": PasswordChangeForm(request.user),
         "ssh_port": get_ssh_port(),
+        "udpgw_port": settings.VPN_UDPGW_PORT,
         "pending_port": pending_port,
         "pending_web": pending_web,
         "panel_web_path": web_path or "/",

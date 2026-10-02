@@ -30,6 +30,7 @@
           <div><p class="eyebrow">SERVER CONNECTION</p><h2>SSH access</h2><p>One SSH port serves administrators and VPN users.</p></div>
         </div>
         <div class="settings-current-port"><div><span class="settings-detail-label">CURRENT PORT</span><strong dir="ltr">{{ ssh_port }}</strong></div><span class="settings-live-badge"><span class="status-dot"></span> Active</span></div>
+        <div class="settings-current-port"><div><span class="settings-detail-label">UDPGW TCP PORT</span><strong dir="ltr">{{ udpgw_port }}</strong></div><span class="settings-live-badge">Via SSH tunnel</span></div>
         {% if pending_port %}
           <div class="settings-callout"><strong>Port change in progress</strong><p>Ports {{ pending_port.old }} and {{ pending_port.new }} are active. Open a new SSH connection from outside the server on port {{ pending_port.new }} before confirming.</p></div>
           <div class="settings-actions">

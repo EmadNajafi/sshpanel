@@ -63,9 +63,9 @@ show_menu() {
       fi
       ;;
     2) certbot renew ;;
-    3) systemctl status --no-pager sshvpn-panel ssh sshvpn-egress sshvpn-policy.timer nginx postgresql ;;
-    4) systemctl restart sshvpn-panel; /usr/sbin/sshd -t && systemctl reload ssh ;;
-    5) journalctl -u sshvpn-panel -u ssh -u sshvpn-policy.service -n 100 --no-pager ;;
+    3) systemctl status --no-pager sshvpn-panel ssh sshvpn-egress sshvpn-udpgw sshvpn-policy.timer nginx postgresql ;;
+    4) systemctl restart sshvpn-panel sshvpn-udpgw; /usr/sbin/sshd -t && systemctl reload ssh ;;
+    5) journalctl -u sshvpn-panel -u ssh -u sshvpn-udpgw -u sshvpn-policy.service -n 100 --no-pager ;;
     6) backup_db ;;
     7) read -r -p "Administrator username: " admin_user; change_admin_password "$admin_user" ;;
     8) read -r -p "Server public IPv4: " panel_ip; web_public "$panel_ip" ;;
@@ -247,8 +247,8 @@ case "${1:-menu}" in
   menu) show_menu ;;
   ssl) shift; issue_ssl "$@" ;;
   renew) certbot renew ;;
-  status) systemctl status --no-pager sshvpn-panel ssh sshvpn-egress sshvpn-policy.timer nginx postgresql ;;
-  restart) systemctl restart sshvpn-panel; /usr/sbin/sshd -t && systemctl reload ssh ;;
+  status) systemctl status --no-pager sshvpn-panel ssh sshvpn-egress sshvpn-udpgw sshvpn-policy.timer nginx postgresql ;;
+  restart) systemctl restart sshvpn-panel sshvpn-udpgw; /usr/sbin/sshd -t && systemctl reload ssh ;;
   logs) journalctl -u sshvpn-panel -u ssh -u sshvpn-policy.service -n 100 --no-pager ;;
   backup) backup_db ;;
   admin-password) shift; change_admin_password "$@" ;;

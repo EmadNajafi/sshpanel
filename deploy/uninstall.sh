@@ -105,7 +105,7 @@ PY
 mapfile -t vpn_users < "$temp_dir/vpn-users"
 echo 'This will permanently delete the web panel, PostgreSQL panel database, VPN accounts,'
 echo 'stored passwords and secrets, all panel backups, traffic records, services, firewall'
-echo 'tables, Nginx site, panel certificate when dedicated to this site, and Git checkout.'
+echo 'tables, UDP gateway, Nginx site, panel certificate when dedicated to this site, and Git checkout.'
 echo "VPN accounts to delete: ${#vpn_users[@]}"
 echo 'The current administrator SSH port and PostgreSQL server remain.'
 echo 'Nginx is purged if no other site or custom configuration uses it.'
@@ -139,6 +139,7 @@ fi
 systemctl disable --now sshvpn-policy.timer sshvpn-usage.timer sshvpn-panel.service 2>/dev/null || true
 systemctl stop sshvpn-policy.service sshvpn-usage.service 2>/dev/null || true
 systemctl disable --now sshvpn-sshd.service 2>/dev/null || true
+systemctl disable --now sshvpn-udpgw.service 2>/dev/null || true
 systemctl disable --now sshvpn-egress.service 2>/dev/null || true
 if [[ -x /usr/local/sbin/sshvpnctl ]]; then
   /usr/local/sbin/sshvpnctl disconnect-all || true
@@ -179,7 +180,7 @@ runuser -u postgres -- dropuser --if-exists sshvpn
 rm -f -- /etc/systemd/system/sshvpn-egress.service /etc/systemd/system/sshvpn-panel.service \
   /etc/systemd/system/sshvpn-policy.service /etc/systemd/system/sshvpn-policy.timer \
   /etc/systemd/system/sshvpn-usage.service /etc/systemd/system/sshvpn-usage.timer \
-  /etc/systemd/system/sshvpn-sshd.service /etc/ssh/sshvpn_sshd_config \
+  /etc/systemd/system/sshvpn-sshd.service /etc/systemd/system/sshvpn-udpgw.service /etc/ssh/sshvpn_sshd_config \
   /etc/sudoers.d/sshvpn-panel
 systemctl daemon-reload
 systemctl reset-failed sshvpn-egress.service sshvpn-panel.service sshvpn-policy.service sshvpn-usage.service 2>/dev/null || true
@@ -187,13 +188,15 @@ systemctl reset-failed sshvpn-egress.service sshvpn-panel.service sshvpn-policy.
 if id sshvpn-panel >/dev/null 2>&1; then userdel sshvpn-panel; fi
 if getent group sshvpn-panel >/dev/null; then groupdel sshvpn-panel; fi
 if getent group sshvpn >/dev/null; then groupdel sshvpn; fi
+if id sshvpn-udpgw >/dev/null 2>&1; then userdel sshvpn-udpgw; fi
+if getent group sshvpn-udpgw >/dev/null; then groupdel sshvpn-udpgw; fi
 
 if ! bash /opt/ssh-vpn-panel/deploy/purge-unused-nginx.sh --yes; then
   echo 'Nginx was kept because it has other configuration or could not be purged.' >&2
 fi
 rm -rf -- /opt/ssh-vpn-panel /etc/sshvpn /var/lib/sshvpn-panel /var/lib/sshvpn /var/backups/sshvpn-panel
 rm -rf -- /run/sshvpn-policy
-rm -f -- /usr/local/sbin/sshvpnctl /usr/local/sbin/sshvpn-backup \
+rm -f -- /usr/local/sbin/sshvpnctl /usr/local/sbin/sshvpn-backup /usr/local/libexec/sshvpn-badvpn-udpgw \
   /usr/local/sbin/sshvpn_policy.py /usr/local/sbin/sshvpn_port.py \
   /usr/local/sbin/sshvpn_usage.py /usr/local/sbin/sshvpn_web.py \
   /usr/local/sbin/sshvpn-authz /usr/local/sbin/sshvpn-install-pam-hook \

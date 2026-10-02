@@ -43,6 +43,15 @@ if [[ -z "$admin_password" || ${#admin_password} -gt 4096 || "$admin_password" !
 fi
 unset admin_confirmation use_default_admin
 admin_username="$(python3 -c 'import sys; print(sys.argv[1].strip())' "$admin_username")"
+while :; do
+  read -r -p 'UDPGW TCP port [7302] (Enter for default): ' udpgw_port
+  udpgw_port="${udpgw_port:-7302}"
+  if [[ $udpgw_port =~ ^[0-9]+$ ]] && (( 10#$udpgw_port >= 1024 && 10#$udpgw_port <= 65535 )); then
+    udpgw_port="$((10#$udpgw_port))"
+    break
+  fi
+  echo 'Enter a TCP port from 1024 to 65535, or press Enter for 7302.' >&2
+done
 
 local_test=0
 email=""
@@ -81,7 +90,7 @@ if [[ -n "$email" && ! "$email" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2
 fi
 
 apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-venv python3-pip postgresql nginx certbot python3-certbot-nginx sudo rsync openssh-server openssl nftables
+DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-venv python3-pip postgresql nginx certbot python3-certbot-nginx sudo rsync openssh-server openssl nftables git cmake build-essential
 
 getent group sshvpn >/dev/null || groupadd --system sshvpn
 getent group sshvpn-panel >/dev/null || groupadd --system sshvpn-panel
@@ -108,6 +117,7 @@ PANEL_HTTP_PORT=$([[ $local_test -eq 1 ]] && echo 8080 || echo 80)
 PANEL_HTTPS_PORT=443
 PANEL_WEB_PATH=$panel_path
 VPN_SSH_PORT=$main_ssh_port
+VPN_UDPGW_PORT=$udpgw_port
 DB_NAME=sshvpn
 DB_USER=sshvpn
 DB_PASSWORD=$db_password
@@ -133,8 +143,7 @@ printf '%s\n' 'sshvpn-panel ALL=(root) NOPASSWD: /usr/local/sbin/sshvpnctl, /usr
 chmod 0440 /etc/sudoers.d/sshvpn-panel
 visudo -cf /etc/sudoers.d/sshvpn-panel
 
-install -m 0644 "$repo_dir/deploy/sshvpn-egress.nft" /etc/sshvpn/egress.nft
-/usr/sbin/nft -c -f /etc/sshvpn/egress.nft
+bash "$repo_dir/deploy/install-udpgw.sh" "$udpgw_port"
 /usr/sbin/sshd -t
 install -m 0644 "$repo_dir/deploy/sshvpn-egress.service" /etc/systemd/system/sshvpn-egress.service
 install -m 0644 "$repo_dir/deploy/sshvpn-panel.service" /etc/systemd/system/sshvpn-panel.service
@@ -169,7 +178,8 @@ sshvpn-install-pam-hook
 systemctl daemon-reload
 systemctl enable --now sshvpn-egress
 sshvpn-configure-main-ssh
-systemctl enable --now postgresql nginx sshvpn-panel sshvpn-policy.timer sshvpn-usage.timer
+systemctl enable --now postgresql nginx sshvpn-panel sshvpn-policy.timer sshvpn-usage.timer sshvpn-udpgw.service
+systemctl is-active --quiet sshvpn-udpgw.service
 systemctl reload nginx
 if git -C "$repo_dir" rev-parse --verify HEAD >/dev/null 2>&1; then
   git -C "$repo_dir" rev-parse --verify HEAD > /opt/ssh-vpn-panel/.installed-commit
@@ -186,6 +196,7 @@ fi
 echo "Admin username:  $admin_username"
 echo "Admin password:  $admin_password"
 echo "VPN SSH port:    $main_ssh_port"
+echo "UDPGW TCP port:  $udpgw_port (through SSH tunnel)"
 echo 'SSL later:       sudo menu ssl panel.example.com admin@example.com'
 echo '============================================================'
 unset admin_password

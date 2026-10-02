@@ -15,6 +15,7 @@ if WEB_PATH and not re.fullmatch(r"/[A-Za-z0-9_-]{1,64}", WEB_PATH):
     raise ValueError("Invalid PANEL_WEB_PATH.")
 FORCE_SCRIPT_NAME = WEB_PATH or None
 VPN_SSH_PORT = int(os.environ.get("VPN_SSH_PORT", "22"))
+VPN_UDPGW_PORT = int(os.environ.get("VPN_UDPGW_PORT", "7302"))
 if os.environ["PANEL_DOMAIN"] == "localhost":
     ALLOWED_HOSTS.append("127.0.0.1")
 if TLS_ENABLED:

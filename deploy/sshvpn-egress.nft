@@ -5,10 +5,19 @@ table inet sshvpn_egress {
         # DNS lookups made by sshd may use Ubuntu's local resolver stub.
         meta skgid sshvpn ip daddr 127.0.0.53 udp dport 53 accept
         meta skgid sshvpn ip daddr 127.0.0.53 tcp dport 53 accept
+        meta skgid "sshvpn-udpgw" ip daddr 127.0.0.53 udp dport 53 accept
+        meta skgid "sshvpn-udpgw" ip daddr 127.0.0.53 tcp dport 53 accept
+
+        # VPN users reach UDPGW only through SSH forwarding to loopback TCP.
+        meta skgid sshvpn ip daddr 127.0.0.1 tcp dport __UDPGW_PORT__ accept
 
         # Keep forwarding sockets away from this host and non-public networks.
         meta skgid sshvpn fib daddr type local reject
         meta skgid sshvpn ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.0.0.0/24, 192.168.0.0/16, 198.18.0.0/15, 224.0.0.0/4, 240.0.0.0/4 } reject
         meta skgid sshvpn ip6 daddr { ::/128, ::1/128, fc00::/7, fe80::/10, ff00::/8 } reject
+        # UDPGW itself must not relay packets to this host or private networks.
+        meta skgid "sshvpn-udpgw" fib daddr type local reject
+        meta skgid "sshvpn-udpgw" ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.0.0.0/24, 192.168.0.0/16, 198.18.0.0/15, 224.0.0.0/4, 240.0.0.0/4 } reject
+        meta skgid "sshvpn-udpgw" ip6 daddr { ::/128, ::1/128, fc00::/7, fe80::/10, ff00::/8 } reject
     }
 }
