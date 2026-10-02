@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#101a2b">
   <title>{% block title %}SSH VPN Panel{% endblock %}</title>
   <script>try { document.documentElement.dataset.theme = localStorage.getItem('sshvpn-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch (_) { document.documentElement.dataset.theme = 'light'; } try { const saved = localStorage.getItem('sshvpn-language'); const cookie = document.cookie.match(/(?:^|; )django_language=(fa|en)(?:;|$)/); const language = saved === 'fa' || saved === 'en' ? saved : (cookie ? cookie[1] : 'en'); document.documentElement.lang = language; document.documentElement.dir = language === 'fa' ? 'rtl' : 'ltr'; } catch (_) { document.documentElement.lang = 'en'; document.documentElement.dir = 'ltr'; }</script>
-  <link rel="stylesheet" href="{% static 'panel.css' %}?v=22">
+  <link rel="stylesheet" href="{% static 'panel.css' %}?v=23">
   <script src="{% static 'i18n.js' %}?v=2" defer></script>
   <script src="{% static 'panel.js' %}?v=4" defer></script>
   {% if user.is_authenticated %}<script src="{% static 'overview-react.js' %}?v=3" defer></script>{% endif %}
@@ -15,7 +15,8 @@
 </head>
 <body>
   <header class="site-header">
-    <div class="site-header-inner">
+    <div class="site-header-inner{% if user.is_authenticated %} has-menu{% endif %}">
+      {% if user.is_authenticated %}<button class="menu-toggle" type="button" aria-label="Open navigation menu" aria-controls="panel-menu" aria-expanded="false" data-menu-toggle><span class="menu-bars" aria-hidden="true"><span></span><span></span><span></span></span><span>Menu</span></button>{% endif %}
       <a class="brand" href="{% url 'dashboard' %}">
         <span class="brand-icon" aria-hidden="true">S</span>
         <span class="brand-label"><strong>SSH VPN</strong><small>Control panel</small></span>
@@ -25,7 +26,6 @@
         <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark mode" aria-pressed="false"><span class="theme-icon" aria-hidden="true">◐</span><span data-theme-label>Dark mode</span></button>
       {% if user.is_authenticated %}
         <span class="admin-badge"><span class="status-dot"></span> Administrator</span>
-        <button class="menu-toggle" type="button" aria-label="Open navigation menu" aria-controls="panel-menu" aria-expanded="false" data-menu-toggle><span class="menu-bars" aria-hidden="true"><span></span><span></span><span></span></span><span>Menu</span></button>
       {% endif %}
       </div>
     </div>

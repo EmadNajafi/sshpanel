@@ -40,6 +40,7 @@ h1, h2, p { margin-top: 0; }
   justify-content: space-between;
   gap: 20px;
 }
+.site-header-inner.has-menu .header-actions { margin-inline-start: auto; }
 .brand { display: inline-flex; gap: 12px; align-items: center; text-decoration: none; }
 .brand-icon, .login-symbol {
   display: grid;
@@ -66,7 +67,7 @@ h1, h2, p { margin-top: 0; }
 .menu-toggle:hover, .menu-toggle:focus-visible { background: #304666; border-color: #7791bd; }
 .menu-bars { display: grid; gap: 4px; width: 17px; }
 .menu-bars span { display: block; height: 2px; border-radius: 2px; background: currentColor; }
-.nav-drawer { position: fixed; inset: 0 0 0 auto; width: min(100%, 390px); height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; overflow-y: auto; border: 0; border-radius: 20px 0 0 20px; color: var(--ink); background: #fff; box-shadow: -24px 0 75px rgba(8, 21, 41, .24); }
+.nav-drawer { position: fixed; inset: 0 auto 0 0; width: min(100%, 390px); height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; overflow-y: auto; border: 0; border-radius: 0 20px 20px 0; color: var(--ink); background: #fff; box-shadow: 24px 0 75px rgba(8, 21, 41, .24); }
 .nav-drawer::backdrop { background: rgba(8, 20, 39, .58); backdrop-filter: blur(3px); }
 .drawer-content { display: flex; flex-direction: column; min-height: 100%; padding: 30px 25px 24px; }
 .drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
@@ -473,7 +474,7 @@ td { color: #506078; font-size: 12px; }
 :root[dir="rtl"] .account-name-button { text-align: right; }
 :root[dir="rtl"] th { letter-spacing: normal; text-transform: none; }
 :root[dir="rtl"] .account-name-button { direction: ltr; unicode-bidi: isolate; }
-:root[dir="rtl"] .nav-drawer { inset: 0 auto 0 0; border-radius: 0 20px 20px 0; box-shadow: 24px 0 75px rgba(8, 21, 41, .24); }
+:root[dir="rtl"] .nav-drawer { inset: 0 0 0 auto; border-radius: 20px 0 0 20px; box-shadow: -24px 0 75px rgba(8, 21, 41, .24); }
 :root[dir="rtl"] .drawer-section-label { margin: 0 11px 9px 0; }
 :root[dir="rtl"] .action-feedback { right: auto; left: 22px; }
 :root[dir="rtl"] .bulk-action-bar > strong { margin-right: 0; margin-left: 5px; }
@@ -502,6 +503,8 @@ td { color: #506078; font-size: 12px; }
   .admin-badge { display: none; }
 }
 @media (max-width: 520px) {
+  .site-header-inner { gap: 8px; }
+  .site-header-inner.has-menu .brand-label { display: none; }
   .header-actions { gap: 6px; }
   .language-toggle, .theme-toggle, .menu-toggle { padding-inline: 8px; }
   .menu-toggle > span:last-child { display: none; }
