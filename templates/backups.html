@@ -11,14 +11,14 @@
   <div class="backup-action-grid">
     <section class="panel settings-section backup-action">
       <div class="settings-section-head"><span class="settings-section-icon settings-icon-blue" aria-hidden="true">01</span><div><p class="eyebrow">EXPORT</p><h2>Create a backup</h2><p>Download a full copy of this panel.</p></div></div>
-      <p class="backup-action-copy">Includes the full PostgreSQL database, administrators, VPN account details and password hashes, account limits, audit history, and saved traffic totals.</p>
+      <p class="backup-action-copy">Includes every database record (administrators, VPN passwords, referrals and audit history), Linux VPN login hashes and status, account limits, and saved traffic totals.</p>
       <p class="backup-sensitive-note">The archive is not encrypted. Store it privately.</p>
       <form method="post" action="{% url 'create_backup' %}">{% csrf_token %}<button class="button button-primary" type="submit">Create backup</button></form>
     </section>
 
     <section class="panel settings-section backup-action">
       <div class="settings-section-head"><span class="settings-section-icon settings-icon-purple" aria-hidden="true">02</span><div><p class="eyebrow">IMPORT</p><h2>Restore from file</h2><p>Bring panel data onto an installed server.</p></div></div>
-      <p class="backup-action-copy">Restoring replaces the destination panel database and administrator accounts. Its web address, TLS mode, database connection, and SSH port stay local.</p>
+      <p class="backup-action-copy">Restoring replaces destination panel data and administrator accounts. The destination's domain or IP, private path, TLS mode, web and SSH ports, and database connection stay as configured on that server. Live connections reconnect after migration.</p>
       <form method="post" action="{% url 'restore_backup' %}" enctype="multipart/form-data" class="backup-restore-form" onsubmit="return panelConfirm('Restore the selected backup? Current panel data and administrator accounts will be replaced. A server-side recovery copy will be created first.')">{% csrf_token %}
         <p><label for="restore-file">Backup file (.tar.gz)</label><input id="restore-file" name="backup_file" type="file" accept=".tar.gz,application/gzip" required></p>
         <p class="restore-confirm"><label><input type="checkbox" name="confirm_replace" value="yes" required> Replace this panel's data with the backup</label></p>

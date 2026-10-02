@@ -32,6 +32,7 @@ USAGE_FILE = Path("/var/lib/sshvpn/usage.json")
 CHUNK = 1024 * 1024
 USERNAME = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 MEMBERS = {"manifest.json", "database.dump", "panel.env", "accounts.json", "usage.json", "nginx.conf", "sshd_config"}
+DATA_MEMBERS = MEMBERS - {"manifest.json"}
 
 
 def run(*args, input_data=None, timeout=300):
@@ -120,19 +121,26 @@ def create():
         ).decode().splitlines())
         if database_names != {item["username"] for item in accounts}:
             raise RuntimeError("Database and Linux VPN accounts changed during backup; retry shortly.")
+        content = {
+            "panel.env": ENV_FILE.read_bytes(),
+            "accounts.json": json.dumps(accounts).encode(),
+            "usage.json": USAGE_FILE.read_bytes(),
+            "nginx.conf": Path("/etc/nginx/sites-available/sshvpn-panel").read_bytes(),
+            "sshd_config": Path("/etc/ssh/sshd_config").read_bytes(),
+        }
         manifest = {
-            "format": 2, "created_at": datetime.now(timezone.utc).isoformat(),
-            "account_count": len(accounts), "database_sha256": file_hash(database),
+            "format": 3, "created_at": datetime.now(timezone.utc).isoformat(),
+            "account_count": len(accounts),
+            "sha256": {"database.dump": file_hash(database), **{
+                name: hashlib.sha256(data).hexdigest() for name, data in content.items()
+            }},
         }
         archive_path = directory / "backup.tar.gz"
         with tarfile.open(archive_path, "w:gz") as archive:
             add_bytes(archive, "manifest.json", json.dumps(manifest).encode())
             archive.add(database, arcname="database.dump", recursive=False)
-            add_bytes(archive, "panel.env", ENV_FILE.read_bytes())
-            add_bytes(archive, "accounts.json", json.dumps(accounts).encode())
-            add_bytes(archive, "usage.json", USAGE_FILE.read_bytes() if USAGE_FILE.exists() else b"{}")
-            add_bytes(archive, "nginx.conf", Path("/etc/nginx/sites-available/sshvpn-panel").read_bytes())
-            add_bytes(archive, "sshd_config", Path("/etc/ssh/sshd_config").read_bytes())
+            for member_name, data in content.items():
+                add_bytes(archive, member_name, data)
         name = f"sshpanel-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{os.urandom(4).hex()}.tar.gz"
         pending = BACKUP_DIR / f".{name}.tmp"
         try:
@@ -157,19 +165,31 @@ def read_archive(path, directory):
             with archive.extractfile(member) as source, destination.open("wb") as output:
                 shutil.copyfileobj(source, output, CHUNK)
     manifest = json.loads((directory / "manifest.json").read_text())
+    if not isinstance(manifest, dict) or manifest.get("format") not in (2, 3):
+        raise ValueError("Unsupported or incomplete backup.")
+    if manifest["format"] == 3:
+        hashes = manifest.get("sha256")
+        if not isinstance(hashes, dict) or set(hashes) != DATA_MEMBERS:
+            raise ValueError("Backup checksums are incomplete.")
+        for name in DATA_MEMBERS:
+            if file_hash(directory / name) != hashes[name]:
+                raise ValueError(f"Backup checksum mismatch: {name}.")
+    elif file_hash(directory / "database.dump") != manifest.get("database_sha256"):
+        raise ValueError("Database checksum mismatch.")
     accounts = json.loads((directory / "accounts.json").read_text())
     source_env = (directory / "panel.env").read_text()
-    if manifest.get("format") != 2 or not isinstance(accounts, list) or manifest.get("account_count") != len(accounts):
+    if not isinstance(accounts, list) or manifest.get("account_count") != len(accounts):
         raise ValueError("Unsupported or incomplete backup.")
-    if file_hash(directory / "database.dump") != manifest.get("database_sha256"):
-        raise ValueError("Database checksum mismatch.")
     secret = next((line.split("=", 1)[1] for line in source_env.splitlines() if line.startswith("DJANGO_SECRET_KEY=")), None)
     if not secret:
         raise ValueError("The credential encryption key is missing.")
-    if not isinstance(json.loads((directory / "usage.json").read_text()), dict):
+    usage = json.loads((directory / "usage.json").read_text())
+    if not isinstance(usage, dict):
         raise ValueError("Traffic data is invalid.")
     seen = set()
     for item in accounts:
+        if not isinstance(item, dict):
+            raise ValueError("Invalid VPN account in backup.")
         username = item.get("username")
         policy = item.get("policy")
         password_hash = item.get("password_hash")
@@ -177,6 +197,18 @@ def read_archive(path, directory):
             raise ValueError("Invalid or duplicate VPN account in backup.")
         if not isinstance(password_hash, str) or not password_hash or any(char in password_hash for char in ":\n\r\x00"):
             raise ValueError("Invalid VPN password hash in backup.")
+        linux = item.get("linux")
+        if manifest["format"] == 3 or linux is not None:
+            aging = ("shadow_last_change", "shadow_min", "shadow_max", "shadow_warn",
+                     "shadow_inactive", "shadow_expire", "shadow_flag")
+            if not isinstance(linux, dict) or not all(
+                key in linux and (linux[key] is None or type(linux[key]) is int) for key in aging
+            ) or linux.get("home") != "/var/empty" or linux.get("shell") != "/usr/sbin/nologin":
+                raise ValueError("Invalid Linux VPN account metadata in backup.")
+            if not isinstance(linux.get("gecos"), str) or any(
+                character in linux["gecos"] for character in ":\n\r\x00"
+            ):
+                raise ValueError("Invalid Linux VPN account description in backup.")
         old_keys = {"expires_at", "max_connections"}
         new_keys = old_keys | {"valid_days", "activated_at"}
         traffic_keys = new_keys | {"traffic_limit_bytes"}
@@ -199,7 +231,30 @@ def read_archive(path, directory):
         if validity is not None and ((expiry is None) != (activated is None)):
             raise ValueError("Invalid VPN activation state in backup.")
         seen.add(username)
+    if manifest["format"] == 3:
+        if set(usage) != seen or any(
+            not isinstance(entry, dict) or any(
+                type(entry.get(key)) is not int or entry[key] < 0
+                for key in ("up", "down", "last_up", "last_down", "uid")
+            ) for entry in usage.values()
+        ):
+            raise ValueError("Traffic data does not match the VPN accounts.")
     return accounts, secret
+
+
+def restore_linux_metadata(item):
+    """Restore portable shadow aging and account description; UIDs remain local."""
+    linux = item.get("linux")
+    if not linux:
+        return  # Older format-2 archives did not require Linux metadata.
+    username = item["username"]
+    run("/usr/sbin/usermod", "--comment", linux["gecos"], username)
+    for option, field in (("-d", "shadow_last_change"), ("-m", "shadow_min"),
+                          ("-M", "shadow_max"), ("-W", "shadow_warn"),
+                          ("-I", "shadow_inactive"), ("-E", "shadow_expire")):
+        value = linux.get(field)
+        if value is not None:
+            run("/usr/bin/chage", option, str(value), username)
 
 
 def restore(upload_name):
@@ -267,6 +322,7 @@ def restore(upload_name):
             if username not in target_names:
                 run("/usr/sbin/useradd", "--no-create-home", "--home-dir", "/var/empty", "--shell", "/usr/sbin/nologin", "--gid", "sshvpn", username)
             run("/usr/sbin/usermod", "--password", item["password_hash"], username)
+            restore_linux_metadata(item)
             policy_path = POLICY_DIR / f"{username}.json"
             temporary_policy = POLICY_DIR / f".{username}.restore"
             temporary_policy.write_text(json.dumps(item["policy"]))
