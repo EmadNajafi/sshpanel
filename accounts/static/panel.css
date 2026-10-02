@@ -474,10 +474,9 @@ td { color: #506078; font-size: 12px; }
 :root[dir="rtl"] .action-feedback { right: auto; left: 22px; }
 :root[dir="rtl"] .bulk-action-bar > strong { margin-right: 0; margin-left: 5px; }
 :root[dir="rtl"] .sessions-list code { text-align: left; direction: ltr; }
-:root[dir="rtl"] input[type="password"],
-:root[dir="rtl"] input[name="port"],
-:root[dir="rtl"] .copy-details-text { direction: ltr; text-align: left; }
-:root[dir="rtl"] .account-search-controls input { text-align: right; }
+:root[dir="rtl"] input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+:root[dir="rtl"] textarea,
+:root[dir="rtl"] select { direction: ltr; text-align: left; }
 
 @media (max-width: 720px) {
   .backup-action-grid { grid-template-columns: 1fr; }

@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#101a2b">
   <title>{% block title %}SSH VPN Panel{% endblock %}</title>
   <script>try { document.documentElement.dataset.theme = localStorage.getItem('sshvpn-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch (_) { document.documentElement.dataset.theme = 'light'; } try { const saved = localStorage.getItem('sshvpn-language'); const cookie = document.cookie.match(/(?:^|; )django_language=(fa|en)(?:;|$)/); const language = saved === 'fa' || saved === 'en' ? saved : (cookie ? cookie[1] : 'en'); document.documentElement.lang = language; document.documentElement.dir = language === 'fa' ? 'rtl' : 'ltr'; } catch (_) { document.documentElement.lang = 'en'; document.documentElement.dir = 'ltr'; }</script>
-  <link rel="stylesheet" href="{% static 'panel.css' %}?v=20">
+  <link rel="stylesheet" href="{% static 'panel.css' %}?v=21">
   <script src="{% static 'i18n.js' %}?v=1" defer></script>
   <script src="{% static 'panel.js' %}?v=4" defer></script>
   {% if user.is_authenticated %}<script src="{% static 'overview-react.js' %}?v=3" defer></script>{% endif %}
