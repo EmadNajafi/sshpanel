@@ -54,6 +54,17 @@ class PolicyTests(unittest.TestCase):
         policy.write_policy("alice", 1000, 2)
         self.assertFalse(policy.admit_connection("alice", 101, now=1000))
 
+    def test_validity_starts_at_first_admitted_connection_only(self):
+        policy.write_policy("alice", None, 1, valid_days=30)
+        with patch.object(policy, "process_start_time", side_effect=lambda pid: str(pid)):
+            self.assertTrue(policy.admit_connection("alice", 101, now=1000))
+            self.assertEqual(policy.read_policy("alice")["expires_at"], 1000 + 30 * 86400)
+            self.assertEqual(policy.read_policy("alice")["activated_at"], 1000)
+            self.assertFalse(policy.admit_connection("alice", 102, now=1001))
+            self.assertEqual(policy.read_policy("alice")["activated_at"], 1000)
+            self.assertTrue(policy.admit_connection("alice", 101, now=1002))
+            self.assertEqual(policy.read_policy("alice")["expires_at"], 1000 + 30 * 86400)
+
     def test_records_ip_on_live_lease_without_duplicating_connection(self):
         policy.write_policy("alice", 2000, 2)
         with patch.object(policy, "process_start_time", return_value="one"):

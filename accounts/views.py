@@ -1,6 +1,7 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as datetime_timezone
 import json
 import math
+import secrets
 
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
@@ -47,6 +48,24 @@ def get_account_usage():
         return None
 
 
+def sync_account_activation():
+    """The PAM hook owns the first successful connection timestamp."""
+    pending = VpnAccount.objects.filter(valid_days__isnull=False, activated_at__isnull=True)
+    if not pending.exists():
+        return
+    try:
+        policies = json.loads(call_helper("policy-status"))
+    except (ProvisionError, ValueError, TypeError):
+        return
+    for account in pending:
+        policy = policies.get(account.username)
+        if not isinstance(policy, dict) or not isinstance(policy.get("activated_at"), int) or not isinstance(policy.get("expires_at"), int):
+            continue
+        account.activated_at = datetime.fromtimestamp(policy["activated_at"], tz=datetime_timezone.utc)
+        account.expires_at = datetime.fromtimestamp(policy["expires_at"], tz=datetime_timezone.utc)
+        account.save(update_fields=["activated_at", "expires_at"])
+
+
 def account_summary(accounts, usage, now):
     inactive = sum(not account.enabled or (account.expires_at is not None and account.expires_at <= now)
                    for account in accounts)
@@ -60,12 +79,22 @@ def account_summary(accounts, usage, now):
 
 @staff_required
 def dashboard(request):
-    accounts = list(VpnAccount.objects.select_related("created_by").order_by("username"))
+    sync_account_activation()
+    accounts = list(VpnAccount.objects.select_related("created_by", "referred_by").order_by("username"))
     usage = get_account_usage()
     now = timezone.now()
     summary = account_summary(accounts, usage, now)
+    referrals = {}
+    for account in accounts:
+        if account.referred_by_id:
+            referrals.setdefault(account.referred_by_id, []).append(account)
     for account in accounts:
         account.usage = usage.get(account.username) if usage is not None else None
+        account.referral_users = referrals.get(account.pk, [])
+        account.referral_count = len(account.referral_users)
+        account.referral_active_count = sum(child.enabled and not child.is_expired for child in account.referral_users)
+        account.referral_online_count = (sum(usage.get(child.username, {}).get("connections", 0) > 0
+                                             for child in account.referral_users) if usage is not None else None)
         account.days_remaining = (max(0, math.ceil((account.expires_at - now).total_seconds() / 86400))
                                   if account.expires_at is not None else None)
     return render(request, "dashboard.html", {
@@ -96,9 +125,11 @@ def system_metrics(request):
 @staff_required
 @require_GET
 def account_usage(request):
+    sync_account_activation()
     usage = get_account_usage()
-    accounts = list(VpnAccount.objects.only("username", "enabled", "expires_at"))
+    accounts = list(VpnAccount.objects.only("username", "enabled", "expires_at", "valid_days", "activated_at"))
     response = JsonResponse({"accounts": usage, "available": usage is not None,
+                             "activated": [account.username for account in accounts if account.activated_at is not None],
                              "summary": account_summary(accounts, usage, timezone.now())})
     response["Cache-Control"] = "no-store, private"
     return response
@@ -121,17 +152,33 @@ def create_account(request):
     if VpnAccount.objects.filter(username=username).exists():
         messages.error(request, "This account already exists.")
         return redirect("dashboard")
+    referral = None
+    code = form.cleaned_data["referral_code"].strip().upper()
+    if code:
+        referral = VpnAccount.objects.filter(referral_code=code).first()
+        if referral is None:
+            messages.error(request, "Referral code was not found.")
+            return redirect("dashboard")
     try:
-        expires_at = timezone.now() + timedelta(days=form.cleaned_data["valid_days"])
+        first_connection = form.cleaned_data["start_on_first_connection"]
+        valid_days = form.cleaned_data["valid_days"]
+        expires_at = None if first_connection else timezone.now() + timedelta(days=valid_days)
         max_connections = form.cleaned_data["max_connections"]
-        call_helper(
-            "create", username, form.cleaned_data["password"],
-            expires_at=int(expires_at.timestamp()), max_connections=max_connections,
-        )
+        helper_options = {"max_connections": max_connections}
+        if first_connection:
+            helper_options["valid_days"] = valid_days
+        else:
+            helper_options["expires_at"] = int(expires_at.timestamp())
+        call_helper("create", username, form.cleaned_data["password"], **helper_options)
         try:
+            referral_code = secrets.token_hex(6).upper()
+            while VpnAccount.objects.filter(referral_code=referral_code).exists():
+                referral_code = secrets.token_hex(6).upper()
             VpnAccount.objects.create(
                 username=username, created_by=request.user,
                 expires_at=expires_at, max_connections=max_connections,
+                valid_days=valid_days if first_connection else None,
+                referral_code=referral_code, referred_by=referral,
                 password_ciphertext=encrypt_password(form.cleaned_data["password"]),
             )
         except IntegrityError:
@@ -149,6 +196,7 @@ def create_account(request):
 @staff_required
 @require_POST
 def edit_account(request, pk):
+    sync_account_activation()
     account = get_object_or_404(VpnAccount, pk=pk)
     form = EditAccountForm(request.POST)
     if not form.is_valid():
@@ -158,18 +206,21 @@ def edit_account(request, pk):
         return redirect("dashboard")
 
     days = form.cleaned_data["valid_days"]
-    expires_at = timezone.now() + timedelta(days=days) if days is not None else account.expires_at
+    pending = account.valid_days is not None and account.activated_at is None
+    expires_at = (timezone.now() + timedelta(days=days) if days is not None and not pending
+                  else account.expires_at)
     max_connections = form.cleaned_data["max_connections"]
     if max_connections is None:
         max_connections = account.max_connections
     password = form.cleaned_data["password"] or None
-    if max_connections == account.max_connections and expires_at == account.expires_at and password is None:
+    if max_connections == account.max_connections and expires_at == account.expires_at and (days is None or not pending or days == account.valid_days) and password is None:
         messages.info(request, f"No changes to {account.username}.")
         return redirect("dashboard")
     try:
         call_helper(
             "update", account.username, password,
-            expires_at=int(expires_at.timestamp()) if days is not None else None,
+            expires_at=int(expires_at.timestamp()) if days is not None and not pending else None,
+            valid_days=days if days is not None and pending else None,
             max_connections=max_connections, enabled=account.enabled,
         )
     except ProvisionError as exc:
@@ -177,8 +228,10 @@ def edit_account(request, pk):
         messages.error(request, str(exc))
     else:
         account.expires_at = expires_at
+        if pending and days is not None:
+            account.valid_days = days
         account.max_connections = max_connections
-        fields = ["expires_at", "max_connections"]
+        fields = ["expires_at", "max_connections", "valid_days"]
         if password is not None:
             account.password_ciphertext = encrypt_password(password)
             fields.append("password_ciphertext")
@@ -191,22 +244,35 @@ def edit_account(request, pk):
 @staff_required
 @require_POST
 def extend_account(request, pk):
+    sync_account_activation()
     account = get_object_or_404(VpnAccount, pk=pk)
     try:
         days = int(request.POST.get("days", ""))
         if days not in (30, 60, 90):
             raise ValueError("Choose 30, 60, or 90 days.")
         now = timezone.now()
-        expires_at = max(account.expires_at or now, now) + timedelta(days=days)
-        call_helper("update", account.username,
-                    expires_at=int(expires_at.timestamp()),
-                    max_connections=account.max_connections, enabled=account.enabled)
+        pending = account.valid_days is not None and account.activated_at is None
+        if pending:
+            valid_days = account.valid_days + days
+            if valid_days > 36500:
+                raise ValueError("Validity cannot exceed 36500 days.")
+            call_helper("update", account.username, valid_days=valid_days,
+                        max_connections=account.max_connections, enabled=account.enabled)
+        else:
+            expires_at = max(account.expires_at or now, now) + timedelta(days=days)
+            call_helper("update", account.username,
+                        expires_at=int(expires_at.timestamp()),
+                        max_connections=account.max_connections, enabled=account.enabled)
     except (ValueError, ProvisionError) as exc:
         record(request, account.username, "extend", False)
         messages.error(request, str(exc))
     else:
-        account.expires_at = expires_at
-        account.save(update_fields=["expires_at"])
+        if pending:
+            account.valid_days = valid_days
+            account.save(update_fields=["valid_days"])
+        else:
+            account.expires_at = expires_at
+            account.save(update_fields=["expires_at"])
         record(request, account.username, "extend", True)
         messages.success(request, f"Added {days} days to {account.username}.")
     return redirect("dashboard")

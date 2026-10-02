@@ -6,7 +6,7 @@ class ProvisionError(Exception):
     pass
 
 
-def call_helper(action, username=None, password=None, *, expires_at=None, max_connections=None, enabled=None, port=None, web_path=None, web_port=None):
+def call_helper(action, username=None, password=None, *, expires_at=None, valid_days=None, max_connections=None, enabled=None, port=None, web_path=None, web_port=None):
     payload = {}
     if username is not None:
         payload["username"] = username
@@ -14,6 +14,8 @@ def call_helper(action, username=None, password=None, *, expires_at=None, max_co
         payload["password"] = password
     if expires_at is not None:
         payload["expires_at"] = expires_at
+    if valid_days is not None:
+        payload["valid_days"] = valid_days
     if max_connections is not None:
         payload["max_connections"] = max_connections
     if enabled is not None:

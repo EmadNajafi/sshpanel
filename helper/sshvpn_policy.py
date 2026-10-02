@@ -28,17 +28,24 @@ def policy_path(username):
     return POLICY_DIR / f"{username}.json"
 
 
-def write_policy(username, expires_at, max_connections):
+def write_policy(username, expires_at, max_connections, *, valid_days=None, activated_at=None):
     path = policy_path(username)
     if expires_at is not None and (type(expires_at) is not int or expires_at <= 0):
         raise ValueError("Invalid expiry time.")
     if max_connections is not None and (type(max_connections) is not int or not 1 <= max_connections <= 10000):
         raise ValueError("Invalid connection limit.")
+    if valid_days is not None and (type(valid_days) is not int or not 1 <= valid_days <= 36500):
+        raise ValueError("Invalid validity period.")
+    if activated_at is not None and (type(activated_at) is not int or activated_at <= 0):
+        raise ValueError("Invalid activation time.")
+    if valid_days is not None and ((expires_at is None) != (activated_at is None)):
+        raise ValueError("Invalid activation policy.")
     POLICY_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix=".policy-", dir=POLICY_DIR)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as output:
-            json.dump({"expires_at": expires_at, "max_connections": max_connections}, output)
+            json.dump({"expires_at": expires_at, "max_connections": max_connections,
+                       "valid_days": valid_days, "activated_at": activated_at}, output)
             output.flush()
             os.fsync(output.fileno())
         os.chmod(temporary, 0o600)
@@ -53,10 +60,19 @@ def read_policy(username):
         policy = json.load(source)
     expires_at = policy["expires_at"]
     max_connections = policy["max_connections"]
+    policy.setdefault("valid_days", None)
+    policy.setdefault("activated_at", None)
     if expires_at is not None and (type(expires_at) is not int or expires_at <= 0):
         raise ValueError("Invalid expiry policy.")
     if max_connections is not None and (type(max_connections) is not int or not 1 <= max_connections <= 10000):
         raise ValueError("Invalid connection policy.")
+    valid_days, activated_at = policy["valid_days"], policy["activated_at"]
+    if valid_days is not None and (type(valid_days) is not int or not 1 <= valid_days <= 36500):
+        raise ValueError("Invalid validity policy.")
+    if activated_at is not None and (type(activated_at) is not int or activated_at <= 0):
+        raise ValueError("Invalid activation policy.")
+    if valid_days is not None and ((expires_at is None) != (activated_at is None)):
+        raise ValueError("Invalid activation policy.")
     return policy
 
 
@@ -91,16 +107,16 @@ def lease_path(username):
 
 
 def admit_connection(username, monitor_pid, now=None, remote_ip=None):
-    policy = read_policy(username)  # Missing policy fails closed.
     now = time.time() if now is None else now
-    if policy["expires_at"] is not None and now >= policy["expires_at"]:
-        return False
-    limit = policy["max_connections"]
-    start_time = process_start_time(monitor_pid)
     path = lease_path(username)
     with path.open("a+", encoding="utf-8") as state:
         os.chmod(path, 0o600)
         fcntl.flock(state, fcntl.LOCK_EX)
+        policy = read_policy(username)  # Re-read while holding the account's admission lock.
+        if policy["expires_at"] is not None and now >= policy["expires_at"]:
+            return False
+        limit = policy["max_connections"]
+        start_time = process_start_time(monitor_pid)
         state.seek(0)
         try:
             leases = json.load(state)
@@ -126,6 +142,11 @@ def admit_connection(username, monitor_pid, now=None, remote_ip=None):
         elif limit is not None and len(live) >= limit:
             allowed = False
         else:
+            if policy["valid_days"] is not None and policy["activated_at"] is None:
+                activated_at = int(now)
+                expires_at = activated_at + policy["valid_days"] * 86400
+                write_policy(username, expires_at, limit,
+                             valid_days=policy["valid_days"], activated_at=activated_at)
             live.append(current)
             allowed = True
         state.seek(0)

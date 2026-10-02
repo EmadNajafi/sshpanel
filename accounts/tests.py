@@ -45,6 +45,36 @@ class AccountViewsTests(TestCase):
         self.assertEqual(AuditEvent.objects.filter(succeeded=True).count(), 2)
 
     @patch("accounts.views.call_helper")
+    def test_referral_and_first_connection_validity(self, helper):
+        referrer = VpnAccount.objects.create(username="referrer", created_by=self.staff, referral_code="ABC123")
+        response = self.client.post(reverse("create_account"), {
+            "username": "newuser", "password": "abc", "valid_days": "30", "max_connections": "2",
+            "referral_code": "abc123", "start_on_first_connection": "on",
+        })
+        self.assertEqual(response.status_code, 302)
+        account = VpnAccount.objects.get(username="newuser")
+        self.assertIsNone(account.expires_at)
+        self.assertEqual(account.valid_days, 30)
+        self.assertEqual(account.referred_by, referrer)
+        self.assertEqual(len(account.referral_code), 12)
+        helper.assert_called_once_with("create", "newuser", "abc", valid_days=30, max_connections=2)
+        helper.reset_mock()
+        page = self.client.get(reverse("dashboard"))
+        self.assertContains(page, "1 referrals")
+        self.assertContains(page, "30 days after first connection")
+
+    @patch("accounts.views.call_helper")
+    def test_first_connection_activation_syncs_from_ssh_policy(self, helper):
+        account = VpnAccount.objects.create(username="alice", created_by=self.staff, valid_days=7)
+        started = int(timezone.now().timestamp())
+        helper.return_value = '{"alice": {"activated_at": %d, "expires_at": %d}}' % (started, started + 7 * 86400)
+        from .views import sync_account_activation
+        sync_account_activation()
+        account.refresh_from_db()
+        self.assertEqual(int(account.activated_at.timestamp()), started)
+        self.assertEqual(int(account.expires_at.timestamp()), started + 7 * 86400)
+
+    @patch("accounts.views.call_helper")
     def test_bad_username_does_not_reach_helper(self, helper):
         self.client.post(reverse("create_account"), {
             "username": "bad/name", "password": "abc", "valid_days": "1", "max_connections": "1",

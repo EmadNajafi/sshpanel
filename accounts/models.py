@@ -9,6 +9,10 @@ class VpnAccount(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     expires_at = models.DateTimeField(null=True, blank=True)
+    valid_days = models.PositiveIntegerField(null=True, blank=True)
+    activated_at = models.DateTimeField(null=True, blank=True)
+    referral_code = models.CharField(max_length=12, unique=True, null=True, blank=True)
+    referred_by = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="referrals")
     max_connections = models.PositiveIntegerField(null=True, blank=True)
     password_ciphertext = models.TextField(blank=True)
 

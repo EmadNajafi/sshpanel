@@ -119,7 +119,8 @@
           `SSH port: ${document.querySelector("[data-ssh-port]").dataset.sshPort}`,
           `Username: ${row.dataset.accountUsername}`,
           `Password: ${password}`,
-          `تاریخ انقضا (شمسی): ${formatPersianExpiry(row.dataset.expiresAt)}`,
+          row.dataset.validDays ? `شروع اعتبار: اولین اتصال موفق (${row.dataset.validDays} روز)` :
+            `تاریخ انقضا (شمسی): ${formatPersianExpiry(row.dataset.expiresAt)}`,
           `Connection limit: ${button.dataset.connections || "Unlimited"}`,
         ].join("\n");
         if (await copyText(details)) {
@@ -157,6 +158,11 @@
       if (!response.ok) return;
       const payload = await response.json();
       if (payload.summary) window.dispatchEvent(new CustomEvent("sshvpn:account-summary", { detail: payload.summary }));
+      if (payload.activated?.some((username) => [...usagePanel.querySelectorAll("[data-account-username]")]
+        .some((row) => row.dataset.accountUsername === username && row.dataset.validDays))) {
+        window.location.reload();
+        return;
+      }
       if (!payload.available) return;
       usagePanel.querySelectorAll("[data-account-username]").forEach((row) => {
         const usage = payload.accounts[row.dataset.accountUsername];

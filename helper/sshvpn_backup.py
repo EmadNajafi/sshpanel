@@ -177,13 +177,22 @@ def read_archive(path, directory):
             raise ValueError("Invalid or duplicate VPN account in backup.")
         if not isinstance(password_hash, str) or not password_hash or any(char in password_hash for char in ":\n\r\x00"):
             raise ValueError("Invalid VPN password hash in backup.")
-        if not isinstance(policy, dict) or set(policy) != {"expires_at", "max_connections"}:
+        old_keys = {"expires_at", "max_connections"}
+        new_keys = old_keys | {"valid_days", "activated_at"}
+        if not isinstance(policy, dict) or set(policy) not in (old_keys, new_keys):
             raise ValueError("Invalid VPN policy in backup.")
         expiry, limit = policy["expires_at"], policy["max_connections"]
         if expiry is not None and (type(expiry) is not int or expiry <= 0):
             raise ValueError("Invalid VPN expiry in backup.")
         if limit is not None and (type(limit) is not int or not 1 <= limit <= 10000):
             raise ValueError("Invalid VPN connection limit in backup.")
+        validity, activated = policy.get("valid_days"), policy.get("activated_at")
+        if validity is not None and (type(validity) is not int or not 1 <= validity <= 36500):
+            raise ValueError("Invalid VPN validity in backup.")
+        if activated is not None and (type(activated) is not int or activated <= 0):
+            raise ValueError("Invalid VPN activation in backup.")
+        if validity is not None and ((expiry is None) != (activated is None)):
+            raise ValueError("Invalid VPN activation state in backup.")
         seen.add(username)
     return accounts, secret
 

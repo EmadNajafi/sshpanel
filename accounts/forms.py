@@ -10,6 +10,8 @@ class CreateAccountForm(forms.Form):
     password = forms.CharField(widget=forms.PasswordInput, max_length=256, strip=False)
     valid_days = forms.IntegerField(min_value=1, max_value=36500, label="Active days")
     max_connections = forms.IntegerField(min_value=1, max_value=10000, label="Simultaneous connections")
+    referral_code = forms.CharField(required=False, max_length=12, label="Referral code")
+    start_on_first_connection = forms.BooleanField(required=False, label="Start validity on first connection")
 
     def clean_username(self):
         value = self.cleaned_data["username"]

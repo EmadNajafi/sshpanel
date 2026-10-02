@@ -148,6 +148,10 @@ h1, h2, p { margin-top: 0; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 22px; }
 
 .account-form p, .login-form p { margin: 0 0 17px; }
+.account-form input[type="checkbox"] { width: 17px; height: 17px; min-height: 0; padding: 0; margin: 2px 0 0; accent-color: var(--blue); }
+.referral-details { margin-top: 5px; font-size: 11px; }
+.referral-details summary { cursor: pointer; color: var(--blue); font-weight: 700; }
+.referral-details span { display: block; padding: 3px 0 0 10px; color: var(--muted); }
 label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 750; color: #33425a; }
 input { width: 100%; min-height: 41px; padding: 9px 11px; border: 1px solid #d6dfeb; border-radius: 9px; color: var(--ink); background: #fff; outline: none; transition: border-color .15s, box-shadow .15s; }
 input:focus { border-color: #5f8cf1; box-shadow: 0 0 0 3px rgba(50, 106, 229, .13); }

@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}Overview · SSH VPN Panel{% endblock %}
-{% block scripts %}<script src="{% static 'dashboard.js' %}?v=9" defer></script>{% endblock %}
+{% block scripts %}<script src="{% static 'dashboard.js' %}?v=10" defer></script>{% endblock %}
 {% block content %}
 <svg class="action-icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
   <symbol id="action-edit" viewBox="0 0 24 24"><path d="m4 16-.5 4.5L8 20l11-11-4-4L4 16Zm9.5-9.5 4 4M13 20h7"/></symbol>
@@ -43,20 +43,21 @@
     </div>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Account</th><th>Password</th><th>Status</th><th>Online</th><th>Data usage</th><th>Days left</th><th>Limit</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Account</th><th>Referral</th><th>Password</th><th>Status</th><th>Online</th><th>Data usage</th><th>Days left</th><th>Limit</th><th>Actions</th></tr></thead>
         <tbody>
         {% for account in accounts %}
-          <tr data-account-username="{{ account.username }}" data-expires-at="{{ account.expires_at|date:'c' }}">
+          <tr data-account-username="{{ account.username }}" data-expires-at="{{ account.expires_at|date:'c' }}" data-valid-days="{% if account.valid_days and not account.activated_at %}{{ account.valid_days }}{% endif %}">
             <td><button class="account-name account-name-button" type="button" data-session-trigger {% if not account.usage.connections %}disabled{% endif %} aria-label="Show active IP addresses for {{ account.username }}">{{ account.username }}</button><small class="table-subtext">Created {{ account.created_at|date:"Y-m-d" }}</small></td>
+            <td><strong>{{ account.referral_code|default:'—' }}</strong><small class="table-subtext">{{ account.referral_count }} referrals · {{ account.referral_active_count }} active · {{ account.referral_online_count|default_if_none:'—' }} online</small>{% if account.referral_users %}<details class="referral-details"><summary>View users</summary>{% for child in account.referral_users %}<span>{{ child.username }}</span>{% endfor %}</details>{% endif %}{% if account.referred_by %}<small class="table-subtext">Via {{ account.referred_by.username }}</small>{% endif %}</td>
             <td><div class="password-cell"><span data-password-value>••••••</span><button class="button button-small button-secondary" type="button" data-reveal-password data-password-url="{% url 'account_password' account.pk %}" aria-label="Show password for {{ account.username }}">Show</button></div></td>
-            <td>{% if account.is_expired %}<span class="state state-expired">Expired</span>{% elif account.enabled %}<span class="state state-active">Active</span>{% else %}<span class="state state-disabled">Disabled</span>{% endif %}</td>
+            <td>{% if account.is_expired %}<span class="state state-expired">Expired</span>{% elif not account.enabled %}<span class="state state-disabled">Disabled</span>{% elif account.valid_days and not account.activated_at %}<span class="state state-disabled">Awaiting first connection</span>{% else %}<span class="state state-active">Active</span>{% endif %}</td>
             <td data-online-status>{% if account.usage is None %}<span class="muted">—</span>{% elif account.usage.connections %}<button class="state state-active online-trigger" type="button" data-session-trigger>{{ account.usage.connections }} online</button>{% else %}<span class="state state-disabled">Offline</span>{% endif %}</td>
             <td data-usage-cell>{% if account.usage is None %}<span class="muted">Unavailable</span>{% else %}<strong class="usage-total">{{ account.usage.total }}</strong><small class="table-subtext">↑ {{ account.usage.upload }} · ↓ {{ account.usage.download }}</small>{% endif %}</td>
-            <td class="nowrap">{% if account.days_remaining is None %}Unlimited{% else %}{{ account.days_remaining }} days{% endif %}</td>
+            <td class="nowrap">{% if account.valid_days and not account.activated_at %}{{ account.valid_days }} days after first connection{% elif account.days_remaining is None %}Unlimited{% else %}{{ account.days_remaining }} days{% endif %}</td>
             <td>{{ account.max_connections|default:"Unlimited" }}</td>
             <td>
               <div class="row-actions" role="group" aria-label="Actions for {{ account.username }}">
-                <button class="action-button" type="button" data-edit-account data-action="{% url 'edit_account' account.pk %}" data-username="{{ account.username }}" data-expires="{{ account.expires_at|date:'Y-m-d H:i'|default:'Unlimited' }}" data-connections="{{ account.max_connections|default_if_none:'' }}" aria-label="Edit {{ account.username }}" title="Edit"><svg><use href="#action-edit"/></svg></button>
+                <button class="action-button" type="button" data-edit-account data-action="{% url 'edit_account' account.pk %}" data-username="{{ account.username }}" data-expires="{% if account.valid_days and not account.activated_at %}{{ account.valid_days }} days after first connection{% else %}{{ account.expires_at|date:'Y-m-d H:i'|default:'Unlimited' }}{% endif %}" data-connections="{{ account.max_connections|default_if_none:'' }}" aria-label="Edit {{ account.username }}" title="Edit"><svg><use href="#action-edit"/></svg></button>
                 <button class="action-button action-button-extend" type="button" data-extend-account data-action="{% url 'extend_account' account.pk %}" data-username="{{ account.username }}" aria-label="Extend {{ account.username }}" title="Extend validity"><svg><use href="#action-extend"/></svg></button>
                 <form method="post" action="{% url 'reset_account_traffic' account.pk %}" onsubmit="return confirm('Reset traffic for {{ account.username|escapejs }}?')">{% csrf_token %}<button class="action-button" type="submit" aria-label="Reset traffic for {{ account.username }}" title="Reset traffic"><svg><use href="#action-reset"/></svg></button></form>
                 <button class="action-button" type="button" data-copy-account data-password-url="{% url 'account_password' account.pk %}" data-connections="{{ account.max_connections|default_if_none:'' }}" aria-label="Copy connection details for {{ account.username }}" title="Copy connection details"><svg><use href="#action-copy"/></svg></button>
@@ -66,7 +67,7 @@
               </div>
             </td>
           </tr>
-        {% empty %}<tr><td colspan="8" class="empty-state">No accounts yet. Use the + New user button to create one.</td></tr>{% endfor %}
+        {% empty %}<tr><td colspan="9" class="empty-state">No accounts yet. Use the + New user button to create one.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>
