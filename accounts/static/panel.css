@@ -134,6 +134,10 @@ h1, h2, p { margin-top: 0; }
 .account-totals .active-total { border-color: #d6f1e7; color: #178c68; background: #f0fbf7; }
 .account-totals .online-total { border-color: #d6e5ff; color: #3569c8; background: #f0f5ff; }
 .account-heading-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.account-search { margin: 0 0 16px; }
+.account-search-controls { display: flex; align-items: center; gap: 9px; }
+.account-search-controls input { flex: 1 1 240px; min-width: 0; max-width: 440px; }
+.account-search-count { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
 .create-trigger { display: inline-flex; align-items: center; gap: 9px; }
 .create-trigger span:first-child { font-size: 21px; font-weight: 400; line-height: .6; }
 .button-edit { background: #edf3ff; color: #3266c7; }
@@ -463,6 +467,8 @@ td { color: #506078; font-size: 12px; }
   .admin-badge { display: none; }
 }
 @media (max-width: 520px) {
+  .account-search-controls { flex-wrap: wrap; }
+  .account-search-controls input { flex-basis: 100%; max-width: none; }
   .bulk-grid { grid-template-columns: 1fr; }
   .theme-toggle [data-theme-label] { display: none; }
   .web-address-form { grid-template-columns: 1fr; }

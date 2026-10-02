@@ -86,7 +86,7 @@ def dashboard(request):
     bulk_token = secrets.token_urlsafe(24)
     request.session["bulk_create_token"] = bulk_token
     sync_account_activation()
-    accounts = list(VpnAccount.objects.select_related("created_by", "referred_by").order_by("username"))
+    accounts = list(VpnAccount.objects.select_related("created_by", "referred_by").order_by("created_at", "pk"))
     usage = get_account_usage()
     now = timezone.now()
     summary = account_summary(accounts, usage, now)
@@ -107,8 +107,24 @@ def dashboard(request):
                                              for child in account.referral_users) if usage is not None else None)
         account.days_remaining = (max(0, math.ceil((account.expires_at - now).total_seconds() / 86400))
                                   if account.expires_at is not None else None)
+    search_query = request.GET.get("q", "").strip()
+    if search_query:
+        needle = search_query.casefold()
+        visible_accounts = [account for account in accounts if any(
+            needle in value.casefold() for value in (
+                account.username,
+                account.referral_code,
+                account.referral_note,
+                account.referred_by.referral_code if account.referred_by else "",
+                account.referred_by.username if account.referred_by else "",
+            )
+        )]
+    else:
+        visible_accounts = accounts
     return render(request, "dashboard.html", {
-        "accounts": accounts,
+        "accounts": visible_accounts,
+        "search_query": search_query,
+        "search_result_count": len(visible_accounts),
         "account_total": summary["total"],
         "account_online": summary["online"],
         "account_inactive": summary["inactive"],

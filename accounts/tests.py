@@ -31,6 +31,38 @@ class AccountViewsTests(TestCase):
         return self.client.post(reverse("bulk_create_accounts"), {**data, "batch_token": "test-batch-token"})
 
     @patch("accounts.views.call_helper")
+    def test_dashboard_lists_new_single_and_bulk_users_last(self, helper):
+        VpnAccount.objects.create(username="z_existing", created_by=self.staff)
+        self.client.post(reverse("create_account"), {
+            "username": "a_single", "password": "abc", "valid_days": "7", "max_connections": "1",
+        })
+        response = self.bulk_post({
+            "count": "2", "prefix": "b_", "start_number": "1000", "password": "shared",
+            "password_mode": "digits", "password_length": "8", "max_connections": "1", "valid_days": "7",
+        })
+        self.assertEqual(response.status_code, 200)
+        page = self.client.get(reverse("dashboard"))
+        self.assertEqual([account.pk for account in page.context["accounts"]],
+                         list(VpnAccount.objects.order_by("created_at", "pk").values_list("pk", flat=True)))
+        self.assertEqual(page.context["accounts"][0].username, "z_existing")
+        self.assertEqual(page.context["accounts"][1].username, "a_single")
+
+    def test_dashboard_searches_username_and_referral_fields(self):
+        owner = VpnAccount.objects.create(username="Owner", created_by=self.staff, referral_code="Spring-Campaign")
+        VpnAccount.objects.create(username="member", created_by=self.staff, referred_by=owner)
+        VpnAccount.objects.create(username="bulk_user", created_by=self.staff, referral_note="مشتری ویژه")
+
+        def matches(query):
+            page = self.client.get(reverse("dashboard"), {"q": query})
+            self.assertEqual(page.context["account_total"], 3)
+            return [account.username for account in page.context["accounts"]]
+
+        self.assertEqual(matches("BULK_USER"), ["bulk_user"])
+        self.assertEqual(matches("مشتری"), ["bulk_user"])
+        self.assertEqual(matches("spring-campaign"), ["Owner", "member"])
+        self.assertEqual(matches("no-match"), [])
+
+    @patch("accounts.views.call_helper")
     def test_create_and_disable_account(self, helper):
         response = self.client.post(reverse("create_account"), {
             "username": "alice", "password": "abc", "valid_days": "7", "max_connections": "2",

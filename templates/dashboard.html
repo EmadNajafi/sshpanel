@@ -42,6 +42,15 @@
         <button class="button button-secondary" type="button" data-open-dialog="bulk-create-dialog" aria-label="Create VPN users in bulk">Bulk users</button>
       </div>
     </div>
+    <form class="account-search" method="get" action="{% url 'dashboard' %}" role="search">
+      <label for="account-search-input">Search users</label>
+      <div class="account-search-controls">
+        <input id="account-search-input" type="search" name="q" value="{{ search_query }}" placeholder="Username or referral" autocomplete="off">
+        <button class="button button-primary" type="submit">Search</button>
+        {% if search_query %}<a class="button button-secondary" href="{% url 'dashboard' %}">Clear</a>{% endif %}
+      </div>
+      {% if search_query %}<p class="account-search-count">{{ search_result_count }} matching users</p>{% endif %}
+    </form>
     <div class="table-scroll">
       <table>
         <thead><tr><th>Account</th><th>Referral</th><th>Password</th><th>Status</th><th>Online</th><th>Data usage</th><th>Days left</th><th>Limit</th><th>Actions</th></tr></thead>
@@ -68,7 +77,7 @@
               </div>
             </td>
           </tr>
-        {% empty %}<tr><td colspan="9" class="empty-state">No accounts yet. Use the + New user button to create one.</td></tr>{% endfor %}
+        {% empty %}<tr><td colspan="9" class="empty-state">{% if search_query %}No users match this search.{% else %}No accounts yet. Use the + New user button to create one.{% endif %}</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>
