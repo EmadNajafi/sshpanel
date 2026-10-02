@@ -99,7 +99,7 @@
       const form = editDialog.querySelector("[data-edit-form]");
       form.action = button.dataset.action;
       form.reset();
-      form.elements.max_connections.value = button.dataset.connections;
+      form.elements.max_connections.value = button.dataset.connections || "0";
       form.elements.referral_code.value = button.dataset.referralCode;
       editDialog.showModal();
     });

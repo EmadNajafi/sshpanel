@@ -56,7 +56,7 @@
     "Minimum number": "حداقل شماره", "Fixed password (optional)": "رمز ثابت (اختیاری)",
     "Generated password": "رمز تولیدشده", "Password length": "طول رمز",
     "Simultaneous connections": "اتصال‌های هم‌زمان", "Traffic limit (GiB)": "سقف ترافیک (گیگابایت)",
-    "Blank means unlimited.": "خالی یعنی نامحدود.", "Active days": "روزهای اعتبار",
+    "Blank means unlimited.": "خالی یعنی نامحدود.", "0 means unlimited.": "صفر یعنی نامحدود.", "0 means unlimited. Leave blank to keep the current limit.": "صفر یعنی نامحدود؛ خالی یعنی حفظ محدودیت فعلی.", "Active days": "روزهای اعتبار",
     "Referral text for all users (optional)": "متن رفرال برای همهٔ کاربران (اختیاری)",
     "This same text is saved with every user created in the batch. It does not link to another account.": "همین متن برای همهٔ کاربران این گروه ذخیره می‌شود و به حساب دیگری پیوند ندارد.",
     "Start validity on first connection": "شروع اعتبار از اولین اتصال",

@@ -3,6 +3,7 @@
 import importlib
 import importlib.machinery
 import importlib.util
+from io import StringIO
 import json
 from pathlib import Path
 import sys
@@ -56,6 +57,12 @@ class PolicyTests(unittest.TestCase):
             del process_times[101]
             self.assertTrue(policy.admit_connection("alice", 102, now=1000))
 
+    def test_unlimited_policy_admits_multiple_connections(self):
+        policy.write_policy("alice", 2000, None)
+        with patch.object(policy, "process_start_time", side_effect=lambda pid: str(pid)):
+            self.assertTrue(policy.admit_connection("alice", 101, now=1000))
+            self.assertTrue(policy.admit_connection("alice", 102, now=1000))
+
     def test_expired_account_is_denied(self):
         policy.write_policy("alice", 1000, 2)
         self.assertFalse(policy.admit_connection("alice", 101, now=1000))
@@ -93,6 +100,36 @@ class PolicyTests(unittest.TestCase):
             self.assertTrue(policy.admit_connection("alice", 101, now=1000, remote_ip="not-an-ip"))
         leases = json.loads(policy.lease_path("alice").read_text())
         self.assertIsNone(leases[0]["ip"])
+
+
+class UnlimitedConnectionCommandTests(unittest.TestCase):
+    def test_create_zero_stores_unlimited_policy(self):
+        request = {"username": "alice", "password": "abc", "valid_days": 7, "max_connections": 0}
+        with patch.object(ctl.os, "geteuid", return_value=0, create=True), \
+             patch.object(ctl.sys, "argv", ["sshvpnctl", "create"]), \
+             patch.object(ctl.sys, "stdin", StringIO(json.dumps(request))), \
+             patch.object(ctl.grp, "getgrnam", return_value=types.SimpleNamespace(gr_gid=1001), create=True), \
+             patch.object(ctl.pwd, "getpwnam", side_effect=KeyError, create=True), \
+             patch.object(ctl, "run"), patch.object(ctl, "verify_ssh_policy"), \
+             patch.object(ctl, "set_password"), patch.object(ctl, "write_policy") as write:
+            self.assertEqual(ctl.main(), 0)
+        write.assert_called_once_with("alice", None, None, valid_days=7, traffic_limit_bytes=None)
+
+    def test_update_zero_removes_connection_limit(self):
+        request = {"username": "alice", "enabled": True, "max_connections": 0}
+        current = {"expires_at": 2000000000, "valid_days": None, "activated_at": None,
+                   "max_connections": 2, "traffic_limit_bytes": None}
+        with patch.object(ctl.os, "geteuid", return_value=0, create=True), \
+             patch.object(ctl.sys, "argv", ["sshvpnctl", "update"]), \
+             patch.object(ctl.sys, "stdin", StringIO(json.dumps(request))), \
+             patch.object(ctl.grp, "getgrnam", return_value=types.SimpleNamespace(gr_gid=1001), create=True), \
+             patch.object(ctl, "managed_user"), \
+             patch.object(ctl, "read_policy", return_value=current), \
+             patch.object(ctl.spwd, "getspnam", return_value=types.SimpleNamespace(sp_pwdp="$6$hash"), create=True), \
+             patch.object(ctl, "run"), patch.object(ctl, "write_policy") as write:
+            self.assertEqual(ctl.main(), 0)
+        write.assert_called_once_with("alice", 2000000000, None, valid_days=None, activated_at=None,
+                                      traffic_limit_bytes=None)
 
 
 class UsageResetTests(unittest.TestCase):

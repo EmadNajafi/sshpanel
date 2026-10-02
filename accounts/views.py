@@ -198,6 +198,7 @@ def provision_account(actor, username, password, valid_days, max_connections,
                       referral, first_connection, traffic_limit_bytes, own_referral_code="", referral_note=""):
     own_referral_code = unique_referral_code(own_referral_code)
     expires_at = None if first_connection else timezone.now() + timedelta(days=valid_days)
+    stored_max_connections = max_connections or None
     options = {"max_connections": max_connections}
     if first_connection:
         options["valid_days"] = valid_days
@@ -210,7 +211,7 @@ def provision_account(actor, username, password, valid_days, max_connections,
         return VpnAccount.objects.create(
             username=username, created_by=actor, expires_at=expires_at,
             valid_days=valid_days if first_connection else None,
-            max_connections=max_connections, traffic_limit_bytes=traffic_limit_bytes,
+            max_connections=stored_max_connections, traffic_limit_bytes=traffic_limit_bytes,
             referral_code=own_referral_code, referred_by=referral, referral_note=referral_note,
             password_ciphertext=encrypt_password(password),
         )
@@ -342,6 +343,8 @@ def edit_account(request, pk):
     max_connections = form.cleaned_data["max_connections"]
     if max_connections is None:
         max_connections = account.max_connections
+    elif max_connections == 0:
+        max_connections = None
     password = form.cleaned_data["password"] or None
     traffic_gb = form.cleaned_data["traffic_gb"]
     traffic_limit_bytes = account.traffic_limit_bytes if traffic_gb is None else traffic_bytes(traffic_gb) or None
@@ -366,7 +369,7 @@ def edit_account(request, pk):
                 "update", account.username, password,
                 expires_at=int(expires_at.timestamp()) if days is not None and not pending else None,
                 valid_days=days if days is not None and pending else None,
-                max_connections=max_connections, enabled=account.enabled,
+                max_connections=(max_connections if max_connections is not None else 0), enabled=account.enabled,
                 traffic_limit_bytes=(traffic_limit_bytes if traffic_limit_bytes is not None else 0)
                                     if traffic_gb is not None else None,
             )

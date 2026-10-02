@@ -90,6 +90,27 @@ class AccountViewsTests(TestCase):
         self.assertEqual(AuditEvent.objects.filter(succeeded=True).count(), 2)
 
     @patch("accounts.views.call_helper")
+    def test_zero_connection_limit_creates_unlimited_account(self, helper):
+        response = self.client.post(reverse("create_account"), {
+            "username": "unlimited", "password": "abc", "valid_days": "7", "max_connections": "0",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNone(VpnAccount.objects.get(username="unlimited").max_connections)
+        self.assertEqual(helper.call_args.kwargs["max_connections"], 0)
+        self.assertContains(self.client.get(reverse("dashboard")), "Unlimited")
+
+    @patch("accounts.views.call_helper")
+    def test_zero_connection_limit_works_for_bulk_creation(self, helper):
+        response = self.bulk_post({
+            "count": "1", "prefix": "bulk_", "start_number": "1000", "password": "abc",
+            "password_mode": "digits", "password_length": "8", "max_connections": "0", "valid_days": "7",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Unlimited")
+        self.assertIsNone(VpnAccount.objects.get().max_connections)
+        self.assertEqual(helper.call_args.kwargs["max_connections"], 0)
+
+    @patch("accounts.views.call_helper")
     def test_referral_and_first_connection_validity(self, helper):
         referrer_code = "My Personal Code ✨ " + "x" * 5000
         referrer = VpnAccount.objects.create(username="referrer", created_by=self.staff, referral_code=referrer_code)
@@ -380,6 +401,14 @@ class AccountViewsTests(TestCase):
         self.assertIsNone(helper.call_args.kwargs["expires_at"])
 
     @patch("accounts.views.call_helper")
+    def test_zero_connection_limit_removes_existing_limit(self, helper):
+        account = VpnAccount.objects.create(username="alice", created_by=self.staff, max_connections=2)
+        self.client.post(reverse("edit_account", args=[account.pk]), {"max_connections": "0"})
+        account.refresh_from_db()
+        self.assertIsNone(account.max_connections)
+        self.assertEqual(helper.call_args.kwargs["max_connections"], 0)
+
+    @patch("accounts.views.call_helper")
     def test_quick_extend_adds_to_future_expiry_or_starts_from_now(self, helper):
         future = timezone.now() + timedelta(days=5)
         account = VpnAccount.objects.create(username="alice", created_by=self.staff, expires_at=future, max_connections=2)
@@ -432,7 +461,7 @@ class AccountViewsTests(TestCase):
     def test_invalid_edit_does_not_reach_helper(self, helper):
         account = VpnAccount.objects.create(username="alice", created_by=self.staff, max_connections=2)
         self.client.post(reverse("edit_account", args=[account.pk]), {
-            "password": "bad\npassword", "valid_days": "-2", "max_connections": "0",
+            "password": "bad\npassword", "valid_days": "-2", "max_connections": "-1",
         })
         helper.assert_not_called()
         account.refresh_from_db()

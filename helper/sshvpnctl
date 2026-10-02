@@ -197,8 +197,9 @@ def main():
                 raise ValueError("Expiry must be in the future.")
             if valid_days is not None and (type(valid_days) is not int or not 1 <= valid_days <= 36500 or expires_at is not None):
                 raise ValueError("Invalid first-connection validity.")
-            if type(max_connections) is not int or not 1 <= max_connections <= 10000:
+            if type(max_connections) is not int or not 0 <= max_connections <= 10000:
                 raise ValueError("Invalid connection limit.")
+            max_connections = max_connections or None
             if traffic_limit_bytes is not None and (type(traffic_limit_bytes) is not int or
                                                     not 1 <= traffic_limit_bytes <= 100000 * 1024 ** 3):
                 raise ValueError("Invalid traffic limit.")
@@ -242,8 +243,10 @@ def main():
                     raise ValueError("Expiry must be in the future.")
                 if valid_days is not None and (type(valid_days) is not int or not 1 <= valid_days <= 36500):
                     raise ValueError("Invalid validity period.")
-                if "max_connections" in request and (type(max_connections) is not int or not 1 <= max_connections <= 10000):
+                if "max_connections" in request and (type(max_connections) is not int or not 0 <= max_connections <= 10000):
                     raise ValueError("Invalid connection limit.")
+                if max_connections == 0:
+                    max_connections = None
                 if traffic_limit_bytes is not None and (type(traffic_limit_bytes) is not int or
                                                         not 1 <= traffic_limit_bytes <= 100000 * 1024 ** 3):
                     raise ValueError("Invalid traffic limit.")

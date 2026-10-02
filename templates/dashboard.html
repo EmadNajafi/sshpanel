@@ -121,7 +121,7 @@
       <p><label for="{{ bulk_create_form.password.id_for_label }}">Fixed password (optional)</label>{{ bulk_create_form.password }}</p>
       <fieldset class="bulk-password-mode"><legend>Generated password</legend>{{ bulk_create_form.password_mode }}</fieldset>
       <p><label for="{{ bulk_create_form.password_length.id_for_label }}">Password length</label>{{ bulk_create_form.password_length }}</p>
-      <p><label for="{{ bulk_create_form.max_connections.id_for_label }}">Simultaneous connections</label>{{ bulk_create_form.max_connections }}</p>
+      <p><label for="{{ bulk_create_form.max_connections.id_for_label }}">Simultaneous connections</label>{{ bulk_create_form.max_connections }}<span class="helptext">0 means unlimited.</span></p>
       <p><label for="{{ bulk_create_form.traffic_gb.id_for_label }}">Traffic limit (GiB)</label>{{ bulk_create_form.traffic_gb }}<span class="helptext">Blank means unlimited.</span></p>
       <p><label for="{{ bulk_create_form.valid_days.id_for_label }}">Active days</label>{{ bulk_create_form.valid_days }}</p>
     </div>
@@ -159,7 +159,7 @@
     <p><label for="edit-referral-code">This user's referral code</label><input id="edit-referral-code" type="text" name="referral_code" autocomplete="off"><span class="helptext">Any unique length. Clear to remove the code.</span></p>
     <p><label for="edit-password">New password</label><input id="edit-password" type="password" name="password" maxlength="256" autocomplete="new-password"><span class="helptext">Leave blank to keep the current password.</span></p>
     <p><label for="edit-valid-days">New validity (days)</label><input id="edit-valid-days" type="number" name="valid_days" min="1" max="36500"><span class="helptext">Leave blank to keep the current expiry. Enter days to count from now.</span></p>
-    <p><label for="edit-connections">Simultaneous connections</label><input id="edit-connections" type="number" name="max_connections" min="1" max="10000"><span class="helptext">Leave blank to keep the current limit.</span></p>
+    <p><label for="edit-connections">Simultaneous connections</label><input id="edit-connections" type="number" name="max_connections" min="0" max="10000"><span class="helptext">0 means unlimited. Leave blank to keep the current limit.</span></p>
     <p><label for="edit-traffic">Traffic limit (GiB)</label><input id="edit-traffic" type="number" name="traffic_gb" min="0" max="100000" step="0.001"><span class="helptext">Blank keeps the current limit; 0 means unlimited.</span></p>
     <div class="dialog-actions"><button class="button button-secondary" type="button" data-close-dialog>Cancel</button><button class="button button-primary" type="submit">Save changes</button></div>
   </form>

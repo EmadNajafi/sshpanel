@@ -9,7 +9,7 @@
   }));
   const host = panel.dataset.host;
   const port = panel.dataset.port;
-  const connections = panel.dataset.connections;
+  const connections = panel.dataset.connections === "0" ? (window.panelT || ((value) => value))("Unlimited") : panel.dataset.connections;
   const traffic = panel.dataset.traffic;
   const t = window.panelT || ((value) => value);
   const details = rows.map((row) =>

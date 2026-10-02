@@ -16,7 +16,8 @@ class CreateAccountForm(forms.Form):
     username = forms.CharField(max_length=32, help_text="SSH login name, e.g. ali or vpn_ali")
     password = forms.CharField(widget=forms.PasswordInput, max_length=256, strip=False)
     valid_days = forms.IntegerField(min_value=1, max_value=36500, label="Active days")
-    max_connections = forms.IntegerField(min_value=1, max_value=10000, label="Simultaneous connections")
+    max_connections = forms.IntegerField(min_value=0, max_value=10000, initial=0,
+                                         label="Simultaneous connections", help_text="0 means unlimited.")
     traffic_gb = forms.DecimalField(required=False, min_value=Decimal("0.001"), max_value=Decimal("100000"),
                                     max_digits=9, decimal_places=3, label="Traffic limit (GiB)",
                                     help_text="Leave blank for unlimited traffic.")
@@ -53,7 +54,8 @@ class BulkCreateAccountForm(forms.Form):
     password_mode = forms.ChoiceField(choices=(("digits", "Numbers"), ("mixed", "Letters and numbers")),
                                       initial="digits", widget=forms.RadioSelect, label="Generated password")
     password_length = forms.IntegerField(min_value=4, max_value=64, initial=8, label="Password length")
-    max_connections = forms.IntegerField(min_value=1, max_value=10000, initial=1, label="Simultaneous connections")
+    max_connections = forms.IntegerField(min_value=0, max_value=10000, initial=0,
+                                         label="Simultaneous connections", help_text="0 means unlimited.")
     traffic_gb = forms.DecimalField(required=False, min_value=Decimal("0.001"), max_value=Decimal("100000"),
                                     max_digits=9, decimal_places=3, label="Traffic limit (GiB)",
                                     help_text="Leave blank for unlimited traffic.")
@@ -102,8 +104,8 @@ class EditAccountForm(forms.Form):
         help_text="Leave blank to keep the current expiry. Enter days to count from now.",
     )
     max_connections = forms.IntegerField(
-        required=False, min_value=1, max_value=10000, label="Simultaneous connections",
-        help_text="Leave blank to keep the current limit.",
+        required=False, min_value=0, max_value=10000, label="Simultaneous connections",
+        help_text="0 means unlimited. Leave blank to keep the current limit.",
     )
     traffic_gb = forms.DecimalField(
         required=False, min_value=Decimal("0"), max_value=Decimal("100000"),
