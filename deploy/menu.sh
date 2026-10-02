@@ -40,16 +40,16 @@ show_menu() {
   printf '  %sPANEL ACCESS%s\n' "$cyan" "$reset"
   printf '  Address   %s%s%s\n' "$green" "$(panel_url)" "$reset"
   printf '  Admin     %s%s%s\n' "$green" "$admins" "$reset"
-  printf '  Password  %sNot recoverable (stored as a hash); use option 8%s\n' "$dim" "$reset"
+  printf '  Password  %sNot recoverable (stored as a hash); use option 7%s\n' "$dim" "$reset"
   printf '\n  %sCERTIFICATES%s                 %sOPERATIONS%s\n' "$yellow" "$reset" "$magenta" "$reset"
   printf '   1  Issue or repair SSL         3  Service status\n'
   printf '   2  Renew SSL certificate       4  Restart panel and SSH\n'
   printf '                                 5  Recent logs\n'
   printf '                                 6  Back up database\n'
   printf '\n  %sADMINISTRATION%s\n' "$cyan" "$reset"
-  printf '   7  Create web administrator    8  Change admin password\n'
-  printf '   9  Publish panel on IPv4 (HTTP only)\n'
-  printf '  10  Completely uninstall panel\n'
+  printf '   7  Change admin password\n'
+  printf '   8  Publish panel on IPv4 (HTTP only)\n'
+  printf '   9  Completely uninstall panel\n'
   printf '\n   0  Exit\n\n'
   read -r -p "Choose: " choice
   case "$choice" in
@@ -67,10 +67,9 @@ show_menu() {
     4) systemctl restart sshvpn-panel; /usr/sbin/sshd -t && systemctl reload ssh ;;
     5) journalctl -u sshvpn-panel -u ssh -u sshvpn-policy.service -n 100 --no-pager ;;
     6) backup_db ;;
-    7) create_admin ;;
-    8) read -r -p "Administrator username: " admin_user; change_admin_password "$admin_user" ;;
-    9) read -r -p "Server public IPv4: " panel_ip; web_public "$panel_ip" ;;
-    10) bash /opt/ssh-vpn-panel/deploy/uninstall.sh ;;
+    7) read -r -p "Administrator username: " admin_user; change_admin_password "$admin_user" ;;
+    8) read -r -p "Server public IPv4: " panel_ip; web_public "$panel_ip" ;;
+    9) bash /opt/ssh-vpn-panel/deploy/uninstall.sh ;;
     0) exit 0 ;;
     *) echo "Invalid choice." >&2; exit 1 ;;
   esac
@@ -227,11 +226,6 @@ activate_tls() {
   echo "Panel HTTPS is active at https://$domain${PANEL_WEB_PATH:-}/"
 }
 
-create_admin() {
-  cd /opt/ssh-vpn-panel
-  runuser -u sshvpn-panel -- .venv/bin/python manage.py createsuperuser
-}
-
 change_admin_password() {
   if [[ $# -ne 1 ]]; then
     echo "Usage: sudo menu admin-password USERNAME" >&2
@@ -257,10 +251,9 @@ case "${1:-menu}" in
   restart) systemctl restart sshvpn-panel; /usr/sbin/sshd -t && systemctl reload ssh ;;
   logs) journalctl -u sshvpn-panel -u ssh -u sshvpn-policy.service -n 100 --no-pager ;;
   backup) backup_db ;;
-  admin) create_admin ;;
   admin-password) shift; change_admin_password "$@" ;;
   vpn-public|vpn-local) echo 'VPN accounts now use the main SSH port; no separate VPN listener exists.' >&2; exit 1 ;;
   web-public) shift; web_public "$@" ;;
   uninstall) shift; bash /opt/ssh-vpn-panel/deploy/uninstall.sh "$@" ;;
-  *) echo "Usage: sshvpn-menu [menu|ssl [DOMAIN EMAIL]|renew|status|restart|logs|backup|admin|admin-password USERNAME|web-public SERVER_PUBLIC_IPV4|uninstall [--dry-run]]" >&2; exit 1 ;;
+  *) echo "Usage: sshvpn-menu [menu|ssl [DOMAIN EMAIL]|renew|status|restart|logs|backup|admin-password USERNAME|web-public SERVER_PUBLIC_IPV4|uninstall [--dry-run]]" >&2; exit 1 ;;
 esac
