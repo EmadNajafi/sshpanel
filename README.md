@@ -48,12 +48,12 @@ For an existing installation, update the checkout with `git pull --ff-only` and 
 To make a previously loopback-only HTTP panel reachable at the server's public IPv4, run `sudo menu web-public SERVER_PUBLIC_IP` after upgrading. This switches Nginx to port 80 and updates Django's allowed host without changing VPN users or SSH ports. Allow inbound TCP 80 in the host and provider firewalls if needed. Administrator credentials are unencrypted over HTTP until you opt into SSL.
 
 1. Keep an administrator SSH session open and take a server snapshot. Open a root shell with `sudo -i` if needed.
-2. Run the bootstrap command below. It clones the public repository to `/root/sshpanel` and runs `deploy/install.sh`. You can pass a domain or IPv4 address after the process substitution to skip the host prompt.
-3. The **first interactive prompts** ask for the web administrator username and password, including password confirmation. The password input is hidden, is sent to Django through stdin, and is stored only as a hash.
-4. Enter the domain or IPv4 address for the panel if prompted. The installer starts the panel on **HTTP port 80** with a generated path, prints the full URL, and does not request a certificate.
+2. Run the bootstrap command below. It clears the terminal, clones the public repository to `/root/sshpanel`, and runs `deploy/install.sh`. You can pass a domain or IPv4 address after the process substitution to override automatic IPv4 detection.
+3. The installer offers the default web administrator `admin` with password `123456`. Confirm it or choose your own username and password. A custom password is hidden while entering it and confirmed once. The password is sent to Django through stdin and stored only as a hash. The chosen credentials are printed once at the end of installation; keep the terminal output private. Change the public default password after first login.
+4. The installer detects the server's public IPv4 address automatically. If detection fails, rerun it with a domain or IPv4 address as an argument. It starts the panel on **HTTP port 80** with a generated path, prints the full URL and administrator credentials, and does not request a certificate.
 5. Test VPN forwarding and denied shell/SFTP/internal destinations on the server's existing SSH port.
 
-From an interactive root shell, run this command. The installer will ask for this server's IP address or domain:
+From an interactive root shell, run this command:
 
 ```sh
 bash <(curl -fsSL --ipv4 https://raw.githubusercontent.com/EmadNajafi/sshpanel/main/install.sh)

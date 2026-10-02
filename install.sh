@@ -25,6 +25,9 @@ if [[ -e /opt/ssh-vpn-panel || -e /etc/sshvpn/panel.env ]]; then
   echo 'An installation already exists. Use the documented upgrade procedure; no data was changed.' >&2
   exit 1
 fi
+printf '\033[H\033[2J'
+echo 'SSH VPN Panel installer'
+echo 'Preparing the panel files...'
 if ! command -v git >/dev/null 2>&1; then
   apt-get update
   DEBIAN_FRONTEND=noninteractive apt-get install -y git ca-certificates
