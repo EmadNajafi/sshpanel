@@ -75,6 +75,8 @@ Open the full `http://localhost:8080/.../` URL printed by the installer on the c
 
 `sudo menu` opens an interactive list. Direct commands include `ssl`, `renew`, `status`, `restart`, `logs`, `backup`, `admin`, and `admin-password USERNAME`.
 
+To remove the installation, inspect the plan with `sudo menu uninstall --dry-run`, then run `sudo menu uninstall` in an interactive terminal and type `DELETE SSHVPN`. This permanently removes the panel database, web administrators, VPN Linux accounts and their policies, all local panel backups, services, Nginx site, dedicated certificate, firewall tables, and `/root/sshpanel` checkout. It removes the panel's SSH/PAM hooks while preserving the current administrator SSH port. Shared Ubuntu packages, PostgreSQL and Nginx services, unrelated sites, and system journals remain. Download any backup you need before uninstalling.
+
 ## Verification
 
 On an Ubuntu 24.04 test VPS, the shared-port configuration was tested with a disposable password account. Password authentication and public TCP forwarding succeeded; shell sessions, forwarding to the server's loopback SSH port, and a second concurrent login at a limit of one were denied. The disposable account was deleted afterward. A new administrator SSH connection still succeeded. The web operations create, disable, enable, reset password, and delete passed against PostgreSQL and Linux accounts.

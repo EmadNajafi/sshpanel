@@ -49,6 +49,7 @@ show_menu() {
   printf '\n  %sADMINISTRATION%s\n' "$cyan" "$reset"
   printf '   7  Create web administrator    8  Change admin password\n'
   printf '   9  Publish panel on IPv4 (HTTP only)\n'
+  printf '  10  Completely uninstall panel\n'
   printf '\n   0  Exit\n\n'
   read -r -p "Choose: " choice
   case "$choice" in
@@ -69,6 +70,7 @@ show_menu() {
     7) create_admin ;;
     8) read -r -p "Administrator username: " admin_user; change_admin_password "$admin_user" ;;
     9) read -r -p "Server public IPv4: " panel_ip; web_public "$panel_ip" ;;
+    10) bash /opt/ssh-vpn-panel/deploy/uninstall.sh ;;
     0) exit 0 ;;
     *) echo "Invalid choice." >&2; exit 1 ;;
   esac
@@ -259,5 +261,6 @@ case "${1:-menu}" in
   admin-password) shift; change_admin_password "$@" ;;
   vpn-public|vpn-local) echo 'VPN accounts now use the main SSH port; no separate VPN listener exists.' >&2; exit 1 ;;
   web-public) shift; web_public "$@" ;;
-  *) echo "Usage: sshvpn-menu [menu|ssl [DOMAIN EMAIL]|renew|status|restart|logs|backup|admin|admin-password USERNAME|web-public SERVER_PUBLIC_IPV4]" >&2; exit 1 ;;
+  uninstall) shift; bash /opt/ssh-vpn-panel/deploy/uninstall.sh "$@" ;;
+  *) echo "Usage: sshvpn-menu [menu|ssl [DOMAIN EMAIL]|renew|status|restart|logs|backup|admin|admin-password USERNAME|web-public SERVER_PUBLIC_IPV4|uninstall [--dry-run]]" >&2; exit 1 ;;
 esac
