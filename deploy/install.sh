@@ -170,6 +170,9 @@ systemctl enable --now sshvpn-egress
 sshvpn-configure-main-ssh
 systemctl enable --now postgresql nginx sshvpn-panel sshvpn-policy.timer sshvpn-usage.timer
 systemctl reload nginx
+if git -C "$repo_dir" rev-parse --verify HEAD >/dev/null 2>&1; then
+  git -C "$repo_dir" rev-parse --verify HEAD > /opt/ssh-vpn-panel/.installed-commit
+fi
 echo
 echo '============================================================'
 echo '                 SSH VPN PANEL INSTALLED'

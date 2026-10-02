@@ -129,6 +129,9 @@ systemctl enable --now sshvpn-policy.timer
 systemctl enable --now sshvpn-usage.timer
 systemctl restart sshvpn-panel
 systemctl is-active --quiet sshvpn-panel
+if git -C "$repo_dir" rev-parse --verify HEAD >/dev/null 2>&1; then
+  git -C "$repo_dir" rev-parse --verify HEAD > /opt/ssh-vpn-panel/.installed-commit
+fi
 
 echo "Upgrade complete. Existing accounts and web administrator were retained."
 echo "Backup: $backup_dir"

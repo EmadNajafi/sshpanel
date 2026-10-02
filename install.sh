@@ -33,12 +33,10 @@ if [[ $installed -eq 0 && ! -t 0 ]]; then
   exit 1
 fi
 printf '\033[H\033[2J'
-if [[ $installed -eq 1 ]]; then
-  echo 'SSH VPN Panel upgrade'
-else
+if [[ $installed -eq 0 ]]; then
   echo 'SSH VPN Panel installer'
+  echo 'Preparing the panel files...'
 fi
-echo 'Preparing the panel files...'
 if ! command -v git >/dev/null 2>&1; then
   apt-get update
   DEBIAN_FRONTEND=noninteractive apt-get install -y git ca-certificates
@@ -54,11 +52,26 @@ if [[ -e $checkout ]]; then
       git -C "$checkout" remote set-url origin "$repository" ;;
     *) echo "The checkout path $checkout points to a different repository. Review it before continuing." >&2; exit 1 ;;
   esac
-  git -C "$checkout" pull --ff-only
+  if [[ $installed -eq 1 ]]; then
+    git -C "$checkout" pull --ff-only --quiet
+  else
+    git -C "$checkout" pull --ff-only
+  fi
 else
-  git clone --depth 1 --branch main "$repository" "$checkout"
+  if [[ $installed -eq 1 ]]; then
+    git clone --quiet --depth 1 --branch main "$repository" "$checkout"
+  else
+    git clone --depth 1 --branch main "$repository" "$checkout"
+  fi
 fi
 if [[ $installed -eq 1 ]]; then
+  installed_commit_file=/opt/ssh-vpn-panel/.installed-commit
+  if [[ -f $installed_commit_file &&
+        $(<"$installed_commit_file") == "$(git -C "$checkout" rev-parse --verify HEAD)" ]]; then
+    echo 'The panel is already installed and up to date. No update is needed.'
+    exit 0
+  fi
+  echo 'SSH VPN Panel upgrade'
   bash "$checkout/deploy/upgrade.sh"
 else
   bash "$checkout/deploy/install.sh" "$@"
