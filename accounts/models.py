@@ -27,6 +27,7 @@ class VpnAccount(models.Model):
     activated_at = models.DateTimeField(null=True, blank=True)
     referral_code = models.TextField(blank=True, default="")
     referral_code_hash = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    referral_note = models.TextField(blank=True, default="")
     referred_by = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="referrals")
     max_connections = models.PositiveIntegerField(null=True, blank=True)
     traffic_limit_bytes = models.PositiveBigIntegerField(null=True, blank=True)

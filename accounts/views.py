@@ -184,7 +184,7 @@ def unique_referral_code(code, *, exclude_pk=None):
 
 
 def provision_account(actor, username, password, valid_days, max_connections,
-                      referral, first_connection, traffic_limit_bytes, own_referral_code=""):
+                      referral, first_connection, traffic_limit_bytes, own_referral_code="", referral_note=""):
     own_referral_code = unique_referral_code(own_referral_code)
     expires_at = None if first_connection else timezone.now() + timedelta(days=valid_days)
     options = {"max_connections": max_connections}
@@ -200,7 +200,7 @@ def provision_account(actor, username, password, valid_days, max_connections,
             username=username, created_by=actor, expires_at=expires_at,
             valid_days=valid_days if first_connection else None,
             max_connections=max_connections, traffic_limit_bytes=traffic_limit_bytes,
-            referral_code=own_referral_code, referred_by=referral,
+            referral_code=own_referral_code, referred_by=referral, referral_note=referral_note,
             password_ciphertext=encrypt_password(password),
         )
     except Exception as exc:
@@ -267,11 +267,7 @@ def bulk_create_accounts(request):
                 messages.error(request, error)
         return redirect("dashboard")
     data = form.cleaned_data
-    try:
-        referral = referral_for(data["referred_by_code"])
-    except ProvisionError as exc:
-        messages.error(request, str(exc))
-        return redirect("dashboard")
+    referral_notes = data["referral_notes"] or [""] * data["count"]
     numbers = secrets.SystemRandom().sample(range(data["start_number"], data["start_number"] + 1_000_000),
                                              data["count"])
     usernames = [f"{data['prefix']}{number}" for number in numbers]
@@ -282,7 +278,7 @@ def bulk_create_accounts(request):
     created = []
     used_passwords = set()
     failure = None
-    for username in usernames:
+    for username, referral_note in zip(usernames, referral_notes):
         password = data["password"]
         if not password:
             for _ in range(100):
@@ -296,14 +292,15 @@ def bulk_create_accounts(request):
         try:
             account = provision_account(
                 request.user, username, password, data["valid_days"], data["max_connections"],
-                referral, data["start_on_first_connection"], traffic_bytes(data["traffic_gb"]),
+                None, data["start_on_first_connection"], traffic_bytes(data["traffic_gb"]),
+                referral_note=referral_note,
             )
         except ProvisionError as exc:
             record(request, username, "create", False)
             failure = f"Stopped at {username}: {exc}"
             break
         record(request, username, "create", True)
-        created.append({"username": username, "password": password, "referral_code": account.referral_code,
+        created.append({"username": username, "password": password, "referral_note": account.referral_note,
                         "expires_at": account.expires_at, "valid_days": data["valid_days"],
                         "first_connection": data["start_on_first_connection"]})
     response = render(request, "bulk_create_result.html", {

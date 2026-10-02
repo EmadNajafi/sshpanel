@@ -150,6 +150,8 @@ h1, h2, p { margin-top: 0; }
 .bulk-dialog .panel-description, .bulk-dialog .helptext { color: #9caabd; }
 .bulk-dialog label, .bulk-dialog legend { color: #b8c6d9; }
 .bulk-dialog input:not([type="checkbox"]):not([type="radio"]) { background: #263241; border-color: #3d4a5b; color: #fff; }
+.bulk-dialog textarea { width: 100%; min-height: 120px; padding: 10px 11px; resize: vertical; border: 1px solid #3d4a5b; border-radius: 9px; background: #263241; color: #fff; font: inherit; }
+.bulk-dialog textarea:focus { outline: none; border-color: #5f8cf1; box-shadow: 0 0 0 3px rgba(95, 140, 241, .2); }
 .bulk-dialog input::placeholder { color: #8c9aae; }
 .bulk-dialog .dialog-close { background: #29394c; color: #e8effa; }
 .bulk-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 16px; }
