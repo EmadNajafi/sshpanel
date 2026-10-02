@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}Bulk users · SSH VPN Panel{% endblock %}
-{% block scripts %}<script src="{% static 'bulk-result.js' %}?v=2" defer></script>{% endblock %}
+{% block scripts %}<script src="{% static 'bulk-result.js' %}?v=3" defer></script>{% endblock %}
 {% block content %}
 <div class="page-heading"><div><p class="eyebrow">BULK VPN USERS</p><h1>Creation result</h1><p class="page-intro">{{ created|length }} of {{ requested }} users created. Save the credentials before leaving this page.</p></div><a class="button button-secondary" href="{% url 'dashboard' %}">Back to users</a></div>
 {% if failure %}<div class="bulk-warning" role="alert">{{ failure }} Existing rows below were created and remain active.</div>{% endif %}

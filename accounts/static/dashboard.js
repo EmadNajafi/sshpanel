@@ -111,7 +111,7 @@
       event.preventDefault();
       return;
     }
-    if (actionSelect.value === "delete" && !window.confirm(`Delete ${selected.length} selected users? This cannot be undone.`)) {
+    if (actionSelect.value === "delete" && !window.panelConfirm(`Delete ${selected.length} selected users? This cannot be undone.`)) {
       event.preventDefault();
     }
   });
@@ -196,15 +196,16 @@
         if (!response.ok) throw new Error("Could not load the password.");
         const { password } = await response.json();
         if (password === null || password === undefined) throw new Error("Password unavailable. Set a new password first.");
+        const t = window.panelT || ((value) => value);
         const details = [
-          `Host: ${window.location.hostname}`,
-          `SSH port: ${document.querySelector("[data-ssh-port]").dataset.sshPort}`,
-          `Username: ${row.dataset.accountUsername}`,
-          `Password: ${password}`,
+          `${t("Host")}: ${window.location.hostname}`,
+          `${t("SSH port")}: ${document.querySelector("[data-ssh-port]").dataset.sshPort}`,
+          `${t("Username")}: ${row.dataset.accountUsername}`,
+          `${t("Password")}: ${password}`,
           row.dataset.validDays ? `شروع اعتبار: اولین اتصال موفق (${row.dataset.validDays} روز)` :
             `تاریخ انقضا (شمسی): ${formatPersianExpiry(row.dataset.expiresAt)}`,
-          `Connection limit: ${button.dataset.connections || "Unlimited"}`,
-          `Traffic limit: ${row.dataset.trafficDisplay || "Unlimited"}`,
+          `${t("Connection limit")}: ${button.dataset.connections || t("Unlimited")}`,
+          `${t("Traffic limit")}: ${row.dataset.trafficDisplay || t("Unlimited")}`,
         ].join("\n");
         if (await copyText(details)) {
           showFeedback(`Connection details for ${row.dataset.accountUsername} copied.`);

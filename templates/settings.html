@@ -34,7 +34,7 @@
           <div class="settings-callout"><strong>Port change in progress</strong><p>Ports {{ pending_port.old }} and {{ pending_port.new }} are active. Open a new SSH connection from outside the server on port {{ pending_port.new }} before confirming.</p></div>
           <div class="settings-actions">
             <form method="post" action="{% url 'cancel_ssh_port' %}">{% csrf_token %}<button class="button button-secondary" type="submit">Cancel change</button></form>
-            <form method="post" action="{% url 'finalize_ssh_port' %}" onsubmit="return confirm('Have you connected to the new SSH port {{ pending_port.new }} from outside the server? The old port will close.')">{% csrf_token %}<button class="button button-primary" type="submit">Confirm port {{ pending_port.new }}</button></form>
+            <form method="post" action="{% url 'finalize_ssh_port' %}" onsubmit="return panelConfirm('Have you connected to the new SSH port {{ pending_port.new }} from outside the server? The old port will close.')">{% csrf_token %}<button class="button button-primary" type="submit">Confirm port {{ pending_port.new }}</button></form>
           </div>
         {% else %}
           <form method="post" action="{% url 'stage_ssh_port' %}" class="settings-port-form">{% csrf_token %}

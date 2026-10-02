@@ -19,7 +19,7 @@
     <section class="panel settings-section backup-action">
       <div class="settings-section-head"><span class="settings-section-icon settings-icon-purple" aria-hidden="true">02</span><div><p class="eyebrow">IMPORT</p><h2>Restore from file</h2><p>Bring panel data onto an installed server.</p></div></div>
       <p class="backup-action-copy">Restoring replaces the destination panel database and administrator accounts. Its web address, TLS mode, database connection, and SSH port stay local.</p>
-      <form method="post" action="{% url 'restore_backup' %}" enctype="multipart/form-data" class="backup-restore-form" onsubmit="return confirm('Restore the selected backup? Current panel data and administrator accounts will be replaced. A server-side recovery copy will be created first.')">{% csrf_token %}
+      <form method="post" action="{% url 'restore_backup' %}" enctype="multipart/form-data" class="backup-restore-form" onsubmit="return panelConfirm('Restore the selected backup? Current panel data and administrator accounts will be replaced. A server-side recovery copy will be created first.')">{% csrf_token %}
         <p><label for="restore-file">Backup file (.tar.gz)</label><input id="restore-file" name="backup_file" type="file" accept=".tar.gz,application/gzip" required></p>
         <p class="restore-confirm"><label><input type="checkbox" name="confirm_replace" value="yes" required> Replace this panel's data with the backup</label></p>
         <button class="button button-secondary" type="submit">Restore backup</button>

@@ -638,7 +638,14 @@ class AccountViewsTests(TestCase):
         self.assertContains(response, "20%")
         self.assertContains(response, 'id="create-account-dialog"')
         self.assertContains(response, 'id="edit-account-dialog"')
+        self.assertContains(response, 'data-language-toggle')
+        self.assertContains(response, 'i18n.js')
+        self.assertContains(response, 'data-ssh-port="22"')
+        self.assertNotContains(response, 'class="port-card"')
         self.assertNotContains(response, 'class="panel create-panel"')
+        self.client.cookies["django_language"] = "fa"
+        self.assertEqual(self.client.get(reverse("dashboard"))["Content-Language"], "fa")
+        del self.client.cookies["django_language"]
         response = self.client.get(reverse("system_metrics"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["memory"]["percent"], 40)

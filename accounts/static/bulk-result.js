@@ -11,8 +11,9 @@
   const port = panel.dataset.port;
   const connections = panel.dataset.connections;
   const traffic = panel.dataset.traffic;
+  const t = window.panelT || ((value) => value);
   const details = rows.map((row) =>
-    `Host: ${host}\nSSH port: ${port}\nUsername: ${row.username}\nPassword: ${row.password}\nExpiry: ${row.expiry}\nConnection limit: ${connections}\nTraffic limit: ${traffic}\nReferral text: ${row.referralText}`
+    `${t("Host")}: ${host}\n${t("SSH port")}: ${port}\n${t("Username")}: ${row.username}\n${t("Password")}: ${row.password}\n${t("Expiry")}: ${row.expiry}\n${t("Connection limit")}: ${connections}\n${t("Traffic limit")}: ${traffic}\n${t("Referral text")}: ${row.referralText}`
   ).join("\n\n");
   panel.querySelector("[data-bulk-copy]").addEventListener("click", async () => {
     try {

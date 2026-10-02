@@ -49,6 +49,8 @@ h1, h2, p { margin-top: 0; }
 .brand-label strong { font-size: 15px; letter-spacing: .015em; }
 .brand-label small { color: #9cabca; font-size: 11px; margin-top: 3px; }
 .header-actions { display: flex; align-items: center; gap: 18px; }
+.language-toggle { min-height: 40px; padding: 0 12px; border: 1px solid #465672; border-radius: 11px; background: #21314b; color: #f5f8ff; font-size: 12px; font-weight: 750; }
+.language-toggle:hover, .language-toggle:focus-visible { background: #304666; border-color: #7791bd; }
 .theme-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border: 1px solid #465672; border-radius: 11px; background: #21314b; color: #f5f8ff; font-size: 12px; font-weight: 750; }
 .theme-toggle:hover, .theme-toggle:focus-visible { background: #304666; border-color: #7791bd; }
 .theme-icon { font-size: 19px; line-height: 1; }
@@ -93,10 +95,6 @@ h1, h2, p { margin-top: 0; }
 .page-heading h1 { margin: 0 0 6px; font-size: clamp(30px, 3vw, 42px); line-height: 1.12; letter-spacing: -.04em; }
 .page-intro, .muted { color: var(--muted); }
 .page-intro { margin-bottom: 0; font-size: 14px; }
-.port-card { display: grid; gap: 2px; min-width: 225px; padding: 15px 18px; border-radius: 14px; background: #e9f0ff; border: 1px solid #d7e4ff; }
-.port-card-label { color: #4b6fae; font-size: 10px; letter-spacing: .15em; font-weight: 800; }
-.port-card strong { color: #1a50ba; font-size: 27px; line-height: 1.1; letter-spacing: -.04em; }
-.port-card small { color: #5d75a1; font-size: 11px; }
 
 .panel, .login-card { background: #fff; border: 1px solid var(--border); box-shadow: var(--shadow); }
 .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-bottom: 20px; }
@@ -365,16 +363,13 @@ td { color: #506078; font-size: 12px; }
 :root[data-theme="dark"] .nav-drawer { background: #182538; color: var(--ink); }
 :root[data-theme="dark"] .nav-drawer::backdrop,
 :root[data-theme="dark"] .account-dialog::backdrop { background: rgba(1, 6, 14, .76); }
-:root[data-theme="dark"] .port-card,
 :root[data-theme="dark"] .settings-current-port,
 :root[data-theme="dark"] .settings-recovery-row,
 :root[data-theme="dark"] .drawer-profile,
 :root[data-theme="dark"] .backup-empty { background: #1d314b; border-color: #385373; }
-:root[data-theme="dark"] .port-card strong,
 :root[data-theme="dark"] .settings-current-port strong,
 :root[data-theme="dark"] .settings-detail-label,
-:root[data-theme="dark"] .port-card-label,
-:root[data-theme="dark"] .port-card small { color: #a9c8ff; }
+:root[data-theme="dark"] .settings-current-web strong { color: #a9c8ff; }
 :root[data-theme="dark"] .drawer-link,
 :root[data-theme="dark"] .settings-nav a,
 :root[data-theme="dark"] .summary-label,
@@ -458,6 +453,20 @@ td { color: #506078; font-size: 12px; }
 :root[data-theme="dark"] .password-details summary { color: #a9c8ff; }
 :root[data-theme="dark"] .password-details summary:hover { background: #263e5d; }
 
+:root[dir="rtl"] { font-family: Tahoma, "Segoe UI", ui-sans-serif, sans-serif; }
+:root[dir="rtl"] th,
+:root[dir="rtl"] td,
+:root[dir="rtl"] .account-name-button { text-align: right; }
+:root[dir="rtl"] .nav-drawer { inset: 0 auto 0 0; border-radius: 0 20px 20px 0; box-shadow: 24px 0 75px rgba(8, 21, 41, .24); }
+:root[dir="rtl"] .drawer-section-label { margin: 0 11px 9px 0; }
+:root[dir="rtl"] .action-feedback { right: auto; left: 22px; }
+:root[dir="rtl"] .bulk-action-bar > strong { margin-right: 0; margin-left: 5px; }
+:root[dir="rtl"] .sessions-list code { text-align: left; direction: ltr; }
+:root[dir="rtl"] input[type="password"],
+:root[dir="rtl"] input[name="port"],
+:root[dir="rtl"] .copy-details-text { direction: ltr; text-align: left; }
+:root[dir="rtl"] .account-search-controls input { text-align: right; }
+
 @media (max-width: 720px) {
   .backup-action-grid { grid-template-columns: 1fr; }
   .settings-layout { grid-template-columns: 1fr; gap: 16px; }
@@ -471,7 +480,6 @@ td { color: #506078; font-size: 12px; }
   .site-header-inner { padding: 0 18px; }
   .app-shell { padding: 25px 16px 50px; }
   .page-heading { align-items: stretch; flex-direction: column; }
-  .port-card { width: 100%; }
   .summary-grid { grid-template-columns: 1fr; gap: 11px; }
   .summary-card { min-height: 135px; padding: 17px 19px; }
   .summary-icon { margin-bottom: 7px; }
@@ -479,6 +487,9 @@ td { color: #506078; font-size: 12px; }
   .admin-badge { display: none; }
 }
 @media (max-width: 520px) {
+  .header-actions { gap: 6px; }
+  .language-toggle, .theme-toggle, .menu-toggle { padding-inline: 8px; }
+  .menu-toggle > span:last-child { display: none; }
   .account-search-controls { flex-wrap: wrap; }
   .account-search-controls input { flex-basis: 100%; max-width: none; }
   .bulk-grid { grid-template-columns: 1fr; }

@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}Overview · SSH VPN Panel{% endblock %}
-{% block scripts %}<script src="{% static 'dashboard.js' %}?v=13" defer></script>{% endblock %}
+{% block scripts %}<script src="{% static 'dashboard.js' %}?v=14" defer></script>{% endblock %}
 {% block content %}
 <svg class="action-icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
   <symbol id="action-edit" viewBox="0 0 24 24"><path d="m4 16-.5 4.5L8 20l11-11-4-4L4 16Zm9.5-9.5 4 4M13 20h7"/></symbol>
@@ -18,11 +18,6 @@
     <h1>Dashboard</h1>
     <p class="page-intro">Manage SSH tunnel accounts and see who's connected right now.</p>
   </div>
-  <div class="port-card" data-ssh-port="{{ vpn_ssh_port }}">
-    <span class="port-card-label">VPN SSH PORT</span>
-    <strong>{{ vpn_ssh_port }}</strong>
-    <small>Uses the server's main SSH service</small>
-  </div>
 </div>
 
 <div id="account-overview-root" data-total="{{ account_total }}" data-online="{{ account_online|default_if_none:'' }}" data-inactive="{{ account_inactive }}">
@@ -34,7 +29,7 @@
 </div>
 
 <div class="dashboard-grid">
-  <section class="panel accounts-panel" data-usage-url="{% url 'account_usage' %}">
+  <section class="panel accounts-panel" data-usage-url="{% url 'account_usage' %}" data-ssh-port="{{ vpn_ssh_port }}">
     <div class="panel-heading">
       <div><p class="eyebrow">YOUR USERS</p><h2>VPN accounts</h2></div>
       <div class="account-heading-actions">
@@ -86,11 +81,11 @@
               <div class="row-actions" role="group" aria-label="Actions for {{ account.username }}">
                 <button class="action-button" type="button" data-edit-account data-action="{% url 'edit_account' account.pk %}" data-username="{{ account.username }}" data-expires="{% if account.valid_days and not account.activated_at %}{{ account.valid_days }} days after first connection{% else %}{{ account.expires_at|date:'Y-m-d H:i'|default:'Unlimited' }}{% endif %}" data-connections="{{ account.max_connections|default_if_none:'' }}" data-referral-code="{{ account.referral_code|default_if_none:'' }}" aria-label="Edit {{ account.username }}" title="Edit"><svg><use href="#action-edit"/></svg></button>
                 <button class="action-button action-button-extend" type="button" data-extend-account data-action="{% url 'extend_account' account.pk %}" data-username="{{ account.username }}" aria-label="Extend {{ account.username }}" title="Extend validity"><svg><use href="#action-extend"/></svg></button>
-                <form method="post" action="{% url 'reset_account_traffic' account.pk %}" onsubmit="return confirm('Reset traffic for {{ account.username|escapejs }}?')">{% csrf_token %}<button class="action-button" type="submit" aria-label="Reset traffic for {{ account.username }}" title="Reset traffic"><svg><use href="#action-reset"/></svg></button></form>
+                <form method="post" action="{% url 'reset_account_traffic' account.pk %}" onsubmit="return panelConfirm('Reset traffic for {{ account.username|escapejs }}?')">{% csrf_token %}<button class="action-button" type="submit" aria-label="Reset traffic for {{ account.username }}" title="Reset traffic"><svg><use href="#action-reset"/></svg></button></form>
                 <button class="action-button" type="button" data-copy-account data-password-url="{% url 'account_password' account.pk %}" data-connections="{{ account.max_connections|default_if_none:'' }}" aria-label="Copy connection details for {{ account.username }}" title="Copy connection details"><svg><use href="#action-copy"/></svg></button>
                 {% if account.enabled %}<form method="post" action="{% url 'disable_account' account.pk %}">{% csrf_token %}<button class="action-button" type="submit" aria-label="Disable {{ account.username }}" title="Disable"><svg><use href="#action-pause"/></svg></button></form>
                 {% elif not account.is_expired %}<form method="post" action="{% url 'enable_account' account.pk %}">{% csrf_token %}<button class="action-button" type="submit" aria-label="Enable {{ account.username }}" title="Enable"><svg><use href="#action-play"/></svg></button></form>{% endif %}
-                <form method="post" action="{% url 'delete_account' account.pk %}" onsubmit="return confirm('Delete {{ account.username|escapejs }}?')">{% csrf_token %}<button class="action-button action-button-danger" type="submit" aria-label="Delete {{ account.username }}" title="Delete"><svg><use href="#action-delete"/></svg></button></form>
+                <form method="post" action="{% url 'delete_account' account.pk %}" onsubmit="return panelConfirm('Delete {{ account.username|escapejs }}?')">{% csrf_token %}<button class="action-button action-button-danger" type="submit" aria-label="Delete {{ account.username }}" title="Delete"><svg><use href="#action-delete"/></svg></button></form>
               </div>
             </td>
           </tr>
