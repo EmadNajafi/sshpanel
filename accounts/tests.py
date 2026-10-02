@@ -55,7 +55,7 @@ class AccountViewsTests(TestCase):
         def matches(query):
             page = self.client.get(reverse("dashboard"), {"q": query})
             self.assertEqual(page.context["account_total"], 3)
-            return [account.username for account in page.context["accounts"]]
+            return [account.username for account in page.context["accounts"] if account.matches_search]
 
         self.assertEqual(matches("BULK_USER"), ["bulk_user"])
         self.assertEqual(matches("مشتری"), ["bulk_user"])
@@ -234,6 +234,78 @@ class AccountViewsTests(TestCase):
         self.client.logout()
         self.assertEqual(self.client.post(reverse("bulk_create_accounts"), {"count": "1"}).status_code, 302)
         helper.assert_not_called()
+
+    @patch("accounts.views.call_helper")
+    def test_bulk_actions_apply_only_to_selected_users(self, helper):
+        first = VpnAccount.objects.create(username="first", created_by=self.staff, max_connections=2)
+        second = VpnAccount.objects.create(username="second", created_by=self.staff, max_connections=2)
+        untouched = VpnAccount.objects.create(username="untouched", created_by=self.staff)
+        selected = [str(first.pk), str(second.pk)]
+        action_url = reverse("bulk_account_action")
+
+        self.client.post(action_url, {"action": "disable", "account_ids": selected})
+        first.refresh_from_db()
+        second.refresh_from_db()
+        untouched.refresh_from_db()
+        self.assertFalse(first.enabled)
+        self.assertFalse(second.enabled)
+        self.assertTrue(untouched.enabled)
+        self.assertEqual(helper.call_count, 2)
+
+        self.client.post(action_url, {"action": "enable", "account_ids": selected})
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertTrue(first.enabled and second.enabled)
+        self.client.post(action_url, {"action": "usage-reset", "account_ids": selected})
+        self.assertEqual(helper.call_args_list[-2].args, ("usage-reset", "first"))
+        self.assertEqual(helper.call_args_list[-1].args, ("usage-reset", "second"))
+
+        with patch("accounts.views.sync_account_activation"):
+            self.client.post(action_url, {"action": "extend", "days": "30", "account_ids": selected})
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertGreater(first.expires_at, timezone.now() + timedelta(days=29))
+        self.assertGreater(second.expires_at, timezone.now() + timedelta(days=29))
+        self.client.post(action_url, {"action": "delete", "account_ids": selected})
+        self.assertEqual(list(VpnAccount.objects.values_list("username", flat=True)), ["untouched"])
+
+    @patch("accounts.views.call_helper")
+    def test_bulk_action_rejects_invalid_selection_before_mutation(self, helper):
+        account = VpnAccount.objects.create(username="first", created_by=self.staff)
+        response = self.client.post(reverse("bulk_account_action"), {
+            "action": "disable", "account_ids": [str(account.pk), "999999"],
+        })
+        self.assertEqual(response.status_code, 302)
+        account.refresh_from_db()
+        self.assertTrue(account.enabled)
+        helper.assert_not_called()
+
+    @patch("accounts.views.call_helper")
+    def test_bulk_action_requires_staff_post_and_valid_extension(self, helper):
+        account = VpnAccount.objects.create(username="first", created_by=self.staff)
+        url = reverse("bulk_account_action")
+        self.assertEqual(self.client.get(url).status_code, 405)
+        self.client.post(url, {"action": "extend", "days": "13", "account_ids": [str(account.pk)]})
+        account.refresh_from_db()
+        self.assertIsNone(account.expires_at)
+        helper.assert_not_called()
+        self.client.logout()
+        self.assertEqual(self.client.post(url, {"action": "delete", "account_ids": [str(account.pk)]}).status_code, 302)
+        self.assertTrue(VpnAccount.objects.filter(pk=account.pk).exists())
+
+    @patch("accounts.views.call_helper")
+    def test_bulk_action_reports_partial_failure(self, helper):
+        first = VpnAccount.objects.create(username="first", created_by=self.staff)
+        second = VpnAccount.objects.create(username="second", created_by=self.staff)
+        helper.side_effect = ["", ProvisionError("unavailable")]
+        response = self.client.post(reverse("bulk_account_action"), {
+            "action": "disable", "account_ids": [str(first.pk), str(second.pk)],
+        })
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertFalse(first.enabled)
+        self.assertTrue(second.enabled)
+        self.assertIn("1 failed", " ".join(str(message) for message in response.wsgi_request._messages))
 
     @patch("accounts.views.call_helper")
     def test_traffic_limit_can_be_changed_and_cleared(self, helper):

@@ -138,6 +138,15 @@ h1, h2, p { margin-top: 0; }
 .account-search-controls { display: flex; align-items: center; gap: 9px; }
 .account-search-controls input { flex: 1 1 240px; min-width: 0; max-width: 440px; }
 .account-search-count { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+.bulk-action-bar { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin: 0 0 16px; padding: 12px; border: 1px solid #d8e5f8; border-radius: 12px; background: #f4f8ff; }
+.bulk-action-bar[hidden], [data-filter-empty][hidden], [data-clear-search][hidden], [data-search-count][hidden], [data-bulk-days][hidden] { display: none; }
+tr[data-account-username][hidden] { display: none; }
+.bulk-action-bar > strong { margin-right: 5px; font-size: 12px; white-space: nowrap; }
+.bulk-action-bar label { margin: 0; }
+.bulk-action-bar select { min-height: 39px; padding: 7px 10px; border: 1px solid #d6dfeb; border-radius: 9px; background: #fff; color: var(--ink); }
+.bulk-action-days { display: inline-flex; align-items: center; gap: 6px; }
+input[data-select-all], input[data-select-account] { width: 17px; height: 17px; min-height: 0; padding: 0; accent-color: var(--blue); cursor: pointer; }
+tr[data-account-username].is-selected { background: #f3f7ff; }
 .create-trigger { display: inline-flex; align-items: center; gap: 9px; }
 .create-trigger span:first-child { font-size: 21px; font-weight: 400; line-height: .6; }
 .button-edit { background: #edf3ff; color: #3266c7; }
@@ -416,6 +425,9 @@ td { color: #506078; font-size: 12px; }
 :root[data-theme="dark"] .summary-inactive { --summary-color: #f1c58e; --summary-wash: #4c3c32; }
 :root[data-theme="dark"] .drawer-health { border-color: #304158; }
 :root[data-theme="dark"] .drawer-resource { background: #213149; border-color: #354862; }
+:root[data-theme="dark"] .bulk-action-bar { background: #203149; border-color: #39577e; }
+:root[data-theme="dark"] .bulk-action-bar select { background: #101c2d; border-color: #40536e; color: var(--ink); }
+:root[data-theme="dark"] tr[data-account-username].is-selected { background: #203149; }
 :root[data-theme="dark"] .drawer-resource-head span,
 :root[data-theme="dark"] .drawer-resource > span,
 :root[data-theme="dark"] .drawer-resource small { color: #a8b9ce; }

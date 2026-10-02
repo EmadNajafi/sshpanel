@@ -36,6 +36,87 @@
       if (event.target === dialog) dialog.close();
     });
   });
+
+  const searchForm = document.querySelector(".account-search");
+  const searchInput = searchForm.querySelector("[name=q]");
+  const clearSearch = searchForm.querySelector("[data-clear-search]");
+  const searchCount = searchForm.querySelector("[data-search-count]");
+  const accountRows = [...document.querySelectorAll("tr[data-account-username]")];
+  const filterEmpty = document.querySelector("[data-filter-empty]");
+  const listEmpty = document.querySelector("[data-account-list-empty] td");
+  const selectAll = document.querySelector("[data-select-all]");
+  const bulkForm = document.querySelector("[data-bulk-action-form]");
+  const actionSelect = bulkForm.querySelector("[data-bulk-action-select]");
+  const daysSelect = bulkForm.querySelector("[data-bulk-days]");
+
+  function updateSelection() {
+    const visible = accountRows.filter((row) => !row.hidden);
+    const selected = accountRows.filter((row) => row.querySelector("[data-select-account]").checked);
+    accountRows.forEach((row) => row.classList.toggle("is-selected", row.querySelector("[data-select-account]").checked));
+    selectAll.disabled = visible.length === 0;
+    selectAll.checked = visible.length > 0 && visible.every((row) => row.querySelector("[data-select-account]").checked);
+    selectAll.indeterminate = !selectAll.checked && visible.some((row) => row.querySelector("[data-select-account]").checked);
+    bulkForm.hidden = selected.length === 0;
+    bulkForm.querySelector("[data-selected-count]").textContent = `${selected.length} selected`;
+  }
+
+  function filterAccounts() {
+    const needle = searchInput.value.trim().toLocaleLowerCase();
+    let matches = 0;
+    accountRows.forEach((row) => {
+      const match = !needle || row.dataset.search.toLocaleLowerCase().includes(needle);
+      row.hidden = !match;
+      if (match) matches += 1;
+      row.querySelector("[data-select-account]").checked = false;
+    });
+    actionSelect.value = "";
+    daysSelect.hidden = true;
+    clearSearch.hidden = !needle;
+    searchCount.hidden = !needle;
+    searchCount.textContent = `${matches} matching users`;
+    filterEmpty.hidden = !needle || matches > 0 || accountRows.length === 0;
+    if (listEmpty) listEmpty.textContent = needle ? "No users match this search." : "No accounts yet. Use the + New user button to create one.";
+    const url = new URL(window.location.href);
+    if (needle) url.searchParams.set("q", searchInput.value.trim());
+    else url.searchParams.delete("q");
+    window.history.replaceState(null, "", url);
+    updateSelection();
+  }
+
+  searchInput.addEventListener("input", filterAccounts);
+  searchForm.addEventListener("submit", (event) => { event.preventDefault(); filterAccounts(); });
+  clearSearch.addEventListener("click", (event) => {
+    event.preventDefault();
+    searchInput.value = "";
+    filterAccounts();
+    searchInput.focus();
+  });
+  accountRows.forEach((row) => row.querySelector("[data-select-account]").addEventListener("change", updateSelection));
+  selectAll.addEventListener("change", () => {
+    accountRows.filter((row) => !row.hidden).forEach((row) => {
+      row.querySelector("[data-select-account]").checked = selectAll.checked;
+    });
+    updateSelection();
+  });
+  bulkForm.querySelector("[data-clear-selection]").addEventListener("click", () => {
+    accountRows.forEach((row) => { row.querySelector("[data-select-account]").checked = false; });
+    actionSelect.value = "";
+    daysSelect.hidden = true;
+    updateSelection();
+  });
+  actionSelect.addEventListener("change", () => { daysSelect.hidden = actionSelect.value !== "extend"; });
+  bulkForm.addEventListener("submit", (event) => {
+    const selected = accountRows.filter((row) => row.querySelector("[data-select-account]").checked);
+    if (!selected.length || !actionSelect.value) {
+      event.preventDefault();
+      return;
+    }
+    if (actionSelect.value === "delete" && !window.confirm(`Delete ${selected.length} selected users? This cannot be undone.`)) {
+      event.preventDefault();
+    }
+  });
+  filterAccounts();
+
   const editDialog = document.getElementById("edit-account-dialog");
   document.querySelectorAll("[data-edit-account]").forEach((button) => {
     button.addEventListener("click", () => {

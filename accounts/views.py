@@ -108,23 +108,19 @@ def dashboard(request):
         account.days_remaining = (max(0, math.ceil((account.expires_at - now).total_seconds() / 86400))
                                   if account.expires_at is not None else None)
     search_query = request.GET.get("q", "").strip()
-    if search_query:
-        needle = search_query.casefold()
-        visible_accounts = [account for account in accounts if any(
-            needle in value.casefold() for value in (
-                account.username,
-                account.referral_code,
-                account.referral_note,
-                account.referred_by.referral_code if account.referred_by else "",
-                account.referred_by.username if account.referred_by else "",
-            )
-        )]
-    else:
-        visible_accounts = accounts
+    needle = search_query.casefold()
+    for account in accounts:
+        account.matches_search = not needle or any(needle in value.casefold() for value in (
+            account.username,
+            account.referral_code,
+            account.referral_note,
+            account.referred_by.referral_code if account.referred_by else "",
+            account.referred_by.username if account.referred_by else "",
+        ))
     return render(request, "dashboard.html", {
-        "accounts": visible_accounts,
+        "accounts": accounts,
         "search_query": search_query,
-        "search_result_count": len(visible_accounts),
+        "search_result_count": sum(account.matches_search for account in accounts),
         "account_total": summary["total"],
         "account_online": summary["online"],
         "account_inactive": summary["inactive"],
@@ -488,6 +484,88 @@ def enable_account(request, pk):
 @require_POST
 def delete_account(request, pk):
     return account_action(request, pk, "delete")
+
+
+@staff_required
+@require_POST
+def bulk_account_action(request):
+    action = request.POST.get("action", "")
+    if action not in {"enable", "disable", "extend", "usage-reset", "delete"}:
+        messages.error(request, "Choose a valid bulk action.")
+        return redirect("dashboard")
+    raw_ids = request.POST.getlist("account_ids")
+    if not raw_ids or any(not value.isdecimal() for value in raw_ids):
+        messages.error(request, "Select at least one valid user.")
+        return redirect("dashboard")
+    account_ids = list(dict.fromkeys(int(value) for value in raw_ids))
+    found = {account.pk: account for account in VpnAccount.objects.filter(pk__in=account_ids)}
+    if len(found) != len(account_ids):
+        messages.error(request, "The selection includes a user that no longer exists. Refresh the list and try again.")
+        return redirect("dashboard")
+    days = None
+    if action == "extend":
+        try:
+            days = int(request.POST.get("days", ""))
+        except ValueError:
+            days = None
+        if days not in (30, 60, 90):
+            messages.error(request, "Choose 30, 60, or 90 days.")
+            return redirect("dashboard")
+        sync_account_activation()
+        found = {account.pk: account for account in VpnAccount.objects.filter(pk__in=account_ids)}
+        if len(found) != len(account_ids):
+            messages.error(request, "The selection changed while processing. Refresh the list and try again.")
+            return redirect("dashboard")
+
+    succeeded = 0
+    skipped = 0
+    failures = []
+    for pk in account_ids:
+        account = found[pk]
+        try:
+            if action in ("enable", "disable"):
+                enabled = action == "enable"
+                if account.enabled == enabled:
+                    skipped += 1
+                    continue
+                if enabled and account.is_expired:
+                    raise ValueError("Extend this expired user before enabling it.")
+                call_helper(action, account.username)
+                account.enabled = enabled
+                account.save(update_fields=["enabled"])
+            elif action == "extend":
+                now = timezone.now()
+                pending = account.valid_days is not None and account.activated_at is None
+                if pending:
+                    valid_days = account.valid_days + days
+                    if valid_days > 36500:
+                        raise ValueError("Validity cannot exceed 36500 days.")
+                    call_helper("update", account.username, valid_days=valid_days,
+                                max_connections=account.max_connections, enabled=account.enabled)
+                    account.valid_days = valid_days
+                    account.save(update_fields=["valid_days"])
+                else:
+                    expires_at = max(account.expires_at or now, now) + timedelta(days=days)
+                    call_helper("update", account.username, expires_at=int(expires_at.timestamp()),
+                                max_connections=account.max_connections, enabled=account.enabled)
+                    account.expires_at = expires_at
+                    account.save(update_fields=["expires_at"])
+            elif action == "usage-reset":
+                call_helper("usage-reset", account.username)
+            else:
+                call_helper("delete", account.username)
+                account.delete()
+        except (ProvisionError, ValueError) as exc:
+            record(request, account.username, action, False)
+            failures.append(f"{account.username}: {exc}")
+        else:
+            record(request, account.username, action, True)
+            succeeded += 1
+    if succeeded or skipped:
+        messages.success(request, f"Bulk {action}: {succeeded} completed, {skipped} already in the requested state.")
+    if failures:
+        messages.error(request, f"{len(failures)} failed. " + "; ".join(failures[:5]))
+    return redirect("dashboard")
 
 
 @staff_required
