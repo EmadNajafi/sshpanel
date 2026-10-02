@@ -21,6 +21,7 @@ urlpatterns = [
     path("settings/backups/create/", views.create_backup, name="create_backup"),
     path("settings/backups/download/<str:name>/", views.download_backup, name="download_backup"),
     path("settings/backups/restore/", views.restore_backup, name="restore_backup"),
+    path("settings/backups/import-users/", views.import_users_backup, name="import_users_backup"),
     path("settings/admin-password/", views.change_admin_password, name="change_admin_password"),
     path("settings/ssh-port/stage/", views.stage_ssh_port, name="stage_ssh_port"),
     path("settings/ssh-port/finalize/", views.finalize_ssh_port, name="finalize_ssh_port"),

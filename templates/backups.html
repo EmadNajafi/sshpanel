@@ -28,7 +28,18 @@
   </div>
 
   <section class="panel settings-section backup-list-panel">
-    <div class="settings-section-head"><span class="settings-section-icon settings-icon-green" aria-hidden="true">03</span><div><p class="eyebrow">SAVED ON THIS SERVER</p><h2>Available backups</h2><p>Download a copy to keep outside this server.</p></div></div>
+    <div class="settings-section-head"><span class="settings-section-icon settings-icon-purple" aria-hidden="true">03</span><div><p class="eyebrow">USER MIGRATION</p><h2>Import users from Shahan</h2><p>Add VPN users without replacing this panel's administrator or server settings.</p></div></div>
+    <p class="backup-action-copy">Upload a users-only archive converted from a Shahan SQL backup. Usernames, passwords, connection limits, expiry, status and referral text are imported. An existing username stops the import; no user is overwritten. A recovery backup is created first.</p>
+    <p class="backup-sensitive-note">The archive contains plaintext VPN passwords. Keep it private and upload it over HTTPS or an administrator SSH tunnel.</p>
+    <form method="post" action="{% url 'import_users_backup' %}" enctype="multipart/form-data" class="backup-restore-form" onsubmit="return panelConfirm('Import users from this archive? Existing users and administrators will be kept. A recovery backup will be created first.')">{% csrf_token %}
+      <p><label for="import-users-file">Users-only archive (.tar.gz)</label><input id="import-users-file" name="backup_file" type="file" accept=".tar.gz,application/gzip" required></p>
+      <p class="restore-confirm"><label><input type="checkbox" name="confirm_import" value="yes" required> Add these users to this panel</label></p>
+      <button class="button button-secondary" type="submit">Import users</button>
+    </form>
+  </section>
+
+  <section class="panel settings-section backup-list-panel">
+    <div class="settings-section-head"><span class="settings-section-icon settings-icon-green" aria-hidden="true">04</span><div><p class="eyebrow">SAVED ON THIS SERVER</p><h2>Available backups</h2><p>Download a copy to keep outside this server.</p></div></div>
     {% if backups %}
       <div class="table-scroll"><table><thead><tr><th>File</th><th>Created</th><th>Size</th><th></th></tr></thead><tbody>
       {% for backup in backups %}<tr><td><strong class="account-name">{{ backup.name }}</strong></td><td class="nowrap">{{ backup.created|date:"Y-m-d H:i" }} UTC</td><td>{{ backup.size|filesizeformat }}</td><td><a class="button button-secondary" href="{% url 'download_backup' backup.name %}">Download</a></td></tr>{% endfor %}

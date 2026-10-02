@@ -722,6 +722,30 @@ def restore_backup(request):
 
 @staff_required
 @require_POST
+def import_users_backup(request):
+    upload = request.FILES.get("backup_file")
+    if not upload or request.POST.get("confirm_import") != "yes":
+        messages.error(request, "Choose a users-only archive and confirm the import.")
+        return redirect("backup_settings")
+    name = None
+    try:
+        name = save_upload(upload)
+        result = call_backup("import-users", name=name, actor_id=request.user.pk)
+    except (BackupError, OSError) as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, f"Imported {result['accounts']} users. Recovery backup: {result['recovery_backup']}.")
+    finally:
+        if name:
+            try:
+                (UPLOAD_DIR / name).unlink(missing_ok=True)
+            except OSError:
+                pass
+    return redirect("backup_settings")
+
+
+@staff_required
+@require_POST
 def change_admin_password(request):
     form = PasswordChangeForm(request.user, request.POST)
     if form.is_valid():

@@ -15,6 +15,7 @@ from unittest.mock import patch
 if sys.platform == "win32":
     for module in ("fcntl", "grp", "pwd", "spwd"):
         sys.modules.setdefault(module, types.ModuleType(module))
+sys.path.insert(0, str(Path(__file__).parents[1]))
 spec = importlib.util.spec_from_file_location("sshvpn_backup", Path(__file__).parents[1] / "sshvpn_backup.py")
 backup = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(backup)

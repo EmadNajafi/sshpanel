@@ -22,6 +22,7 @@ import sys
 import tarfile
 import tempfile
 from datetime import datetime, timezone
+from sshvpn_user_import import read_archive as read_user_import_archive, import_users
 
 BACKUP_DIR = Path("/var/lib/sshvpn-panel/backups")
 UPLOAD_DIR = Path("/var/lib/sshvpn-panel/restore-uploads")
@@ -362,8 +363,21 @@ def restore(upload_name):
     return len(accounts)
 
 
+def import_user_archive(upload_name, actor_id):
+    if not isinstance(upload_name, str) or not re.fullmatch(r"restore-[0-9a-f]{32}\.tar\.gz", upload_name):
+        raise ValueError("Invalid upload name.")
+    upload = UPLOAD_DIR / upload_name
+    if not upload.is_file() or upload.is_symlink():
+        raise ValueError("Uploaded user archive was not found.")
+    if type(actor_id) is not int or actor_id <= 0:
+        raise ValueError("Invalid importing administrator.")
+    users = read_user_import_archive(upload)
+    recovery_name = create()
+    return {"accounts": import_users(users, actor_id, env_values()), "recovery_backup": recovery_name}
+
+
 def main():
-    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in {"create", "restore"}:
+    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in {"create", "restore", "import-users"}:
         print("Invalid backup operation.", file=sys.stderr)
         return 1
     try:
@@ -372,6 +386,8 @@ def main():
             fcntl.flock(lock, fcntl.LOCK_EX)
             if sys.argv[1] == "create":
                 print(json.dumps({"name": create()}))
+            elif sys.argv[1] == "import-users":
+                print(json.dumps(import_user_archive(request["name"], request["actor_id"])))
             else:
                 print(json.dumps({"accounts": restore(request["name"])}))
     except (KeyError, ValueError, OSError, RuntimeError, subprocess.TimeoutExpired, tarfile.TarError, json.JSONDecodeError) as exc:
