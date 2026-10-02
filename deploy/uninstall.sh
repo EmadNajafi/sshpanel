@@ -107,8 +107,8 @@ echo 'This will permanently delete the web panel, PostgreSQL panel database, VPN
 echo 'stored passwords and secrets, all panel backups, traffic records, services, firewall'
 echo 'tables, Nginx site, panel certificate when dedicated to this site, and Git checkout.'
 echo "VPN accounts to delete: ${#vpn_users[@]}"
-echo 'The current administrator SSH port, other Nginx sites, PostgreSQL server and shared'
-echo 'Ubuntu packages will remain.'
+echo 'The current administrator SSH port and PostgreSQL server remain.'
+echo 'Nginx is purged if no other site or custom configuration uses it.'
 if [[ ${1:-} == --dry-run ]]; then
   echo 'Dry run only; nothing was deleted.'
   exit 0
@@ -163,8 +163,6 @@ if ! nginx -t || ! systemctl reload nginx; then
   echo 'Nginx check failed; its panel configuration was restored. Uninstall stopped.' >&2
   exit 1
 fi
-systemctl reload nginx
-
 # Certbot may share a certificate with another site; never delete a shared cert.
 panel_domain=$(sed -n 's/^PANEL_DOMAIN=//p' /etc/sshvpn/panel.env | head -n 1)
 if [[ $panel_domain =~ ^[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,}$ ]] && \
@@ -190,6 +188,9 @@ if id sshvpn-panel >/dev/null 2>&1; then userdel sshvpn-panel; fi
 if getent group sshvpn-panel >/dev/null; then groupdel sshvpn-panel; fi
 if getent group sshvpn >/dev/null; then groupdel sshvpn; fi
 
+if ! bash /opt/ssh-vpn-panel/deploy/purge-unused-nginx.sh --yes; then
+  echo 'Nginx was kept because it has other configuration or could not be purged.' >&2
+fi
 rm -rf -- /opt/ssh-vpn-panel /etc/sshvpn /var/lib/sshvpn-panel /var/lib/sshvpn /var/backups/sshvpn-panel
 rm -rf -- /run/sshvpn-policy
 rm -f -- /usr/local/sbin/sshvpnctl /usr/local/sbin/sshvpn-backup \
@@ -204,4 +205,4 @@ if [[ -L /usr/local/bin/menu && $(readlink /usr/local/bin/menu) == /usr/local/bi
 fi
 rm -f -- /usr/local/bin/sshvpn-menu
 if [[ -d $checkout ]]; then rm -rf -- "$checkout"; fi
-echo 'SSH VPN Panel was removed. Shared server services and the current SSH port remain.'
+echo 'SSH VPN Panel was removed. The current administrator SSH port remains.'
