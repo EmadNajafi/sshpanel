@@ -25,14 +25,17 @@ if [[ -e /opt/ssh-vpn-panel || -e /etc/sshvpn/panel.env ]]; then
   echo 'An installation already exists. Use the documented upgrade procedure; no data was changed.' >&2
   exit 1
 fi
-if [[ -e $checkout ]]; then
-  echo "The checkout path $checkout already exists. Review it before installing." >&2
-  exit 1
-fi
-
 if ! command -v git >/dev/null 2>&1; then
   apt-get update
   DEBIAN_FRONTEND=noninteractive apt-get install -y git ca-certificates
 fi
-git clone --depth 1 --branch main "$repository" "$checkout"
+if [[ -e $checkout ]]; then
+  if [[ ! -d $checkout/.git ]] || [[ $(git -C "$checkout" remote get-url origin) != "$repository" ]]; then
+    echo "The checkout path $checkout already exists and is not this repository. Review it before installing." >&2
+    exit 1
+  fi
+  git -C "$checkout" pull --ff-only
+else
+  git clone --depth 1 --branch main "$repository" "$checkout"
+fi
 bash "$checkout/deploy/install.sh" "$@"
