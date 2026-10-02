@@ -53,10 +53,10 @@ To make a previously loopback-only HTTP panel reachable at the server's public I
 4. Enter the domain or IPv4 address for the panel if prompted. The installer starts the panel on **HTTP port 80** with a generated path, prints the full URL, and does not request a certificate.
 5. Test VPN forwarding and denied shell/SFTP/internal destinations on the server's existing SSH port.
 
-For example, from an interactive root shell (the IPv4 address is optional):
+From an interactive root shell, run this command. The installer will ask for this server's IP address or domain:
 
 ```sh
-bash <(curl -fsSL --ipv4 https://raw.githubusercontent.com/EmadNajafi/sshpanel/main/install.sh) 203.0.113.10
+bash <(curl -fsSL --ipv4 https://raw.githubusercontent.com/EmadNajafi/sshpanel/main/install.sh)
 ```
 
 When you choose to use HTTPS later, point your domain to the server, allow ports 80 and 443, and run `sudo menu ssl panel.example.com admin@example.com`. A failed certificate request restores the previous HTTP configuration. Until HTTPS is enabled, administrator credentials travel over HTTP; use a trusted network or an SSH tunnel.

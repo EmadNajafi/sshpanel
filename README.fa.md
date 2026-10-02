@@ -40,10 +40,10 @@
 
 رابط فارسی از فونت محلی [Vazirmatn](https://github.com/rastikerdar/vazirmatn) نسخهٔ 33.003 استفاده می‌کند. مجوز SIL Open Font License آن در `accounts/static/fonts/OFL.txt` قرار دارد.
 
-برای نصب تازه، ابتدا در ترمینال تعاملی سرور دستور `sudo -i` را اجرا کنید؛ سپس این دستور را بزنید. IP یا دامنهٔ آخر دستور اختیاری است و اگر آن را ننویسید، نصاب از شما می‌پرسد. نام کاربری و رمز مدیر هم در ابتدای نصب روی همان سرور پرسیده می‌شوند:
+برای نصب تازه، ابتدا در ترمینال تعاملی سرور دستور `sudo -i` را اجرا کنید؛ سپس این دستور را بزنید. نصاب، IP یا دامنهٔ همان سرور و نام کاربری و رمز مدیر را می‌پرسد. گزینهٔ `--ipv4` فقط دانلود فایل از گیت‌هاب را با IPv4 انجام می‌دهد و IP پنل نیست:
 
 ```bash
-bash <(curl -fsSL --ipv4 https://raw.githubusercontent.com/EmadNajafi/sshpanel/main/install.sh) SERVER_PUBLIC_IP
+bash <(curl -fsSL --ipv4 https://raw.githubusercontent.com/EmadNajafi/sshpanel/main/install.sh)
 ```
 
 این دستور کل مخزن را در `/root/sshpanel` روی سرور مقصد دریافت می‌کند و نصاب اصلی را اجرا می‌کند. نصب تازه ابتدا با HTTP بالا می‌آید و SSL اختیاری است. برای نصب موجود، دوباره نصب نکنید؛ در همان مخزن روی سرور اجرا کنید:
