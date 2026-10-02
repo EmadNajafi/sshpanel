@@ -18,6 +18,11 @@ if (( dry_run && confirmed )); then
   echo 'Choose either --dry-run or --yes.' >&2
   exit 1
 fi
+if (( ! keep_group && ! dry_run )) &&
+   [[ -f /etc/sshvpn/panel.env || -d /opt/ssh-vpn-panel ]]; then
+  echo 'The panel is still installed; use sudo menu uninstall to remove it and its accounts.' >&2
+  exit 1
+fi
 
 if ! getent group sshvpn >/dev/null; then
   echo 'The sshvpn group is absent, so panel ownership cannot be verified.' >&2
