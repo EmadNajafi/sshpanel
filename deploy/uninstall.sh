@@ -93,12 +93,11 @@ fi
 python3 - > "$temp_dir/vpn-users" <<'PY'
 import grp
 import pwd
-from pathlib import Path
 
 gid = grp.getgrnam('sshvpn').gr_gid
 for user in pwd.getpwall():
     if user.pw_gid == gid:
-        if user.pw_dir != '/var/empty' or user.pw_shell != '/usr/sbin/nologin' or not Path(f'/etc/sshvpn/accounts/{user.pw_name}.json').is_file():
+        if user.pw_dir != '/var/empty' or user.pw_shell != '/usr/sbin/nologin':
             raise SystemExit(f'Unrecognized account in sshvpn group: {user.pw_name}')
         print(user.pw_name)
 PY
@@ -123,7 +122,16 @@ if [[ $answer != 'DELETE SSHVPN' ]]; then
   exit 1
 fi
 
-# Remove the SSH integration first. Roll it back if the main SSH service cannot reload.
+# Stop account creation, then lock and remove VPN users before removing their SSH rules.
+systemctl disable --now sshvpn-policy.timer sshvpn-usage.timer sshvpn-panel.service 2>/dev/null || true
+systemctl stop sshvpn-policy.service sshvpn-usage.service 2>/dev/null || true
+if systemctl is-active --quiet sshvpn-panel.service; then
+  echo 'The web panel is still running; no VPN accounts were removed.' >&2
+  exit 1
+fi
+bash /opt/ssh-vpn-panel/deploy/cleanup-vpn-users.sh --yes --keep-group
+
+# Remove the SSH integration. Roll it back if the main SSH service cannot reload.
 cp -a "$ssh_config" "$temp_dir/original-sshd_config"
 cp -a "$pam_config" "$temp_dir/original-pam-sshd"
 install -m 0644 -o root -g root "$temp_dir/sshd_config" "$ssh_config"
@@ -136,8 +144,6 @@ if ! /usr/sbin/sshd -t || ! systemctl reload ssh; then
   exit 1
 fi
 
-systemctl disable --now sshvpn-policy.timer sshvpn-usage.timer sshvpn-panel.service 2>/dev/null || true
-systemctl stop sshvpn-policy.service sshvpn-usage.service 2>/dev/null || true
 systemctl disable --now sshvpn-sshd.service 2>/dev/null || true
 systemctl disable --now sshvpn-egress.service 2>/dev/null || true
 if [[ -x /usr/local/sbin/sshvpnctl ]]; then
@@ -145,10 +151,6 @@ if [[ -x /usr/local/sbin/sshvpnctl ]]; then
 fi
 /usr/sbin/nft delete table inet sshvpn_usage 2>/dev/null || true
 /usr/sbin/nft delete table inet sshvpn_egress 2>/dev/null || true
-for user in "${vpn_users[@]}"; do
-  userdel "$user"
-done
-
 if [[ -L $enabled ]]; then rm -- "$enabled"; fi
 if [[ -f $site ]]; then cp -a "$site" "$temp_dir/nginx-panel"; rm -- "$site"; fi
 if [[ -f /etc/nginx/conf.d/sshvpn-rate.conf ]]; then
