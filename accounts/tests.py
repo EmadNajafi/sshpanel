@@ -714,6 +714,17 @@ class InitialAdminTests(TestCase):
             call_command("initial_admin", stdout=StringIO())
         self.assertTrue(get_user_model().objects.get(username="emad").check_password("1"))
 
+    def test_accepts_numeric_admin_username(self):
+        with patch("sys.stdin", StringIO("1\n2\n")):
+            call_command("initial_admin", stdout=StringIO())
+        self.assertTrue(get_user_model().objects.get(username="1").check_password("2"))
+        self.assertTrue(self.client.login(username="1", password="2"))
+
+    def test_rejects_non_english_admin_username(self):
+        with patch("sys.stdin", StringIO("مدیر\n2\n")):
+            with self.assertRaises(CommandError):
+                call_command("initial_admin", stdout=StringIO())
+
     def test_rejects_empty_admin_password(self):
         with patch("sys.stdin", StringIO("emad\n\n")):
             with self.assertRaises(CommandError):

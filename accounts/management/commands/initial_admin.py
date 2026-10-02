@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 
 
-ADMIN_USERNAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]{2,31}$")
+ADMIN_USERNAME = re.compile(r"[A-Za-z0-9_]{1,150}\Z")
 
 
 class Command(BaseCommand):
@@ -16,7 +16,7 @@ class Command(BaseCommand):
         username = sys.stdin.readline().rstrip("\n")
         password = sys.stdin.readline().rstrip("\n")
         if not ADMIN_USERNAME.fullmatch(username):
-            raise CommandError("Administrator username is invalid.")
+            raise CommandError("Administrator username must use English letters, digits or underscore (1-150 characters).")
         if not password or len(password) > 4096 or "\r" in password or "\x00" in password:
             raise CommandError("Administrator password must be nonempty (maximum 4096 characters).")
         user_model = get_user_model()
