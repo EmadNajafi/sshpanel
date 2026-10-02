@@ -43,7 +43,7 @@ For migration, install the same version of this panel on a fresh Ubuntu 24.04 se
 
 In **Settings → Web address**, an administrator can set a single-segment URL path and the current HTTP or HTTPS listener port. Existing installations keep their current address until the form is submitted. Open the new URL and confirm it there within five minutes; an unconfirmed change or a failed local health check restores the previous Nginx and panel configuration. Allow the chosen port through host and provider firewalls first. HTTPS changes preserve the installed certificate and keep port 80 for renewal. The path is an address choice, not an authentication or TLS substitute.
 
-For an existing installation, update the checkout with `git pull --ff-only` and run `sudo bash deploy/upgrade.sh` instead of the fresh installer. The upgrade backs up the database and configuration and retains the web administrator, VPN accounts, listener addresses, and current TLS mode.
+Run the same one-line command below on an existing installation to upgrade it. It detects the installed panel, updates the checkout, and runs `deploy/upgrade.sh` without asking for administrator credentials or an IP address. The upgrade backs up the database and configuration and retains the web administrator, VPN accounts, listener addresses, and current TLS mode. You can also run `git pull --ff-only` followed by `sudo bash deploy/upgrade.sh` from `/root/sshpanel`.
 
 To make a previously loopback-only HTTP panel reachable at the server's public IPv4, run `sudo menu web-public SERVER_PUBLIC_IP` after upgrading. This switches Nginx to port 80 and updates Django's allowed host without changing VPN users or SSH ports. Allow inbound TCP 80 in the host and provider firewalls if needed. Administrator credentials are unencrypted over HTTP until you opt into SSL.
 
@@ -61,7 +61,7 @@ bash <(curl -fsSL --ipv4 https://raw.githubusercontent.com/EmadNajafi/sshpanel/m
 
 When you choose to use HTTPS later, point your domain to the server, allow ports 80 and 443, and run `sudo menu ssl panel.example.com admin@example.com`. A failed certificate request restores the previous HTTP configuration. Until HTTPS is enabled, administrator credentials travel over HTTP; use a trusted network or an SSH tunnel.
 
-The installer targets Ubuntu 24.04, refuses to replace an existing `/opt/ssh-vpn-panel`, and does not change the existing administrator SSH port or firewall. It installs Git if needed, downloads all project files from GitHub, and runs entirely on the destination server. No GitHub credentials are required.
+The installer targets Ubuntu 24.04. Its one-line bootstrap upgrades an existing installation and refuses to overwrite a partial installation. It does not change the existing administrator SSH port or firewall. It installs Git if needed, downloads all project files from GitHub, and runs entirely on the destination server. No GitHub credentials are required.
 
 ## Local test without a domain or SSL
 

@@ -43,13 +43,10 @@ def call_helper(action, username=None, password=None, *, expires_at=None, valid_
 
 def get_ssh_port():
     try:
-        result = subprocess.run(
-            ["/usr/sbin/sshd", "-T"], text=True, capture_output=True, timeout=5, check=True,
-        )
-        for line in result.stdout.splitlines():
-            if line.startswith("port "):
-                return int(line.split()[1])
-    except (OSError, ValueError, subprocess.SubprocessError):
+        port = json.loads(call_helper("port-current"))["port"]
+        if type(port) is int and 1 <= port <= 65535:
+            return port
+    except (ProvisionError, ValueError, KeyError, TypeError):
         pass
     from django.conf import settings
     return settings.VPN_SSH_PORT

@@ -14,7 +14,7 @@ from django.utils import timezone
 
 from .models import AuditEvent, VpnAccount
 from .secrets import decrypt_password, encrypt_password
-from .services import ProvisionError
+from .services import ProvisionError, get_ssh_port
 from .system_metrics import _cpu_metric, get_system_metrics
 from .views import format_bytes
 
@@ -23,6 +23,13 @@ class AccountViewsTests(TestCase):
     def setUp(self):
         self.staff = get_user_model().objects.create_user("owner", password="correct-long-password", is_staff=True)
         self.client.force_login(self.staff)
+
+    @patch("accounts.services.call_helper", return_value='{"port": 6677}')
+    def test_current_ssh_port_comes_from_privileged_helper(self, helper):
+        self.assertEqual(get_ssh_port(), 6677)
+        self.assertContains(self.client.get(reverse("dashboard")), 'data-ssh-port="6677"')
+        self.assertEqual(self.client.get(reverse("panel_settings")).context["ssh_port"], 6677)
+        helper.assert_any_call("port-current")
 
     def bulk_post(self, data):
         session = self.client.session
@@ -645,8 +652,9 @@ class AccountViewsTests(TestCase):
         self.assertEqual(response.status_code, 403)
         helper.assert_not_called()
 
+    @patch("accounts.views.get_ssh_port", return_value=22)
     @patch("accounts.views.get_system_metrics")
-    def test_dashboard_and_metrics_are_staff_only(self, metrics):
+    def test_dashboard_and_metrics_are_staff_only(self, metrics, port):
         metrics.return_value = {
             "cpu": {"percent": 20, "detail": "2 CPU cores"},
             "memory": {"percent": 40, "detail": "1.0 GiB of 2.0 GiB"},

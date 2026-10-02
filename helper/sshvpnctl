@@ -13,7 +13,7 @@ from sshvpn_policy import (
     GROUP, POLICY_DIR, USERNAME, lease_path, policy_path, read_policy,
     seed_legacy_accounts, write_policy,
 )
-from sshvpn_port import current_state, stage_port, finalize_port, cancel_port
+from sshvpn_port import current_port, current_state, stage_port, finalize_port, cancel_port
 from sshvpn_web import stage_change as stage_web_change, confirm_change as confirm_web_change, status as web_status
 from sshvpn_usage import snapshot as usage_snapshot, reset_account as reset_usage_account, remove_account as remove_usage_account
 
@@ -128,7 +128,7 @@ def disconnect_all_accounts():
 def main():
     if os.geteuid() != 0:
         return fail("Root privileges are required.")
-    if len(sys.argv) != 2 or sys.argv[1] not in ALLOWED | {"seed-legacy", "sweep", "disconnect-all", "port-stage", "port-finalize", "port-cancel", "port-status", "web-stage", "web-confirm", "web-status", "usage-status", "usage-snapshot", "usage-sync", "policy-status"}:
+    if len(sys.argv) != 2 or sys.argv[1] not in ALLOWED | {"seed-legacy", "sweep", "disconnect-all", "port-current", "port-stage", "port-finalize", "port-cancel", "port-status", "web-stage", "web-confirm", "web-status", "usage-status", "usage-snapshot", "usage-sync", "policy-status"}:
         return fail("Invalid action.")
     try:
         if sys.argv[1] == "seed-legacy":
@@ -152,6 +152,9 @@ def main():
             return 0
         if sys.argv[1] == "port-status":
             print(json.dumps(current_state()))
+            return 0
+        if sys.argv[1] == "port-current":
+            print(json.dumps({"port": current_port()}))
             return 0
         if sys.argv[1] == "web-status":
             print(json.dumps(web_status()))

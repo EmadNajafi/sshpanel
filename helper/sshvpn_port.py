@@ -39,6 +39,16 @@ def current_state():
     return json.loads(STATE.read_text(encoding="utf-8"))
 
 
+def current_port():
+    ports = effective_ports()
+    state = current_state()
+    if state is not None and state["old"] in ports:
+        return state["old"]
+    if len(ports) != 1:
+        raise ValueError("Multiple SSH ports are configured; the current port is ambiguous.")
+    return ports[0]
+
+
 def _write_config(content):
     original = CONFIG.stat()
     descriptor, temporary = tempfile.mkstemp(prefix=".sshvpn-port-", dir=CONFIG.parent)
