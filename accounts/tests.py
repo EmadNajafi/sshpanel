@@ -136,31 +136,31 @@ class AccountViewsTests(TestCase):
         self.assertContains(response, "3 of 3 users created")
 
     @patch("accounts.views.call_helper")
-    def test_bulk_saves_separate_free_text_referrals_without_account_links(self, helper):
-        first_note = "معرف دلخواه " + "x" * 5000
-        second_note = "برچسب دیگر ✨"
+    def test_bulk_saves_shared_free_text_referral_without_account_links(self, helper):
+        referral_note = "معرف دلخواه " + "x" * 5000 + "\nبرچسب دوم ✨"
         response = self.bulk_post({
             "count": "3", "prefix": "vpn_", "start_number": "1000", "password": "shared",
             "password_mode": "digits", "password_length": "8", "max_connections": "1",
-            "valid_days": "7", "referral_notes": "\n".join((first_note, second_note, first_note)),
+            "valid_days": "7", "referral_note": referral_note,
         })
         self.assertEqual(response.status_code, 200)
         accounts = list(VpnAccount.objects.order_by("pk"))
-        self.assertEqual([account.referral_note for account in accounts], [first_note, second_note, first_note])
+        self.assertEqual([account.referral_note for account in accounts], [referral_note] * 3)
         self.assertTrue(all(account.referred_by_id is None and account.referral_code == "" for account in accounts))
         self.assertEqual(helper.call_count, 3)
-        self.assertContains(response, first_note)
+        self.assertContains(response, "معرف دلخواه")
 
     @patch("accounts.views.call_helper")
-    def test_bulk_rejects_referral_text_count_mismatch_before_provisioning(self, helper):
+    def test_bulk_accepts_one_referral_text_for_multiple_users(self, helper):
         response = self.bulk_post({
             "count": "2", "prefix": "vpn_", "start_number": "1000", "password": "shared",
             "password_mode": "digits", "password_length": "8", "max_connections": "1",
-            "valid_days": "7", "referral_notes": "one line only",
+            "valid_days": "7", "referral_note": "one text for both",
         })
-        self.assertEqual(response.status_code, 302)
-        self.assertFalse(VpnAccount.objects.exists())
-        helper.assert_not_called()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(VpnAccount.objects.values_list("referral_note", flat=True)),
+                         ["one text for both"] * 2)
+        self.assertEqual(helper.call_count, 2)
 
     @patch("accounts.views.call_helper")
     def test_bulk_creation_reports_partial_failure_and_keeps_credentials(self, helper):

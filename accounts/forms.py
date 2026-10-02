@@ -57,9 +57,9 @@ class BulkCreateAccountForm(forms.Form):
     traffic_gb = forms.DecimalField(required=False, min_value=Decimal("0.001"), max_value=Decimal("100000"),
                                     max_digits=9, decimal_places=3, label="Traffic limit (GiB)",
                                     help_text="Leave blank for unlimited traffic.")
-    referral_notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 5}),
-                                     label="Referral text (one per user)",
-                                     help_text="Optional. Enter one line per user. This text does not link to an account.")
+    referral_note = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}),
+                                    label="Referral text for all users",
+                                    help_text="Optional. The same text is saved for every user in this batch.")
     valid_days = forms.IntegerField(min_value=1, max_value=36500, label="Active days")
     start_on_first_connection = forms.BooleanField(required=False, label="Start validity on first connection")
 
@@ -75,22 +75,8 @@ class BulkCreateAccountForm(forms.Form):
             raise forms.ValidationError("The password cannot contain a line break or NUL character.")
         return value
 
-    def clean_referral_notes(self):
-        value = valid_referral_text(self.cleaned_data["referral_notes"])
-        if not value:
-            return []
-        notes = [line.strip() for line in value.splitlines()]
-        if any(not note for note in notes):
-            raise forms.ValidationError("Each referral text line must contain text.")
-        return notes
-
-    def clean(self):
-        data = super().clean()
-        notes = data.get("referral_notes")
-        count = data.get("count")
-        if notes and count is not None and len(notes) != count:
-            self.add_error("referral_notes", "Enter exactly one referral text line for each user, or leave this field blank.")
-        return data
+    def clean_referral_note(self):
+        return valid_referral_text(self.cleaned_data["referral_note"])
 
 
 class PasswordForm(forms.Form):

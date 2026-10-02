@@ -103,7 +103,7 @@
       <p><label for="{{ bulk_create_form.traffic_gb.id_for_label }}">Traffic limit (GiB)</label>{{ bulk_create_form.traffic_gb }}<span class="helptext">Blank means unlimited.</span></p>
       <p><label for="{{ bulk_create_form.valid_days.id_for_label }}">Active days</label>{{ bulk_create_form.valid_days }}</p>
     </div>
-    <p><label for="{{ bulk_create_form.referral_notes.id_for_label }}">Referral text, one line per user (optional)</label>{{ bulk_create_form.referral_notes }}<span class="helptext">The first line is saved with the first created user, the second line with the second, and so on. These are text labels only; they do not link to another account.</span></p>
+    <p><label for="{{ bulk_create_form.referral_note.id_for_label }}">Referral text for all users (optional)</label>{{ bulk_create_form.referral_note }}<span class="helptext">This same text is saved with every user created in the batch. It does not link to another account.</span></p>
     <p class="bulk-first-connection"><label for="{{ bulk_create_form.start_on_first_connection.id_for_label }}">{{ bulk_create_form.start_on_first_connection }} Start validity on first connection</label></p>
     <div class="dialog-actions"><button class="button button-secondary" type="button" data-close-dialog>Cancel</button><button class="button button-primary" type="submit">Create users</button></div>
   </form>

@@ -267,7 +267,7 @@ def bulk_create_accounts(request):
                 messages.error(request, error)
         return redirect("dashboard")
     data = form.cleaned_data
-    referral_notes = data["referral_notes"] or [""] * data["count"]
+    referral_note = data["referral_note"]
     numbers = secrets.SystemRandom().sample(range(data["start_number"], data["start_number"] + 1_000_000),
                                              data["count"])
     usernames = [f"{data['prefix']}{number}" for number in numbers]
@@ -278,7 +278,7 @@ def bulk_create_accounts(request):
     created = []
     used_passwords = set()
     failure = None
-    for username, referral_note in zip(usernames, referral_notes):
+    for username in usernames:
         password = data["password"]
         if not password:
             for _ in range(100):
