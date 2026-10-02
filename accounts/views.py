@@ -14,6 +14,7 @@ from django.http import FileResponse, Http404, JsonResponse
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.cache import never_cache
 from django.utils import timezone
 
 from .forms import BulkCreateAccountForm, CreateAccountForm, EditAccountForm, PasswordForm
@@ -81,6 +82,7 @@ def account_summary(accounts, usage, now):
     }
 
 
+@never_cache
 @staff_required
 def dashboard(request):
     bulk_token = secrets.token_urlsafe(24)
@@ -100,11 +102,8 @@ def dashboard(request):
                                          if account.traffic_limit_bytes is not None else None)
         account.traffic_exhausted = (account.traffic_limit_bytes is not None and account.usage is not None and
                                      account.usage.get("total_bytes", 0) >= account.traffic_limit_bytes)
+        account.display_password = decrypt_password(account.password_ciphertext)
         account.referral_users = referrals.get(account.pk, [])
-        account.referral_count = len(account.referral_users)
-        account.referral_active_count = sum(child.enabled and not child.is_expired for child in account.referral_users)
-        account.referral_online_count = (sum(usage.get(child.username, {}).get("connections", 0) > 0
-                                             for child in account.referral_users) if usage is not None else None)
         account.days_remaining = (max(0, math.ceil((account.expires_at - now).total_seconds() / 86400))
                                   if account.expires_at is not None else None)
     search_query = request.GET.get("q", "").strip()

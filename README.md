@@ -31,7 +31,7 @@ The installer keeps the SSH port already configured on the server; it does not o
 
 The hamburger menu opens **Settings**. There an administrator can change their own password using the current password, or stage a new shared SSH port. Staging keeps the original port active, validates SSH configuration and verifies that the new port is listening locally. Open a separate SSH connection through the new port from outside the server, then confirm in Settings to close the old port. Cancel restores the original port. Host and provider firewalls may need a rule for the new port. Keep a working administrator session open while changing ports.
 
-The credential display uses a server-side encrypted database field; its encryption key is derived from `DJANGO_SECRET_KEY` in `/etc/sshvpn/panel.env`. Preserve that value in backups. Revealed passwords are served only to authenticated staff with `Cache-Control: no-store`. Enable HTTPS before revealing passwords over an untrusted network; the initial HTTP mode does not encrypt browser traffic.
+The credential display uses a server-side encrypted database field; its encryption key is derived from `DJANGO_SECRET_KEY` in `/etc/sshvpn/panel.env`. Preserve that value in backups. Passwords are always shown in the staff-only account list, which is served with `Cache-Control: no-store`. Enable HTTPS before opening the account list over an untrusted network; the initial HTTP mode does not encrypt browser traffic.
 
 ## Backup and migration
 

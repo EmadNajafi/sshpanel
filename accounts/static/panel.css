@@ -221,8 +221,8 @@ td { color: #506078; font-size: 12px; }
 .sessions-list span { color: var(--muted); font-size: 12px; }
 .sessions-list code { color: var(--ink); font-size: 13px; overflow-wrap: anywhere; text-align: right; }
 .usage-total { display: block; color: #25354f; font-size: 12px; white-space: nowrap; }
-.password-cell { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
-.password-cell [data-password-value] { max-width: 175px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.password-cell { max-width: 190px; text-align: left; }
+.password-cell [data-password-value] { display: block; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; unicode-bidi: isolate; }
 .settings-page { max-width: 1240px; margin: 0 auto; }
 .settings-hero { position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; overflow: hidden; padding: 34px 38px; margin-bottom: 26px; border-radius: 22px; background: linear-gradient(120deg, #12213a 0%, #1a3156 68%, #234c84 100%); color: #fff; }
 .settings-hero::after { content: ""; position: absolute; width: 270px; height: 270px; right: 90px; top: -185px; border: 1px solid rgba(255,255,255,.14); border-radius: 50%; box-shadow: 0 0 0 55px rgba(255,255,255,.025), 0 0 0 112px rgba(255,255,255,.02); pointer-events: none; }
@@ -293,6 +293,7 @@ td { color: #506078; font-size: 12px; }
 .state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .state-active { background: #eaf9f2; color: #159569; }
 .state-disabled { background: #edf1f6; color: #687891; }
+.state-disabled-account { background: #ffebee; color: #c6283c; }
 .state-expired { background: #fff0ed; color: #c36142; }
 .action-icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
 .row-actions { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; min-width: max-content; }
@@ -444,6 +445,7 @@ td { color: #506078; font-size: 12px; }
 :root[data-theme="dark"] .settings-live-badge,
 :root[data-theme="dark"] .action-button-extend { background: #1d493d; border-color: #326a58; color: #75e5ba; }
 :root[data-theme="dark"] .state-expired,
+:root[data-theme="dark"] .state-disabled-account,
 :root[data-theme="dark"] .button-danger,
 :root[data-theme="dark"] .action-button-danger { background: #512d36; border-color: #79414e; color: #ffabb5; }
 :root[data-theme="dark"] .settings-callout,
@@ -469,6 +471,8 @@ td { color: #506078; font-size: 12px; }
 :root[dir="rtl"] th,
 :root[dir="rtl"] td,
 :root[dir="rtl"] .account-name-button { text-align: right; }
+:root[dir="rtl"] th { letter-spacing: normal; text-transform: none; }
+:root[dir="rtl"] .account-name-button { direction: ltr; unicode-bidi: isolate; }
 :root[dir="rtl"] .nav-drawer { inset: 0 auto 0 0; border-radius: 0 20px 20px 0; box-shadow: 24px 0 75px rgba(8, 21, 41, .24); }
 :root[dir="rtl"] .drawer-section-label { margin: 0 11px 9px 0; }
 :root[dir="rtl"] .action-feedback { right: auto; left: 22px; }

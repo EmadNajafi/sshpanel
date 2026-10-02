@@ -13,7 +13,7 @@ from django.urls import get_script_prefix, reverse, set_script_prefix
 from django.utils import timezone
 
 from .models import AuditEvent, VpnAccount
-from .secrets import decrypt_password
+from .secrets import decrypt_password, encrypt_password
 from .services import ProvisionError
 from .system_metrics import _cpu_metric, get_system_metrics
 from .views import format_bytes
@@ -101,7 +101,8 @@ class AccountViewsTests(TestCase):
         helper.assert_called_once_with("create", "newuser", "abc", valid_days=30, max_connections=2)
         helper.reset_mock()
         page = self.client.get(reverse("dashboard"))
-        self.assertContains(page, "1 referrals")
+        self.assertContains(page, "View users")
+        self.assertNotContains(page, "1 referrals")
         self.assertContains(page, "30 days after first connection")
 
     @patch("accounts.views.call_helper")
@@ -449,6 +450,24 @@ class AccountViewsTests(TestCase):
         self.assertEqual(self.client.get(reverse("account_password", args=[account.pk])).json()["password"], "secret-test")
         self.client.logout()
         self.assertEqual(self.client.get(reverse("account_password", args=[account.pk])).status_code, 302)
+
+    @patch("accounts.views.get_system_metrics", return_value={})
+    @patch("accounts.views.get_account_usage", return_value={})
+    def test_dashboard_shows_password_and_red_disabled_state_without_referral_totals(self, usage, metrics):
+        VpnAccount.objects.create(
+            username="alice", created_by=self.staff, enabled=False,
+            expires_at=timezone.now() - timedelta(days=1),
+            referral_code="ref-alice", password_ciphertext=encrypt_password("visible-pass"),
+        )
+        page = self.client.get(reverse("dashboard"))
+        self.assertContains(page, "visible-pass")
+        self.assertContains(page, 'class="state state-disabled-account">Disabled</span>')
+        self.assertContains(page, "<th>Account</th><th>Password</th><th>Referral</th>", html=False)
+        self.assertNotContains(page, "data-reveal-password")
+        self.assertNotContains(page, "referrals ·")
+        self.assertIn("no-store", page["Cache-Control"])
+        self.client.logout()
+        self.assertNotIn("visible-pass", self.client.get(reverse("dashboard")).content.decode())
 
     def test_admin_can_change_own_password_and_keep_session(self):
         response = self.client.post(reverse("change_admin_password"), {

@@ -1,30 +1,4 @@
 (() => {
-  document.querySelectorAll("[data-reveal-password]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const value = button.closest(".password-cell").querySelector("[data-password-value]");
-      if (button.dataset.visible === "true") {
-        value.textContent = "••••••";
-        button.textContent = "Show";
-        button.dataset.visible = "false";
-        return;
-      }
-      button.disabled = true;
-      try {
-        const response = await fetch(button.dataset.passwordUrl, {
-          credentials: "same-origin", headers: { Accept: "application/json" }, cache: "no-store",
-        });
-        if (!response.ok) throw new Error("Request failed");
-        const data = await response.json();
-        value.textContent = data.password ?? "Unavailable — set a new password";
-        button.textContent = "Hide";
-        button.dataset.visible = "true";
-      } catch (_error) {
-        value.textContent = "Could not load password";
-      } finally {
-        button.disabled = false;
-      }
-    });
-  });
   document.querySelectorAll("[data-open-dialog]").forEach((button) => {
     button.addEventListener("click", () => document.getElementById(button.dataset.openDialog).showModal());
   });
@@ -271,9 +245,11 @@
         nameButton.disabled = !isOnline;
         const total = document.createElement("strong");
         total.className = "usage-total";
+        total.dir = "ltr";
         total.textContent = row.dataset.trafficDisplay ? `${usage.total} / ${row.dataset.trafficDisplay}` : usage.total;
         const detail = document.createElement("small");
         detail.className = "table-subtext";
+        detail.dir = "ltr";
         detail.textContent = `↑ ${usage.upload} · ↓ ${usage.download}`;
         usageCell.replaceChildren(total, detail);
         if (row.dataset.trafficLimit && row.dataset.enabled === "true" &&

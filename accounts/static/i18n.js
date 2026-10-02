@@ -137,6 +137,9 @@
     "← Dashboard": "داشبورد ←", "RECENT EVENTS": "رویدادهای اخیر",
     "History": "تاریخچه", "Time": "زمان", "Result": "نتیجه",
     "Success": "موفق", "Failed": "ناموفق",
+    "Create": "ساخت", "Update": "ویرایش", "Usage-reset": "ریست ترافیک",
+    "Web-stage": "شروع تغییر نشانی", "Web-confirm": "تأیید نشانی",
+    "Port-stage": "شروع تغییر پورت", "Port-finalize": "تأیید پورت", "Port-cancel": "لغو تغییر پورت",
     "No activity has been recorded yet.": "هنوز فعالیتی ثبت نشده است.",
     "← Newer": "جدیدتر ←", "Older →": "قدیمی‌تر →",
     "Backups": "بکاپ‌ها", "Restore completed": "بازیابی کامل شد",
@@ -154,12 +157,16 @@
     "Could not load password": "رمز عبور بارگذاری نشد.",
     "Could not load the password.": "رمز عبور بارگذاری نشد.",
     "Password unavailable. Set a new password first.": "رمز عبور موجود نیست؛ ابتدا رمز جدید تعیین کنید.",
+    "Unavailable — set a new password": "رمز موجود نیست؛ رمز جدید تعیین کنید",
+    "IP unavailable — reconnect needed": "IP در دسترس نیست؛ اتصال دوباره لازم است",
     "Select and copy the connection details.": "اطلاعات اتصال را انتخاب و کپی کنید.",
     "Usage unavailable": "اطلاعات مصرف در دسترس نیست.",
     "Waiting for server data": "در انتظار دادهٔ سرور",
     "Disk": "دیسک", "Unknown": "نامشخص", "System": "سیستم",
     "Switch to dark mode": "تغییر به حالت تاریک", "Switch to light mode": "تغییر به حالت روشن",
     "Open navigation menu": "باز کردن منو", "Close navigation menu": "بستن منو",
+    "Allow the new port in your server and provider firewalls. Open the new URL and confirm it within five minutes; otherwise the old address is restored automatically.": "پورت جدید را در فایروال سرور و ارائه‌دهنده باز کنید. نشانی جدید را باز کنید و تا پنج دقیقه تأیید کنید؛ وگرنه نشانی قبلی خودکار برمی‌گردد.",
+    "Allow the new port in your server and provider firewalls. Port 80 stays available for certificate renewal. Open the new URL and confirm it within five minutes; otherwise the old address is restored automatically.": "پورت جدید را در فایروال سرور و ارائه‌دهنده باز کنید. پورت ۸۰ برای تمدید گواهی باز می‌ماند. نشانی جدید را باز کنید و تا پنج دقیقه تأیید کنید؛ وگرنه نشانی قبلی خودکار برمی‌گردد.",
     "Close menu": "بستن منو", "Server resource usage": "مصرف منابع سرور",
     "Panel navigation": "ناوبری پنل", "VPN account overview": "نمای کلی حساب‌های VPN",
     "Select all visible users": "انتخاب همهٔ کاربران قابل‌نمایش",
@@ -174,6 +181,7 @@
     "This password is entirely numeric.": "رمز عبور نباید فقط عدد باشد.",
     "Restore the selected backup? Current panel data and administrator accounts will be replaced. A server-side recovery copy will be created first.": "بکاپ انتخاب‌شده بازیابی شود؟ داده‌های فعلی پنل و حساب‌های مدیر جایگزین می‌شوند. ابتدا یک نسخهٔ بازیابی روی سرور ساخته می‌شود.",
     "Host": "هاست", "SSH port": "پورت SSH", "Connection limit": "سقف اتصال",
+    "Copy connection details": "کپی اطلاعات اتصال",
     "Traffic limit": "سقف ترافیک", "Referral code": "کد معرف",
     "Could not load password": "رمز عبور بارگذاری نشد.",
     "The new panel address is confirmed.": "نشانی جدید پنل تأیید شد.",
@@ -197,6 +205,11 @@
   };
 
   const patterns = [
+    [/^Ports (\d+) and (\d+) are active\. Open a new SSH connection from outside the server on port (\d+) before confirming\.$/, (_, oldPort, newPort, testPort) => `پورت‌های ${oldPort} و ${newPort} فعال‌اند. پیش از تأیید، از بیرون سرور اتصال SSH روی پورت ${testPort} را آزمایش کنید.`],
+    [/^Choose the URL path and (HTTP|HTTPS) port used to open this panel\.$/, (_, protocol) => `مسیر نشانی و پورت ${protocol} پنل را انتخاب کنید.`],
+    [/^Use (\d+) or a port from 1024 to 65535\.$/, (_, port) => `از پورت ${port} یا پورتی بین ۱۰۲۴ تا ۶۵۵۳۵ استفاده کنید.`],
+    [/^(HTTP|HTTPS) port$/, (_, protocol) => `پورت ${protocol}`],
+    [/^Confirm port (\d+)$/, (_, port) => `تأیید پورت ${port}`],
     [/^(\d+) selected$/, (_, count) => `${count} انتخاب‌شده`],
     [/^(\d+) matching users$/, (_, count) => `${count} کاربر پیدا شد`],
     [/^(\d+) online$/, (_, count) => `${count} آنلاین`],
@@ -234,6 +247,10 @@
     [/^SSH now uses port (\d+)\. The old port is closed\.$/, (_, port) => `SSH اکنون از پورت ${port} استفاده می‌کند. پورت قبلی بسته شد.`],
     [/^Select (.+)$/, (_, username) => `انتخاب ${username}`],
     [/^Show password for (.+)$/, (_, username) => `نمایش رمز ${username}`],
+    [/^Reset traffic for (.+)$/, (_, username) => `ریست ترافیک ${username}`],
+    [/^Enable (.+)$/, (_, username) => `فعال‌سازی ${username}`],
+    [/^Disable (.+)$/, (_, username) => `غیرفعال‌سازی ${username}`],
+    [/^Delete (.+)$/, (_, username) => `حذف ${username}`],
     [/^Edit (.+)$/, (_, username) => `ویرایش ${username}`],
     [/^Extend (.+)$/, (_, username) => `تمدید ${username}`],
     [/^Copy connection details for (.+)$/, (_, username) => `کپی اطلاعات اتصال ${username}`],
@@ -258,7 +275,7 @@
 
   if (language !== "fa") return;
   document.title = translated(document.title);
-  const ignored = ".account-name, [data-password-value], [data-username], [data-password], [data-referral], [data-sessions-name], .referral-cell strong, .drawer-avatar, .drawer-profile strong, code, pre, script, style, [data-language-toggle]";
+  const ignored = ".account-name, [data-password-value], [data-username], [data-password], [data-referral], [data-referral-value], [data-referral-user], [data-sessions-name], .drawer-avatar, .drawer-profile strong, code, pre, script, style, [data-language-toggle]";
   const attributes = ["aria-label", "placeholder", "title"];
   function translateNode(node) {
     if (node.nodeType === Node.TEXT_NODE) {

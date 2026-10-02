@@ -29,7 +29,7 @@
           <span class="settings-section-icon settings-icon-blue" aria-hidden="true">01</span>
           <div><p class="eyebrow">SERVER CONNECTION</p><h2>SSH access</h2><p>One SSH port serves administrators and VPN users.</p></div>
         </div>
-        <div class="settings-current-port"><div><span class="settings-detail-label">CURRENT PORT</span><strong>{{ ssh_port }}</strong></div><span class="settings-live-badge"><span class="status-dot"></span> Active</span></div>
+        <div class="settings-current-port"><div><span class="settings-detail-label">CURRENT PORT</span><strong dir="ltr">{{ ssh_port }}</strong></div><span class="settings-live-badge"><span class="status-dot"></span> Active</span></div>
         {% if pending_port %}
           <div class="settings-callout"><strong>Port change in progress</strong><p>Ports {{ pending_port.old }} and {{ pending_port.new }} are active. Open a new SSH connection from outside the server on port {{ pending_port.new }} before confirming.</p></div>
           <div class="settings-actions">
@@ -49,7 +49,7 @@
           <span class="settings-section-icon settings-icon-green" aria-hidden="true">02</span>
           <div><p class="eyebrow">PANEL ACCESS</p><h2>Web address</h2><p>Choose the URL path and {% if tls_enabled %}HTTPS{% else %}HTTP{% endif %} port used to open this panel.</p></div>
         </div>
-        <div class="settings-current-port settings-current-web"><div><span class="settings-detail-label">CURRENT ADDRESS</span><strong>{{ panel_web_url }}</strong></div><span class="settings-live-badge"><span class="status-dot"></span> Active</span></div>
+        <div class="settings-current-port settings-current-web"><div><span class="settings-detail-label">CURRENT ADDRESS</span><strong dir="ltr">{{ panel_web_url }}</strong></div><span class="settings-live-badge"><span class="status-dot"></span> Active</span></div>
         {% if pending_web %}
           <div class="settings-callout"><strong>Address change pending</strong><p>{% if pending_web.phase == 'awaiting-confirmation' %}You are at the new address. Confirm it within five minutes or the panel will automatically return to its previous address.{% else %}The new address is being activated. Open it after a few seconds.{% endif %}</p></div>
           {% if pending_web.phase == 'awaiting-confirmation' %}<form method="post" action="{% url 'confirm_web_address' %}" class="settings-actions">{% csrf_token %}<button class="button button-primary" type="submit">Confirm this address</button></form>{% endif %}
