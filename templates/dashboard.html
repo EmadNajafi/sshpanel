@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}Overview · SSH VPN Panel{% endblock %}
-{% block scripts %}<script src="{% static 'dashboard.js' %}?v=11" defer></script>{% endblock %}
+{% block scripts %}<script src="{% static 'dashboard.js' %}?v=12" defer></script>{% endblock %}
 {% block content %}
 <svg class="action-icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
   <symbol id="action-edit" viewBox="0 0 24 24"><path d="m4 16-.5 4.5L8 20l11-11-4-4L4 16Zm9.5-9.5 4 4M13 20h7"/></symbol>
@@ -49,7 +49,7 @@
         {% for account in accounts %}
           <tr data-account-username="{{ account.username }}" data-expires-at="{{ account.expires_at|date:'c' }}" data-valid-days="{% if account.valid_days and not account.activated_at %}{{ account.valid_days }}{% endif %}" data-traffic-limit="{{ account.traffic_limit_bytes|default_if_none:'' }}" data-traffic-display="{{ account.traffic_limit_display|default_if_none:'' }}" data-enabled="{{ account.enabled|yesno:'true,false' }}">
             <td><button class="account-name account-name-button" type="button" data-session-trigger {% if not account.usage.connections %}disabled{% endif %} aria-label="Show active IP addresses for {{ account.username }}">{{ account.username }}</button><small class="table-subtext">Created {{ account.created_at|date:"Y-m-d" }}</small></td>
-            <td><strong>{{ account.referral_code|default:'—' }}</strong><small class="table-subtext">{{ account.referral_count }} referrals · {{ account.referral_active_count }} active · {{ account.referral_online_count|default_if_none:'—' }} online</small>{% if account.referral_users %}<details class="referral-details"><summary>View users</summary>{% for child in account.referral_users %}<span>{{ child.username }}</span>{% endfor %}</details>{% endif %}{% if account.referred_by %}<small class="table-subtext">Via {{ account.referred_by.username }}</small>{% endif %}</td>
+            <td class="referral-cell"><strong>{{ account.referral_code|default:'Not set' }}</strong><small class="table-subtext">{{ account.referral_count }} referrals · {{ account.referral_active_count }} active · {{ account.referral_online_count|default_if_none:'—' }} online</small>{% if account.referral_users %}<details class="referral-details"><summary>View users</summary>{% for child in account.referral_users %}<span>{{ child.username }}</span>{% endfor %}</details>{% endif %}{% if account.referred_by %}<small class="table-subtext">Via {{ account.referred_by.username }}</small>{% endif %}</td>
             <td><div class="password-cell"><span data-password-value>••••••</span><button class="button button-small button-secondary" type="button" data-reveal-password data-password-url="{% url 'account_password' account.pk %}" aria-label="Show password for {{ account.username }}">Show</button></div></td>
             <td data-account-state>{% if account.is_expired %}<span class="state state-expired">Expired</span>{% elif not account.enabled %}<span class="state state-disabled">Disabled</span>{% elif account.traffic_exhausted %}<span class="state state-expired">Traffic exhausted</span>{% elif account.valid_days and not account.activated_at %}<span class="state state-disabled">Awaiting first connection</span>{% else %}<span class="state state-active">Active</span>{% endif %}</td>
             <td data-online-status>{% if account.usage is None %}<span class="muted">—</span>{% elif account.usage.connections %}<button class="state state-active online-trigger" type="button" data-session-trigger>{{ account.usage.connections }} online</button>{% else %}<span class="state state-disabled">Offline</span>{% endif %}</td>
@@ -58,7 +58,7 @@
             <td>{{ account.max_connections|default:"Unlimited" }}</td>
             <td>
               <div class="row-actions" role="group" aria-label="Actions for {{ account.username }}">
-                <button class="action-button" type="button" data-edit-account data-action="{% url 'edit_account' account.pk %}" data-username="{{ account.username }}" data-expires="{% if account.valid_days and not account.activated_at %}{{ account.valid_days }} days after first connection{% else %}{{ account.expires_at|date:'Y-m-d H:i'|default:'Unlimited' }}{% endif %}" data-connections="{{ account.max_connections|default_if_none:'' }}" aria-label="Edit {{ account.username }}" title="Edit"><svg><use href="#action-edit"/></svg></button>
+                <button class="action-button" type="button" data-edit-account data-action="{% url 'edit_account' account.pk %}" data-username="{{ account.username }}" data-expires="{% if account.valid_days and not account.activated_at %}{{ account.valid_days }} days after first connection{% else %}{{ account.expires_at|date:'Y-m-d H:i'|default:'Unlimited' }}{% endif %}" data-connections="{{ account.max_connections|default_if_none:'' }}" data-referral-code="{{ account.referral_code|default_if_none:'' }}" aria-label="Edit {{ account.username }}" title="Edit"><svg><use href="#action-edit"/></svg></button>
                 <button class="action-button action-button-extend" type="button" data-extend-account data-action="{% url 'extend_account' account.pk %}" data-username="{{ account.username }}" aria-label="Extend {{ account.username }}" title="Extend validity"><svg><use href="#action-extend"/></svg></button>
                 <form method="post" action="{% url 'reset_account_traffic' account.pk %}" onsubmit="return confirm('Reset traffic for {{ account.username|escapejs }}?')">{% csrf_token %}<button class="action-button" type="submit" aria-label="Reset traffic for {{ account.username }}" title="Reset traffic"><svg><use href="#action-reset"/></svg></button></form>
                 <button class="action-button" type="button" data-copy-account data-password-url="{% url 'account_password' account.pk %}" data-connections="{{ account.max_connections|default_if_none:'' }}" aria-label="Copy connection details for {{ account.username }}" title="Copy connection details"><svg><use href="#action-copy"/></svg></button>
@@ -101,7 +101,7 @@
       <p><label for="{{ bulk_create_form.password_length.id_for_label }}">Password length</label>{{ bulk_create_form.password_length }}</p>
       <p><label for="{{ bulk_create_form.max_connections.id_for_label }}">Simultaneous connections</label>{{ bulk_create_form.max_connections }}</p>
       <p><label for="{{ bulk_create_form.traffic_gb.id_for_label }}">Traffic limit (GiB)</label>{{ bulk_create_form.traffic_gb }}<span class="helptext">Blank means unlimited.</span></p>
-      <p><label for="{{ bulk_create_form.referral_code.id_for_label }}">Referral code</label>{{ bulk_create_form.referral_code }}</p>
+      <p><label for="{{ bulk_create_form.referred_by_code.id_for_label }}">Introduced by referral code</label>{{ bulk_create_form.referred_by_code }}<span class="helptext">New users get no personal code. Set each one later in Edit.</span></p>
       <p><label for="{{ bulk_create_form.valid_days.id_for_label }}">Active days</label>{{ bulk_create_form.valid_days }}</p>
     </div>
     <p class="bulk-first-connection"><label for="{{ bulk_create_form.start_on_first_connection.id_for_label }}">{{ bulk_create_form.start_on_first_connection }} Start validity on first connection</label></p>
@@ -134,6 +134,7 @@
   <div class="dialog-heading"><div><p class="eyebrow">ACCOUNT SETTINGS</p><h2 id="edit-dialog-title">Edit <span data-edit-name></span></h2></div><button type="button" class="dialog-close" data-close-dialog aria-label="Close">×</button></div>
   <p class="panel-description">Username stays the same. Current expiry: <strong data-edit-expires></strong>.</p>
   <form method="post" class="account-form" data-edit-form>{% csrf_token %}
+    <p><label for="edit-referral-code">This user's referral code</label><input id="edit-referral-code" type="text" name="referral_code" autocomplete="off"><span class="helptext">Any unique length. Clear to remove the code.</span></p>
     <p><label for="edit-password">New password</label><input id="edit-password" type="password" name="password" maxlength="256" autocomplete="new-password"><span class="helptext">Leave blank to keep the current password.</span></p>
     <p><label for="edit-valid-days">New validity (days)</label><input id="edit-valid-days" type="number" name="valid_days" min="1" max="36500"><span class="helptext">Leave blank to keep the current expiry. Enter days to count from now.</span></p>
     <p><label for="edit-connections">Simultaneous connections</label><input id="edit-connections" type="number" name="max_connections" min="1" max="10000"><span class="helptext">Leave blank to keep the current limit.</span></p>

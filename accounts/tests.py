@@ -52,22 +52,51 @@ class AccountViewsTests(TestCase):
 
     @patch("accounts.views.call_helper")
     def test_referral_and_first_connection_validity(self, helper):
-        referrer = VpnAccount.objects.create(username="referrer", created_by=self.staff, referral_code="ABC123")
+        referrer_code = "My Personal Code ✨ " + "x" * 5000
+        referrer = VpnAccount.objects.create(username="referrer", created_by=self.staff, referral_code=referrer_code)
+        own_code = "New user code / " + "y" * 5000
         response = self.client.post(reverse("create_account"), {
             "username": "newuser", "password": "abc", "valid_days": "30", "max_connections": "2",
-            "referral_code": "abc123", "start_on_first_connection": "on",
+            "referral_code": own_code, "referred_by_code": referrer_code, "start_on_first_connection": "on",
         })
         self.assertEqual(response.status_code, 302)
         account = VpnAccount.objects.get(username="newuser")
         self.assertIsNone(account.expires_at)
         self.assertEqual(account.valid_days, 30)
         self.assertEqual(account.referred_by, referrer)
-        self.assertEqual(len(account.referral_code), 12)
+        self.assertEqual(account.referral_code, own_code)
+        self.assertEqual(len(account.referral_code_hash), 64)
         helper.assert_called_once_with("create", "newuser", "abc", valid_days=30, max_connections=2)
         helper.reset_mock()
         page = self.client.get(reverse("dashboard"))
         self.assertContains(page, "1 referrals")
         self.assertContains(page, "30 days after first connection")
+
+    @patch("accounts.views.call_helper")
+    def test_custom_referral_code_is_unique_without_length_limit(self, helper):
+        code = "Personal Name " + "z" * 5000
+        VpnAccount.objects.create(username="owner1", created_by=self.staff, referral_code=code)
+        response = self.client.post(reverse("create_account"), {
+            "username": "owner2", "password": "abc", "valid_days": "7", "max_connections": "1",
+            "referral_code": code.upper(),
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(VpnAccount.objects.filter(username="owner2").exists())
+        helper.assert_not_called()
+
+    @patch("accounts.views.call_helper")
+    def test_edit_sets_and_clears_custom_referral_code(self, helper):
+        account = VpnAccount.objects.create(username="alice", created_by=self.staff)
+        code = "My own code " + "a" * 5000
+        self.client.post(reverse("edit_account", args=[account.pk]), {"referral_code": code})
+        account.refresh_from_db()
+        self.assertEqual(account.referral_code, code)
+        self.assertEqual(len(account.referral_code_hash), 64)
+        self.client.post(reverse("edit_account", args=[account.pk]), {"referral_code": ""})
+        account.refresh_from_db()
+        self.assertEqual(account.referral_code, "")
+        self.assertIsNone(account.referral_code_hash)
+        helper.assert_not_called()
 
     @patch("accounts.views.call_helper")
     def test_first_connection_activation_syncs_from_ssh_policy(self, helper):
@@ -98,6 +127,8 @@ class AccountViewsTests(TestCase):
             self.assertEqual(account.valid_days, 30)
             self.assertIsNone(account.expires_at)
             self.assertEqual(account.traffic_limit_bytes, int(2.5 * 1024 ** 3))
+            self.assertEqual(account.referral_code, "")
+            self.assertIsNone(account.referral_code_hash)
             passwords.append(decrypt_password(account.password_ciphertext))
         self.assertEqual(len(set(passwords)), 3)
         self.assertTrue(all(len(password) == 8 and password.isdigit() for password in passwords))

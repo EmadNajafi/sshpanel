@@ -9,6 +9,7 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.decorators import user_passes_test
 from django.conf import settings
+from django.db import IntegrityError
 from django.http import FileResponse, Http404, JsonResponse
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
@@ -17,7 +18,7 @@ from django.utils import timezone
 
 from .forms import BulkCreateAccountForm, CreateAccountForm, EditAccountForm, PasswordForm
 from .backups import BACKUP_DIR, BACKUP_NAME, UPLOAD_DIR, BackupError, call_backup, list_backups, save_upload
-from .models import AuditEvent, VpnAccount
+from .models import AuditEvent, VpnAccount, normalized_referral_code, referral_code_digest
 from .services import ProvisionError, call_helper, get_ssh_port
 from .secrets import decrypt_password, encrypt_password
 from .system_metrics import get_system_metrics
@@ -155,16 +156,36 @@ def traffic_bytes(gigabytes):
 
 
 def referral_for(code):
-    if not code:
+    try:
+        digest = referral_code_digest(code)
+    except ValueError as exc:
+        raise ProvisionError(str(exc)) from exc
+    if digest is None:
         return None
-    referral = VpnAccount.objects.filter(referral_code=code.strip().upper()).first()
+    referral = VpnAccount.objects.filter(referral_code_hash=digest).first()
     if referral is None:
         raise ProvisionError("Referral code was not found.")
     return referral
 
 
+def unique_referral_code(code, *, exclude_pk=None):
+    try:
+        code = normalized_referral_code(code)
+    except ValueError as exc:
+        raise ProvisionError(str(exc)) from exc
+    digest = referral_code_digest(code)
+    if digest is not None:
+        matches = VpnAccount.objects.filter(referral_code_hash=digest)
+        if exclude_pk is not None:
+            matches = matches.exclude(pk=exclude_pk)
+        if matches.exists():
+            raise ProvisionError("This referral code is already in use.")
+    return code
+
+
 def provision_account(actor, username, password, valid_days, max_connections,
-                      referral, first_connection, traffic_limit_bytes):
+                      referral, first_connection, traffic_limit_bytes, own_referral_code=""):
+    own_referral_code = unique_referral_code(own_referral_code)
     expires_at = None if first_connection else timezone.now() + timedelta(days=valid_days)
     options = {"max_connections": max_connections}
     if first_connection:
@@ -175,14 +196,11 @@ def provision_account(actor, username, password, valid_days, max_connections,
         options["traffic_limit_bytes"] = traffic_limit_bytes
     call_helper("create", username, password, **options)
     try:
-        code = secrets.token_hex(6).upper()
-        while VpnAccount.objects.filter(referral_code=code).exists():
-            code = secrets.token_hex(6).upper()
         return VpnAccount.objects.create(
             username=username, created_by=actor, expires_at=expires_at,
             valid_days=valid_days if first_connection else None,
             max_connections=max_connections, traffic_limit_bytes=traffic_limit_bytes,
-            referral_code=code, referred_by=referral,
+            referral_code=own_referral_code, referred_by=referral,
             password_ciphertext=encrypt_password(password),
         )
     except Exception as exc:
@@ -209,8 +227,9 @@ def create_account(request):
     try:
         provision_account(
             request.user, username, form.cleaned_data["password"], form.cleaned_data["valid_days"],
-            form.cleaned_data["max_connections"], referral_for(form.cleaned_data["referral_code"]),
+            form.cleaned_data["max_connections"], referral_for(form.cleaned_data["referred_by_code"]),
             form.cleaned_data["start_on_first_connection"], traffic_bytes(form.cleaned_data["traffic_gb"]),
+            form.cleaned_data["referral_code"],
         )
     except ProvisionError as exc:
         record(request, username, "create", False)
@@ -249,7 +268,7 @@ def bulk_create_accounts(request):
         return redirect("dashboard")
     data = form.cleaned_data
     try:
-        referral = referral_for(data["referral_code"])
+        referral = referral_for(data["referred_by_code"])
     except ProvisionError as exc:
         messages.error(request, str(exc))
         return redirect("dashboard")
@@ -318,20 +337,31 @@ def edit_account(request, pk):
     password = form.cleaned_data["password"] or None
     traffic_gb = form.cleaned_data["traffic_gb"]
     traffic_limit_bytes = account.traffic_limit_bytes if traffic_gb is None else traffic_bytes(traffic_gb) or None
-    if (max_connections == account.max_connections and expires_at == account.expires_at and
-            traffic_limit_bytes == account.traffic_limit_bytes and
-            (days is None or not pending or days == account.valid_days) and password is None):
+    try:
+        own_code = unique_referral_code(
+            form.cleaned_data["referral_code"] if "referral_code" in request.POST else account.referral_code,
+            exclude_pk=account.pk,
+        )
+    except ProvisionError as exc:
+        messages.error(request, str(exc))
+        return redirect("dashboard")
+    referral_changed = own_code != account.referral_code
+    linux_changed = (max_connections != account.max_connections or expires_at != account.expires_at or
+                     traffic_limit_bytes != account.traffic_limit_bytes or
+                     (days is not None and pending and days != account.valid_days) or password is not None)
+    if not linux_changed and not referral_changed:
         messages.info(request, f"No changes to {account.username}.")
         return redirect("dashboard")
     try:
-        call_helper(
-            "update", account.username, password,
-            expires_at=int(expires_at.timestamp()) if days is not None and not pending else None,
-            valid_days=days if days is not None and pending else None,
-            max_connections=max_connections, enabled=account.enabled,
-            traffic_limit_bytes=(traffic_limit_bytes if traffic_limit_bytes is not None else 0)
-                                if traffic_gb is not None else None,
-        )
+        if linux_changed:
+            call_helper(
+                "update", account.username, password,
+                expires_at=int(expires_at.timestamp()) if days is not None and not pending else None,
+                valid_days=days if days is not None and pending else None,
+                max_connections=max_connections, enabled=account.enabled,
+                traffic_limit_bytes=(traffic_limit_bytes if traffic_limit_bytes is not None else 0)
+                                    if traffic_gb is not None else None,
+            )
     except ProvisionError as exc:
         record(request, account.username, "update", False)
         messages.error(request, str(exc))
@@ -341,11 +371,19 @@ def edit_account(request, pk):
             account.valid_days = days
         account.max_connections = max_connections
         account.traffic_limit_bytes = traffic_limit_bytes
+        account.referral_code = own_code
         fields = ["expires_at", "max_connections", "valid_days", "traffic_limit_bytes"]
+        if referral_changed:
+            fields.append("referral_code")
         if password is not None:
             account.password_ciphertext = encrypt_password(password)
             fields.append("password_ciphertext")
-        account.save(update_fields=fields)
+        try:
+            account.save(update_fields=fields)
+        except IntegrityError:
+            record(request, account.username, "update", False)
+            messages.error(request, "This referral code is already in use.")
+            return redirect("dashboard")
         record(request, account.username, "update", True)
         messages.success(request, f"Updated {account.username}.")
     return redirect("dashboard")

@@ -6,6 +6,12 @@ from decimal import Decimal
 USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 
 
+def valid_referral_text(value):
+    if "\x00" in value:
+        raise forms.ValidationError("A referral code cannot contain NUL.")
+    return value
+
+
 class CreateAccountForm(forms.Form):
     username = forms.CharField(max_length=32, help_text="SSH login name, e.g. ali or vpn_ali")
     password = forms.CharField(widget=forms.PasswordInput, max_length=256, strip=False)
@@ -14,7 +20,9 @@ class CreateAccountForm(forms.Form):
     traffic_gb = forms.DecimalField(required=False, min_value=Decimal("0.001"), max_value=Decimal("100000"),
                                     max_digits=9, decimal_places=3, label="Traffic limit (GiB)",
                                     help_text="Leave blank for unlimited traffic.")
-    referral_code = forms.CharField(required=False, max_length=12, label="Referral code")
+    referral_code = forms.CharField(required=False, label="This user's referral code",
+                                    help_text="Choose any unique code. Leave blank to set it later.")
+    referred_by_code = forms.CharField(required=False, label="Introduced by referral code")
     start_on_first_connection = forms.BooleanField(required=False, label="Start validity on first connection")
 
     def clean_username(self):
@@ -28,6 +36,12 @@ class CreateAccountForm(forms.Form):
         if any(character in value for character in "\r\n\x00"):
             raise forms.ValidationError("The password cannot contain a line break or NUL character.")
         return value
+
+    def clean_referral_code(self):
+        return valid_referral_text(self.cleaned_data["referral_code"])
+
+    def clean_referred_by_code(self):
+        return valid_referral_text(self.cleaned_data["referred_by_code"])
 
 
 class BulkCreateAccountForm(forms.Form):
@@ -43,7 +57,7 @@ class BulkCreateAccountForm(forms.Form):
     traffic_gb = forms.DecimalField(required=False, min_value=Decimal("0.001"), max_value=Decimal("100000"),
                                     max_digits=9, decimal_places=3, label="Traffic limit (GiB)",
                                     help_text="Leave blank for unlimited traffic.")
-    referral_code = forms.CharField(required=False, max_length=12, label="Referral code")
+    referred_by_code = forms.CharField(required=False, label="Introduced by referral code")
     valid_days = forms.IntegerField(min_value=1, max_value=36500, label="Active days")
     start_on_first_connection = forms.BooleanField(required=False, label="Start validity on first connection")
 
@@ -59,6 +73,9 @@ class BulkCreateAccountForm(forms.Form):
             raise forms.ValidationError("The password cannot contain a line break or NUL character.")
         return value
 
+    def clean_referred_by_code(self):
+        return valid_referral_text(self.cleaned_data["referred_by_code"])
+
 class PasswordForm(forms.Form):
     password = forms.CharField(widget=forms.PasswordInput, max_length=256, strip=False)
 
@@ -70,6 +87,8 @@ class PasswordForm(forms.Form):
 
 
 class EditAccountForm(forms.Form):
+    referral_code = forms.CharField(required=False, label="This user's referral code",
+                                    help_text="Set your own code, or clear the field to remove it.")
     password = forms.CharField(
         required=False, max_length=256, strip=False, widget=forms.PasswordInput,
         label="New password", help_text="Leave blank to keep the current password.",
@@ -94,3 +113,6 @@ class EditAccountForm(forms.Form):
         if any(character in value for character in "\r\n\x00"):
             raise forms.ValidationError("The password cannot contain a line break or NUL character.")
         return value
+
+    def clean_referral_code(self):
+        return valid_referral_text(self.cleaned_data["referral_code"])
