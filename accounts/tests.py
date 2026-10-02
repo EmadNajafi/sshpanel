@@ -472,12 +472,12 @@ class AccountViewsTests(TestCase):
     def test_admin_can_change_own_password_and_keep_session(self):
         response = self.client.post(reverse("change_admin_password"), {
             "old_password": "correct-long-password",
-            "new_password1": "new-admin-password-long",
-            "new_password2": "new-admin-password-long",
+            "new_password1": "1",
+            "new_password2": "1",
         })
         self.assertEqual(response.status_code, 302)
         self.staff.refresh_from_db()
-        self.assertTrue(self.staff.check_password("new-admin-password-long"))
+        self.assertTrue(self.staff.check_password("1"))
         self.assertEqual(self.client.get(reverse("panel_settings")).status_code, 200)
 
     @patch("accounts.views.call_helper", return_value='{"old": 5656, "new": 6677}')
@@ -709,8 +709,13 @@ class InitialAdminTests(TestCase):
         self.assertTrue(admin.check_password("long-secret-password-123"))
         self.assertNotIn("long-secret-password-123", admin.password)
 
-    def test_rejects_short_admin_password(self):
-        with patch("sys.stdin", StringIO("emad\nshort\n")):
+    def test_accepts_one_character_admin_password(self):
+        with patch("sys.stdin", StringIO("emad\n1\n")):
+            call_command("initial_admin", stdout=StringIO())
+        self.assertTrue(get_user_model().objects.get(username="emad").check_password("1"))
+
+    def test_rejects_empty_admin_password(self):
+        with patch("sys.stdin", StringIO("emad\n\n")):
             with self.assertRaises(CommandError):
                 call_command("initial_admin", stdout=StringIO())
         self.assertFalse(get_user_model().objects.filter(username="emad").exists())

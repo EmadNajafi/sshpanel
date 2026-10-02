@@ -18,15 +18,15 @@ if [[ -e /opt/ssh-vpn-panel || -e /etc/sshvpn/panel.env ]]; then
 fi
 
 read -r -p "Administrator username: " admin_username
-read -r -s -p "Administrator password (at least 12 characters): " admin_password
+read -r -s -p "Administrator password: " admin_password
 echo
 read -r -s -p "Confirm administrator password: " admin_confirmation
 echo
 if [[ ! "$admin_username" =~ ^[A-Za-z][A-Za-z0-9_]{2,31}$ ]]; then
   echo "Use 3-32 letters, digits or underscores; start with a letter." >&2; exit 1
 fi
-if [[ ${#admin_password} -lt 12 || ${#admin_password} -gt 256 || "$admin_password" != "$admin_confirmation" ]]; then
-  echo "Administrator passwords must match and contain 12-256 characters." >&2; exit 1
+if [[ -z "$admin_password" || ${#admin_password} -gt 4096 || "$admin_password" != "$admin_confirmation" ]]; then
+  echo "Administrator passwords must match and cannot be empty (maximum 4096 characters)." >&2; exit 1
 fi
 unset admin_confirmation
 

@@ -17,8 +17,8 @@ class Command(BaseCommand):
         password = sys.stdin.readline().rstrip("\n")
         if not ADMIN_USERNAME.fullmatch(username):
             raise CommandError("Administrator username is invalid.")
-        if len(password) < 12 or "\r" in password:
-            raise CommandError("Administrator password must contain at least 12 characters.")
+        if not password or len(password) > 4096 or "\r" in password or "\x00" in password:
+            raise CommandError("Administrator password must be nonempty (maximum 4096 characters).")
         user_model = get_user_model()
         if user_model.objects.filter(username=username).exists():
             raise CommandError("Administrator username already exists.")

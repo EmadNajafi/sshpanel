@@ -110,7 +110,7 @@
     "Change web address": "تغییر نشانی وب", "ACCOUNT SECURITY": "امنیت حساب",
     "Administrator password": "رمز مدیر", "Update the password used to sign in to this panel.": "رمز ورود به پنل را تغییر دهید.",
     "Current password": "رمز فعلی", "Confirm new password": "تأیید رمز جدید",
-    "Use at least 12 characters. Avoid a common or numeric-only password.": "حداقل ۱۲ کاراکتر وارد کنید و از رمز رایج یا فقط عدد استفاده نکنید.",
+    "Any nonempty password is accepted.": "هر رمز غیرخالی پذیرفته می‌شود.",
     "Update password": "تغییر رمز", "DATA & RECOVERY": "داده و بازیابی",
     "Backup and restore": "پشتیبان‌گیری و بازیابی",
     "Keep a complete copy of panel data for migration or recovery.": "برای انتقال یا بازیابی، نسخه‌ای کامل از داده‌های پنل نگه دارید.",

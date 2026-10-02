@@ -65,12 +65,7 @@ DATABASES = {"default": {
     "PORT": os.environ.get("DB_PORT", "5432"),
     "CONN_MAX_AGE": 60,
 }}
-AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 12}},
-    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
-    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
-]
+AUTH_PASSWORD_VALIDATORS = []
 LANGUAGE_CODE = "en-us"
 LANGUAGES = [("en", "English"), ("fa", "فارسی")]
 TIME_ZONE = "UTC"
