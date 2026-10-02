@@ -1,5 +1,6 @@
 import re
 from django import forms
+from decimal import Decimal
 
 
 USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
@@ -10,6 +11,9 @@ class CreateAccountForm(forms.Form):
     password = forms.CharField(widget=forms.PasswordInput, max_length=256, strip=False)
     valid_days = forms.IntegerField(min_value=1, max_value=36500, label="Active days")
     max_connections = forms.IntegerField(min_value=1, max_value=10000, label="Simultaneous connections")
+    traffic_gb = forms.DecimalField(required=False, min_value=Decimal("0.001"), max_value=Decimal("100000"),
+                                    max_digits=9, decimal_places=3, label="Traffic limit (GiB)",
+                                    help_text="Leave blank for unlimited traffic.")
     referral_code = forms.CharField(required=False, max_length=12, label="Referral code")
     start_on_first_connection = forms.BooleanField(required=False, label="Start validity on first connection")
 
@@ -25,6 +29,35 @@ class CreateAccountForm(forms.Form):
             raise forms.ValidationError("The password cannot contain a line break or NUL character.")
         return value
 
+
+class BulkCreateAccountForm(forms.Form):
+    count = forms.IntegerField(min_value=1, max_value=100, label="Number of users")
+    prefix = forms.CharField(max_length=20, initial="user", label="Username prefix")
+    start_number = forms.IntegerField(min_value=0, max_value=999999999, initial=1000, label="Minimum number")
+    password = forms.CharField(required=False, max_length=256, strip=False, widget=forms.PasswordInput,
+                               label="Fixed password", help_text="Optional. Leave blank to generate a unique password per user.")
+    password_mode = forms.ChoiceField(choices=(("digits", "Numbers"), ("mixed", "Letters and numbers")),
+                                      initial="digits", widget=forms.RadioSelect, label="Generated password")
+    password_length = forms.IntegerField(min_value=4, max_value=64, initial=8, label="Password length")
+    max_connections = forms.IntegerField(min_value=1, max_value=10000, initial=1, label="Simultaneous connections")
+    traffic_gb = forms.DecimalField(required=False, min_value=Decimal("0.001"), max_value=Decimal("100000"),
+                                    max_digits=9, decimal_places=3, label="Traffic limit (GiB)",
+                                    help_text="Leave blank for unlimited traffic.")
+    referral_code = forms.CharField(required=False, max_length=12, label="Referral code")
+    valid_days = forms.IntegerField(min_value=1, max_value=36500, label="Active days")
+    start_on_first_connection = forms.BooleanField(required=False, label="Start validity on first connection")
+
+    def clean_prefix(self):
+        value = self.cleaned_data["prefix"]
+        if not USERNAME_RE.fullmatch(value):
+            raise forms.ValidationError("Use lowercase letters, digits, underscores or hyphens; start with a letter or underscore.")
+        return value
+
+    def clean_password(self):
+        value = self.cleaned_data["password"]
+        if any(character in value for character in "\r\n\x00"):
+            raise forms.ValidationError("The password cannot contain a line break or NUL character.")
+        return value
 
 class PasswordForm(forms.Form):
     password = forms.CharField(widget=forms.PasswordInput, max_length=256, strip=False)
@@ -49,6 +82,11 @@ class EditAccountForm(forms.Form):
     max_connections = forms.IntegerField(
         required=False, min_value=1, max_value=10000, label="Simultaneous connections",
         help_text="Leave blank to keep the current limit.",
+    )
+    traffic_gb = forms.DecimalField(
+        required=False, min_value=Decimal("0"), max_value=Decimal("100000"),
+        max_digits=9, decimal_places=3, label="Traffic limit (GiB)",
+        help_text="Leave blank to keep the current limit; use 0 for unlimited.",
     )
 
     def clean_password(self):

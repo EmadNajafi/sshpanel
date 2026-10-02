@@ -145,6 +145,22 @@ h1, h2, p { margin-top: 0; }
 .dialog-close { width: 32px; height: 32px; flex: 0 0 32px; border: 0; border-radius: 9px; background: #f0f4f9; color: #53657e; font-size: 24px; line-height: 1; }
 .dialog-close:hover { background: #e4ebf4; }
 .account-dialog .panel-description { margin-bottom: 20px; }
+.bulk-dialog { width: min(100% - 32px, 690px); background: #182230; color: #f6f8fc; border-color: #364254; }
+.bulk-dialog .eyebrow { color: #90b7ff; }
+.bulk-dialog .panel-description, .bulk-dialog .helptext { color: #9caabd; }
+.bulk-dialog label, .bulk-dialog legend { color: #b8c6d9; }
+.bulk-dialog input:not([type="checkbox"]):not([type="radio"]) { background: #263241; border-color: #3d4a5b; color: #fff; }
+.bulk-dialog input::placeholder { color: #8c9aae; }
+.bulk-dialog .dialog-close { background: #29394c; color: #e8effa; }
+.bulk-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 16px; }
+.bulk-password-mode { min-width: 0; margin: 0 0 17px; padding: 8px 12px; border: 1px solid #3d4a5b; border-radius: 10px; }
+.bulk-password-mode legend { padding: 0 4px; font-size: 12px; font-weight: 750; }
+.bulk-password-mode > div { display: flex; gap: 16px; flex-wrap: wrap; }
+.bulk-password-mode label, .bulk-first-connection label { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.bulk-password-mode input[type="radio"] { width: 16px; min-height: 0; height: 16px; margin: 0; padding: 0; accent-color: #59c9e8; }
+.bulk-first-connection { margin-top: 5px !important; }
+.bulk-result-panel { margin-top: 20px; }
+.bulk-warning { padding: 14px 18px; border: 1px solid #f5cb70; border-radius: 12px; background: #fff5dd; color: #7b5210; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 22px; }
 
 .account-form p, .login-form p { margin: 0 0 17px; }
@@ -444,6 +460,7 @@ td { color: #506078; font-size: 12px; }
   .admin-badge { display: none; }
 }
 @media (max-width: 520px) {
+  .bulk-grid { grid-template-columns: 1fr; }
   .theme-toggle [data-theme-label] { display: none; }
   .web-address-form { grid-template-columns: 1fr; }
   .settings-section { padding: 22px 18px; }

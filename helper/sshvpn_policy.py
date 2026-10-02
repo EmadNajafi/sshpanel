@@ -28,7 +28,8 @@ def policy_path(username):
     return POLICY_DIR / f"{username}.json"
 
 
-def write_policy(username, expires_at, max_connections, *, valid_days=None, activated_at=None):
+def write_policy(username, expires_at, max_connections, *, valid_days=None, activated_at=None,
+                 traffic_limit_bytes=None):
     path = policy_path(username)
     if expires_at is not None and (type(expires_at) is not int or expires_at <= 0):
         raise ValueError("Invalid expiry time.")
@@ -36,6 +37,9 @@ def write_policy(username, expires_at, max_connections, *, valid_days=None, acti
         raise ValueError("Invalid connection limit.")
     if valid_days is not None and (type(valid_days) is not int or not 1 <= valid_days <= 36500):
         raise ValueError("Invalid validity period.")
+    if traffic_limit_bytes is not None and (type(traffic_limit_bytes) is not int or
+                                            not 1 <= traffic_limit_bytes <= 100000 * 1024 ** 3):
+        raise ValueError("Invalid traffic limit.")
     if activated_at is not None and (type(activated_at) is not int or activated_at <= 0):
         raise ValueError("Invalid activation time.")
     if valid_days is not None and ((expires_at is None) != (activated_at is None)):
@@ -45,7 +49,8 @@ def write_policy(username, expires_at, max_connections, *, valid_days=None, acti
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as output:
             json.dump({"expires_at": expires_at, "max_connections": max_connections,
-                       "valid_days": valid_days, "activated_at": activated_at}, output)
+                       "valid_days": valid_days, "activated_at": activated_at,
+                       "traffic_limit_bytes": traffic_limit_bytes}, output)
             output.flush()
             os.fsync(output.fileno())
         os.chmod(temporary, 0o600)
@@ -62,11 +67,16 @@ def read_policy(username):
     max_connections = policy["max_connections"]
     policy.setdefault("valid_days", None)
     policy.setdefault("activated_at", None)
+    policy.setdefault("traffic_limit_bytes", None)
     if expires_at is not None and (type(expires_at) is not int or expires_at <= 0):
         raise ValueError("Invalid expiry policy.")
     if max_connections is not None and (type(max_connections) is not int or not 1 <= max_connections <= 10000):
         raise ValueError("Invalid connection policy.")
     valid_days, activated_at = policy["valid_days"], policy["activated_at"]
+    traffic_limit_bytes = policy["traffic_limit_bytes"]
+    if traffic_limit_bytes is not None and (type(traffic_limit_bytes) is not int or
+                                            not 1 <= traffic_limit_bytes <= 100000 * 1024 ** 3):
+        raise ValueError("Invalid traffic policy.")
     if valid_days is not None and (type(valid_days) is not int or not 1 <= valid_days <= 36500):
         raise ValueError("Invalid validity policy.")
     if activated_at is not None and (type(activated_at) is not int or activated_at <= 0):
@@ -115,6 +125,11 @@ def admit_connection(username, monitor_pid, now=None, remote_ip=None):
         policy = read_policy(username)  # Re-read while holding the account's admission lock.
         if policy["expires_at"] is not None and now >= policy["expires_at"]:
             return False
+        if policy["traffic_limit_bytes"] is not None:
+            from sshvpn_usage import snapshot
+            current = snapshot().get(username, {})
+            if current.get("upload_bytes", 0) + current.get("download_bytes", 0) >= policy["traffic_limit_bytes"]:
+                return False
         limit = policy["max_connections"]
         start_time = process_start_time(monitor_pid)
         state.seek(0)
@@ -146,7 +161,8 @@ def admit_connection(username, monitor_pid, now=None, remote_ip=None):
                 activated_at = int(now)
                 expires_at = activated_at + policy["valid_days"] * 86400
                 write_policy(username, expires_at, limit,
-                             valid_days=policy["valid_days"], activated_at=activated_at)
+                             valid_days=policy["valid_days"], activated_at=activated_at,
+                             traffic_limit_bytes=policy["traffic_limit_bytes"])
             live.append(current)
             allowed = True
         state.seek(0)

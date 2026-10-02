@@ -2,20 +2,20 @@ from datetime import datetime, timedelta, timezone as datetime_timezone
 import json
 import math
 import secrets
+import string
 
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.decorators import user_passes_test
 from django.conf import settings
-from django.db import IntegrityError
 from django.http import FileResponse, Http404, JsonResponse
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
 from django.utils import timezone
 
-from .forms import CreateAccountForm, EditAccountForm, PasswordForm
+from .forms import BulkCreateAccountForm, CreateAccountForm, EditAccountForm, PasswordForm
 from .backups import BACKUP_DIR, BACKUP_NAME, UPLOAD_DIR, BackupError, call_backup, list_backups, save_upload
 from .models import AuditEvent, VpnAccount
 from .services import ProvisionError, call_helper, get_ssh_port
@@ -43,6 +43,7 @@ def get_account_usage():
             "upload": format_bytes(item["upload_bytes"]),
             "download": format_bytes(item["download_bytes"]),
             "total": format_bytes(item["upload_bytes"] + item["download_bytes"]),
+            "total_bytes": item["upload_bytes"] + item["download_bytes"],
         } for username, item in raw.items()}
     except (ProvisionError, ValueError, TypeError, KeyError, OverflowError, AttributeError):
         return None
@@ -67,7 +68,9 @@ def sync_account_activation():
 
 
 def account_summary(accounts, usage, now):
-    inactive = sum(not account.enabled or (account.expires_at is not None and account.expires_at <= now)
+    inactive = sum(not account.enabled or (account.expires_at is not None and account.expires_at <= now) or
+                   (usage is not None and account.traffic_limit_bytes is not None and
+                    usage.get(account.username, {}).get("total_bytes", 0) >= account.traffic_limit_bytes)
                    for account in accounts)
     return {
         "total": len(accounts),
@@ -79,6 +82,8 @@ def account_summary(accounts, usage, now):
 
 @staff_required
 def dashboard(request):
+    bulk_token = secrets.token_urlsafe(24)
+    request.session["bulk_create_token"] = bulk_token
     sync_account_activation()
     accounts = list(VpnAccount.objects.select_related("created_by", "referred_by").order_by("username"))
     usage = get_account_usage()
@@ -90,6 +95,10 @@ def dashboard(request):
             referrals.setdefault(account.referred_by_id, []).append(account)
     for account in accounts:
         account.usage = usage.get(account.username) if usage is not None else None
+        account.traffic_limit_display = (format_bytes(account.traffic_limit_bytes)
+                                         if account.traffic_limit_bytes is not None else None)
+        account.traffic_exhausted = (account.traffic_limit_bytes is not None and account.usage is not None and
+                                     account.usage.get("total_bytes", 0) >= account.traffic_limit_bytes)
         account.referral_users = referrals.get(account.pk, [])
         account.referral_count = len(account.referral_users)
         account.referral_active_count = sum(child.enabled and not child.is_expired for child in account.referral_users)
@@ -104,6 +113,8 @@ def dashboard(request):
         "account_inactive": summary["inactive"],
         "metrics": get_system_metrics(),
         "create_form": CreateAccountForm(),
+        "bulk_create_form": BulkCreateAccountForm(),
+        "bulk_create_token": bulk_token,
         "vpn_ssh_port": get_ssh_port(),
     })
 
@@ -127,7 +138,7 @@ def system_metrics(request):
 def account_usage(request):
     sync_account_activation()
     usage = get_account_usage()
-    accounts = list(VpnAccount.objects.only("username", "enabled", "expires_at", "valid_days", "activated_at"))
+    accounts = list(VpnAccount.objects.only("username", "enabled", "expires_at", "valid_days", "activated_at", "traffic_limit_bytes"))
     response = JsonResponse({"accounts": usage, "available": usage is not None,
                              "activated": [account.username for account in accounts if account.activated_at is not None],
                              "summary": account_summary(accounts, usage, timezone.now())})
@@ -137,6 +148,49 @@ def account_usage(request):
 
 def record(request, username, action, succeeded):
     AuditEvent.objects.create(actor=request.user, username=username, action=action, succeeded=succeeded)
+
+
+def traffic_bytes(gigabytes):
+    return int(gigabytes * 1024 ** 3) if gigabytes is not None else None
+
+
+def referral_for(code):
+    if not code:
+        return None
+    referral = VpnAccount.objects.filter(referral_code=code.strip().upper()).first()
+    if referral is None:
+        raise ProvisionError("Referral code was not found.")
+    return referral
+
+
+def provision_account(actor, username, password, valid_days, max_connections,
+                      referral, first_connection, traffic_limit_bytes):
+    expires_at = None if first_connection else timezone.now() + timedelta(days=valid_days)
+    options = {"max_connections": max_connections}
+    if first_connection:
+        options["valid_days"] = valid_days
+    else:
+        options["expires_at"] = int(expires_at.timestamp())
+    if traffic_limit_bytes is not None:
+        options["traffic_limit_bytes"] = traffic_limit_bytes
+    call_helper("create", username, password, **options)
+    try:
+        code = secrets.token_hex(6).upper()
+        while VpnAccount.objects.filter(referral_code=code).exists():
+            code = secrets.token_hex(6).upper()
+        return VpnAccount.objects.create(
+            username=username, created_by=actor, expires_at=expires_at,
+            valid_days=valid_days if first_connection else None,
+            max_connections=max_connections, traffic_limit_bytes=traffic_limit_bytes,
+            referral_code=code, referred_by=referral,
+            password_ciphertext=encrypt_password(password),
+        )
+    except Exception as exc:
+        try:
+            call_helper("delete", username)
+        except ProvisionError as cleanup_error:
+            raise ProvisionError(f"Could not save {username}; its Linux account needs manual cleanup: {cleanup_error}") from exc
+        raise ProvisionError(f"Could not save {username}.") from exc
 
 
 @staff_required
@@ -152,38 +206,12 @@ def create_account(request):
     if VpnAccount.objects.filter(username=username).exists():
         messages.error(request, "This account already exists.")
         return redirect("dashboard")
-    referral = None
-    code = form.cleaned_data["referral_code"].strip().upper()
-    if code:
-        referral = VpnAccount.objects.filter(referral_code=code).first()
-        if referral is None:
-            messages.error(request, "Referral code was not found.")
-            return redirect("dashboard")
     try:
-        first_connection = form.cleaned_data["start_on_first_connection"]
-        valid_days = form.cleaned_data["valid_days"]
-        expires_at = None if first_connection else timezone.now() + timedelta(days=valid_days)
-        max_connections = form.cleaned_data["max_connections"]
-        helper_options = {"max_connections": max_connections}
-        if first_connection:
-            helper_options["valid_days"] = valid_days
-        else:
-            helper_options["expires_at"] = int(expires_at.timestamp())
-        call_helper("create", username, form.cleaned_data["password"], **helper_options)
-        try:
-            referral_code = secrets.token_hex(6).upper()
-            while VpnAccount.objects.filter(referral_code=referral_code).exists():
-                referral_code = secrets.token_hex(6).upper()
-            VpnAccount.objects.create(
-                username=username, created_by=request.user,
-                expires_at=expires_at, max_connections=max_connections,
-                valid_days=valid_days if first_connection else None,
-                referral_code=referral_code, referred_by=referral,
-                password_ciphertext=encrypt_password(form.cleaned_data["password"]),
-            )
-        except IntegrityError:
-            call_helper("delete", username)
-            raise ProvisionError("The account could not be saved.")
+        provision_account(
+            request.user, username, form.cleaned_data["password"], form.cleaned_data["valid_days"],
+            form.cleaned_data["max_connections"], referral_for(form.cleaned_data["referral_code"]),
+            form.cleaned_data["start_on_first_connection"], traffic_bytes(form.cleaned_data["traffic_gb"]),
+        )
     except ProvisionError as exc:
         record(request, username, "create", False)
         messages.error(request, str(exc))
@@ -191,6 +219,81 @@ def create_account(request):
         record(request, username, "create", True)
         messages.success(request, f"Created {username}.")
     return redirect("dashboard")
+
+
+def generated_password(mode, length):
+    if mode == "digits":
+        return "".join(secrets.choice(string.digits) for _ in range(length))
+    letters = string.ascii_letters
+    characters = [secrets.choice(letters), secrets.choice(string.digits)]
+    characters.extend(secrets.choice(letters + string.digits) for _ in range(length - 2))
+    secrets.SystemRandom().shuffle(characters)
+    return "".join(characters)
+
+
+@staff_required
+@require_POST
+def bulk_create_accounts(request):
+    submitted_token = request.POST.get("batch_token", "")
+    saved_token = request.session.get("bulk_create_token", "")
+    if not saved_token or not secrets.compare_digest(submitted_token, saved_token):
+        messages.error(request, "This bulk request has already been processed. Open the form again.")
+        return redirect("dashboard")
+    request.session.pop("bulk_create_token", None)
+    request.session.save()
+    form = BulkCreateAccountForm(request.POST)
+    if not form.is_valid():
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                messages.error(request, error)
+        return redirect("dashboard")
+    data = form.cleaned_data
+    try:
+        referral = referral_for(data["referral_code"])
+    except ProvisionError as exc:
+        messages.error(request, str(exc))
+        return redirect("dashboard")
+    numbers = secrets.SystemRandom().sample(range(data["start_number"], data["start_number"] + 1_000_000),
+                                             data["count"])
+    usernames = [f"{data['prefix']}{number}" for number in numbers]
+    collisions = set(VpnAccount.objects.filter(username__in=usernames).values_list("username", flat=True))
+    if collisions:
+        messages.error(request, "These generated names already exist: " + ", ".join(sorted(collisions)))
+        return redirect("dashboard")
+    created = []
+    used_passwords = set()
+    failure = None
+    for username in usernames:
+        password = data["password"]
+        if not password:
+            for _ in range(100):
+                password = generated_password(data["password_mode"], data["password_length"])
+                if password not in used_passwords:
+                    break
+            else:
+                failure = "Could not generate enough unique passwords. Increase the password length."
+                break
+            used_passwords.add(password)
+        try:
+            account = provision_account(
+                request.user, username, password, data["valid_days"], data["max_connections"],
+                referral, data["start_on_first_connection"], traffic_bytes(data["traffic_gb"]),
+            )
+        except ProvisionError as exc:
+            record(request, username, "create", False)
+            failure = f"Stopped at {username}: {exc}"
+            break
+        record(request, username, "create", True)
+        created.append({"username": username, "password": password, "referral_code": account.referral_code,
+                        "expires_at": account.expires_at, "valid_days": data["valid_days"],
+                        "first_connection": data["start_on_first_connection"]})
+    response = render(request, "bulk_create_result.html", {
+        "created": created, "requested": data["count"], "failure": failure,
+        "vpn_ssh_port": get_ssh_port(), "panel_host": settings.ALLOWED_HOSTS[0],
+        "traffic_gb": data["traffic_gb"], "max_connections": data["max_connections"],
+    })
+    response["Cache-Control"] = "no-store, private"
+    return response
 
 
 @staff_required
@@ -213,7 +316,11 @@ def edit_account(request, pk):
     if max_connections is None:
         max_connections = account.max_connections
     password = form.cleaned_data["password"] or None
-    if max_connections == account.max_connections and expires_at == account.expires_at and (days is None or not pending or days == account.valid_days) and password is None:
+    traffic_gb = form.cleaned_data["traffic_gb"]
+    traffic_limit_bytes = account.traffic_limit_bytes if traffic_gb is None else traffic_bytes(traffic_gb) or None
+    if (max_connections == account.max_connections and expires_at == account.expires_at and
+            traffic_limit_bytes == account.traffic_limit_bytes and
+            (days is None or not pending or days == account.valid_days) and password is None):
         messages.info(request, f"No changes to {account.username}.")
         return redirect("dashboard")
     try:
@@ -222,6 +329,8 @@ def edit_account(request, pk):
             expires_at=int(expires_at.timestamp()) if days is not None and not pending else None,
             valid_days=days if days is not None and pending else None,
             max_connections=max_connections, enabled=account.enabled,
+            traffic_limit_bytes=(traffic_limit_bytes if traffic_limit_bytes is not None else 0)
+                                if traffic_gb is not None else None,
         )
     except ProvisionError as exc:
         record(request, account.username, "update", False)
@@ -231,7 +340,8 @@ def edit_account(request, pk):
         if pending and days is not None:
             account.valid_days = days
         account.max_connections = max_connections
-        fields = ["expires_at", "max_connections", "valid_days"]
+        account.traffic_limit_bytes = traffic_limit_bytes
+        fields = ["expires_at", "max_connections", "valid_days", "traffic_limit_bytes"]
         if password is not None:
             account.password_ciphertext = encrypt_password(password)
             fields.append("password_ciphertext")

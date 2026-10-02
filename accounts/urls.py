@@ -8,6 +8,7 @@ urlpatterns = [
     path("api/system-metrics/", views.system_metrics, name="system_metrics"),
     path("api/account-usage/", views.account_usage, name="account_usage"),
     path("accounts/new/", views.create_account, name="create_account"),
+    path("accounts/bulk-new/", views.bulk_create_accounts, name="bulk_create_accounts"),
     path("accounts/<int:pk>/edit/", views.edit_account, name="edit_account"),
     path("accounts/<int:pk>/extend/", views.extend_account, name="extend_account"),
     path("accounts/<int:pk>/traffic-reset/", views.reset_account_traffic, name="reset_account_traffic"),

@@ -89,6 +89,7 @@ def stop_user_processes(username):
 def sweep_expired_accounts():
     if not POLICY_DIR.exists():
         return
+    current_usage = None
     for path in POLICY_DIR.glob("*.json"):
         username = path.stem
         if not USERNAME.fullmatch(username):
@@ -98,8 +99,21 @@ def sweep_expired_accounts():
             policy = read_policy(username)
         except (KeyError, ValueError, FileNotFoundError):
             continue
-        if policy["expires_at"] is not None and time.time() >= policy["expires_at"]:
-            if not spwd.getspnam(username).sp_pwdp.startswith("!"):
+        expired = policy["expires_at"] is not None and time.time() >= policy["expires_at"]
+        exhausted = False
+        if policy["traffic_limit_bytes"] is not None:
+            if current_usage is None:
+                try:
+                    current_usage = usage_snapshot()
+                except (OSError, RuntimeError, ValueError):
+                    current_usage = False  # Disconnect metered sessions if counters cannot be trusted.
+            if current_usage is False:
+                exhausted = True
+            else:
+                totals = current_usage.get(username, {})
+                exhausted = totals.get("upload_bytes", 0) + totals.get("download_bytes", 0) >= policy["traffic_limit_bytes"]
+        if expired or exhausted:
+            if expired and not spwd.getspnam(username).sp_pwdp.startswith("!"):
                 run("/usr/sbin/usermod", "--lock", username)
             run("/usr/bin/pkill", "-KILL", "-u", username, ok=(0, 1))
 
@@ -175,12 +189,16 @@ def main():
             expires_at = request.get("expires_at")
             valid_days = request.get("valid_days")
             max_connections = request["max_connections"]
+            traffic_limit_bytes = request.get("traffic_limit_bytes")
             if valid_days is None and (type(expires_at) is not int or expires_at <= int(time.time())):
                 raise ValueError("Expiry must be in the future.")
             if valid_days is not None and (type(valid_days) is not int or not 1 <= valid_days <= 36500 or expires_at is not None):
                 raise ValueError("Invalid first-connection validity.")
             if type(max_connections) is not int or not 1 <= max_connections <= 10000:
                 raise ValueError("Invalid connection limit.")
+            if traffic_limit_bytes is not None and (type(traffic_limit_bytes) is not int or
+                                                    not 1 <= traffic_limit_bytes <= 100000 * 1024 ** 3):
+                raise ValueError("Invalid traffic limit.")
             try:
                 pwd.getpwnam(username)
             except KeyError:
@@ -191,7 +209,8 @@ def main():
             try:
                 verify_ssh_policy(username)
                 set_password(username, password)
-                write_policy(username, expires_at, max_connections, valid_days=valid_days)
+                write_policy(username, expires_at, max_connections, valid_days=valid_days,
+                             traffic_limit_bytes=traffic_limit_bytes)
             except Exception:
                 run("/usr/sbin/userdel", username)
                 raise
@@ -209,6 +228,9 @@ def main():
                 if "valid_days" in request and policy["activated_at"] is None:
                     expires_at = None
                 max_connections = request.get("max_connections", policy["max_connections"])
+                traffic_limit_bytes = request.get("traffic_limit_bytes", policy["traffic_limit_bytes"])
+                if traffic_limit_bytes == 0 and type(traffic_limit_bytes) is int:
+                    traffic_limit_bytes = None
                 enabled = request.get("enabled")
                 password = request.get("password")
                 if enabled is not True and enabled is not False:
@@ -219,6 +241,9 @@ def main():
                     raise ValueError("Invalid validity period.")
                 if "max_connections" in request and (type(max_connections) is not int or not 1 <= max_connections <= 10000):
                     raise ValueError("Invalid connection limit.")
+                if traffic_limit_bytes is not None and (type(traffic_limit_bytes) is not int or
+                                                        not 1 <= traffic_limit_bytes <= 100000 * 1024 ** 3):
+                    raise ValueError("Invalid traffic limit.")
                 if password is not None and (not isinstance(password, str) or not 1 <= len(password) <= 256 or any(c in password for c in "\n\r\x00")):
                     raise ValueError("Invalid password.")
                 old_hash = spwd.getspnam(username).sp_pwdp
@@ -226,7 +251,8 @@ def main():
                     if password is not None:
                         set_password(username, password)
                     write_policy(username, expires_at, max_connections,
-                                 valid_days=valid_days, activated_at=activated_at)
+                                 valid_days=valid_days, activated_at=activated_at,
+                                 traffic_limit_bytes=traffic_limit_bytes)
                     if enabled:
                         if old_hash.startswith("!"):
                             run("/usr/sbin/usermod", "--unlock", username)
@@ -234,7 +260,8 @@ def main():
                         run("/usr/sbin/usermod", "--lock", username)
                 except Exception:
                     write_policy(username, policy["expires_at"], policy["max_connections"],
-                                 valid_days=policy["valid_days"], activated_at=policy["activated_at"])
+                                 valid_days=policy["valid_days"], activated_at=policy["activated_at"],
+                                 traffic_limit_bytes=policy["traffic_limit_bytes"])
                     run("/usr/sbin/usermod", "--password", old_hash, username)
                     raise
                 if password is not None or policy["max_connections"] != max_connections:

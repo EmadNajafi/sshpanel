@@ -24,6 +24,12 @@ class AccountViewsTests(TestCase):
         self.staff = get_user_model().objects.create_user("owner", password="correct-long-password", is_staff=True)
         self.client.force_login(self.staff)
 
+    def bulk_post(self, data):
+        session = self.client.session
+        session["bulk_create_token"] = "test-batch-token"
+        session.save()
+        return self.client.post(reverse("bulk_create_accounts"), {**data, "batch_token": "test-batch-token"})
+
     @patch("accounts.views.call_helper")
     def test_create_and_disable_account(self, helper):
         response = self.client.post(reverse("create_account"), {
@@ -73,6 +79,82 @@ class AccountViewsTests(TestCase):
         account.refresh_from_db()
         self.assertEqual(int(account.activated_at.timestamp()), started)
         self.assertEqual(int(account.expires_at.timestamp()), started + 7 * 86400)
+
+    @patch("accounts.views.call_helper")
+    def test_bulk_creation_generates_distinct_users_and_passwords(self, helper):
+        response = self.bulk_post({
+            "count": "3", "prefix": "vpn_", "start_number": "1000", "password": "",
+            "password_mode": "digits", "password_length": "8", "max_connections": "2",
+            "traffic_gb": "2.5", "valid_days": "30", "start_on_first_connection": "on",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("no-store", response["Cache-Control"])
+        self.assertEqual(VpnAccount.objects.count(), 3)
+        self.assertEqual(helper.call_count, 3)
+        passwords = []
+        for account in VpnAccount.objects.all():
+            self.assertTrue(account.username.startswith("vpn_"))
+            self.assertGreaterEqual(int(account.username[4:]), 1000)
+            self.assertEqual(account.valid_days, 30)
+            self.assertIsNone(account.expires_at)
+            self.assertEqual(account.traffic_limit_bytes, int(2.5 * 1024 ** 3))
+            passwords.append(decrypt_password(account.password_ciphertext))
+        self.assertEqual(len(set(passwords)), 3)
+        self.assertTrue(all(len(password) == 8 and password.isdigit() for password in passwords))
+        self.assertContains(response, "3 of 3 users created")
+
+    @patch("accounts.views.call_helper")
+    def test_bulk_creation_reports_partial_failure_and_keeps_credentials(self, helper):
+        helper.side_effect = ["", ProvisionError("Linux account unavailable")]
+        response = self.bulk_post({
+            "count": "2", "prefix": "user", "start_number": "1000", "password": "shared",
+            "password_mode": "mixed", "password_length": "8", "max_connections": "1",
+            "valid_days": "7",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(VpnAccount.objects.count(), 1)
+        self.assertContains(response, "1 of 2 users created")
+        self.assertContains(response, "Linux account unavailable")
+        self.assertContains(response, "shared")
+
+    @patch("accounts.views.call_helper")
+    def test_bulk_rejects_invalid_prefix_before_provisioning(self, helper):
+        response = self.bulk_post({
+            "count": "2", "prefix": "Bad!", "start_number": "1", "password": "",
+            "password_mode": "digits", "password_length": "8", "max_connections": "1", "valid_days": "7",
+        })
+        self.assertEqual(response.status_code, 302)
+        helper.assert_not_called()
+
+    @patch("accounts.views.call_helper")
+    def test_bulk_post_cannot_be_replayed(self, helper):
+        data = {"count": "1", "prefix": "user", "start_number": "1000", "password": "fixed",
+                "password_mode": "digits", "password_length": "8", "max_connections": "1", "valid_days": "7"}
+        self.bulk_post(data)
+        self.assertEqual(VpnAccount.objects.count(), 1)
+        again = self.client.post(reverse("bulk_create_accounts"), {**data, "batch_token": "test-batch-token"})
+        self.assertEqual(again.status_code, 302)
+        self.assertEqual(VpnAccount.objects.count(), 1)
+        self.assertEqual(helper.call_count, 1)
+
+    @patch("accounts.views.call_helper")
+    def test_bulk_creation_requires_staff_and_post(self, helper):
+        self.assertEqual(self.client.get(reverse("bulk_create_accounts")).status_code, 405)
+        self.client.logout()
+        self.assertEqual(self.client.post(reverse("bulk_create_accounts"), {"count": "1"}).status_code, 302)
+        helper.assert_not_called()
+
+    @patch("accounts.views.call_helper")
+    def test_traffic_limit_can_be_changed_and_cleared(self, helper):
+        account = VpnAccount.objects.create(username="alice", created_by=self.staff)
+        self.client.post(reverse("edit_account", args=[account.pk]), {"traffic_gb": "1.5"})
+        account.refresh_from_db()
+        self.assertEqual(account.traffic_limit_bytes, int(1.5 * 1024 ** 3))
+        self.assertEqual(helper.call_args.kwargs["traffic_limit_bytes"], int(1.5 * 1024 ** 3))
+        self.client.post(reverse("edit_account", args=[account.pk]), {"traffic_gb": "0"})
+        account.refresh_from_db()
+        self.assertIsNone(account.traffic_limit_bytes)
+        self.assertEqual(helper.call_args.kwargs["traffic_limit_bytes"], 0)
 
     @patch("accounts.views.call_helper")
     def test_bad_username_does_not_reach_helper(self, helper):
@@ -293,6 +375,7 @@ class AccountViewsTests(TestCase):
         VpnAccount.objects.create(username="unlimited", created_by=self.staff)
         page = self.client.get(reverse("dashboard"))
         self.assertContains(page, "Days left")
+        self.assertContains(page, 'id="bulk-create-dialog"')
         self.assertContains(page, "3 days")
         self.assertContains(page, "0 days")
         self.assertContains(page, "Unlimited")

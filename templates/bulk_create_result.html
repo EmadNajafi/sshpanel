@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Bulk users · SSH VPN Panel{% endblock %}
+{% block scripts %}<script src="{% static 'bulk-result.js' %}?v=1" defer></script>{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">BULK VPN USERS</p><h1>Creation result</h1><p class="page-intro">{{ created|length }} of {{ requested }} users created. Save the credentials before leaving this page.</p></div><a class="button button-secondary" href="{% url 'dashboard' %}">Back to users</a></div>
+{% if failure %}<div class="bulk-warning" role="alert">{{ failure }} Existing rows below were created and remain active.</div>{% endif %}
+{% if created %}
+<section class="panel bulk-result-panel" data-bulk-result data-host="{{ panel_host }}" data-port="{{ vpn_ssh_port }}" data-connections="{{ max_connections }}" data-traffic="{% if traffic_gb %}{{ traffic_gb }} GiB{% else %}Unlimited{% endif %}">
+  <div class="panel-heading"><div><p class="eyebrow">CREATED ACCOUNTS</p><h2>Connection details</h2></div><div class="account-heading-actions"><button type="button" class="button button-secondary" data-bulk-copy>Copy all</button><button type="button" class="button button-primary" data-bulk-download>Download CSV</button></div></div>
+  <div class="table-scroll"><table><thead><tr><th>Username</th><th>Password</th><th>Referral code</th><th>Expiry</th><th>Connections</th><th>Traffic</th></tr></thead><tbody>
+  {% for account in created %}<tr data-bulk-row><td data-username>{{ account.username }}</td><td data-password>{{ account.password }}</td><td data-referral>{{ account.referral_code }}</td><td data-expiry>{% if account.first_connection %}{{ account.valid_days }} days after first connection{% else %}{{ account.expires_at|date:'Y-m-d H:i' }} UTC{% endif %}</td><td>{{ max_connections }}</td><td>{% if traffic_gb %}{{ traffic_gb }} GiB{% else %}Unlimited{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  <p class="panel-description">The CSV contains passwords. Keep the file private and delete copies you no longer need.</p>
+</section>
+{% endif %}
+{% endblock %}

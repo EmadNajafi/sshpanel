@@ -122,6 +122,7 @@
           row.dataset.validDays ? `شروع اعتبار: اولین اتصال موفق (${row.dataset.validDays} روز)` :
             `تاریخ انقضا (شمسی): ${formatPersianExpiry(row.dataset.expiresAt)}`,
           `Connection limit: ${button.dataset.connections || "Unlimited"}`,
+          `Traffic limit: ${row.dataset.trafficDisplay || "Unlimited"}`,
         ].join("\n");
         if (await copyText(details)) {
           showFeedback(`Connection details for ${row.dataset.accountUsername} copied.`);
@@ -187,11 +188,19 @@
         nameButton.disabled = !isOnline;
         const total = document.createElement("strong");
         total.className = "usage-total";
-        total.textContent = usage.total;
+        total.textContent = row.dataset.trafficDisplay ? `${usage.total} / ${row.dataset.trafficDisplay}` : usage.total;
         const detail = document.createElement("small");
         detail.className = "table-subtext";
         detail.textContent = `↑ ${usage.upload} · ↓ ${usage.download}`;
         usageCell.replaceChildren(total, detail);
+        if (row.dataset.trafficLimit && row.dataset.enabled === "true" &&
+            (!row.dataset.expiresAt || new Date(row.dataset.expiresAt) > new Date())) {
+          const exhausted = usage.total_bytes >= Number(row.dataset.trafficLimit);
+          const state = document.createElement("span");
+          state.className = `state ${exhausted ? "state-expired" : row.dataset.validDays ? "state-disabled" : "state-active"}`;
+          state.textContent = exhausted ? "Traffic exhausted" : row.dataset.validDays ? "Awaiting first connection" : "Active";
+          row.querySelector("[data-account-state]").replaceChildren(state);
+        }
       });
     } catch (_error) {
       // Keep the previous readings if a refresh fails.

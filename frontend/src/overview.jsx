@@ -19,7 +19,7 @@ function AccountOverview({ element }) {
   const cards = [
     { key: "total", title: "Total users", detail: "All VPN accounts", icon: "◎" },
     { key: "online", title: "Online now", detail: "Connected users, updated live", icon: "↗" },
-    { key: "inactive", title: "Inactive users", detail: "Disabled or expired", icon: "◌" },
+    { key: "inactive", title: "Inactive users", detail: "Disabled, expired or out of traffic", icon: "◌" },
   ];
   return <section className="summary-grid" aria-label="VPN account overview">
     {cards.map(({ key, title, detail, icon }) =>

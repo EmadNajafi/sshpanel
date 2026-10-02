@@ -20,16 +20,17 @@ spec.loader.exec_module(backup)
 
 
 class BackupArchiveTests(unittest.TestCase):
-    def make_archive(self, path, *, database=b"database rows", include_usage=True):
+    def make_archive(self, path, *, database=b"database rows", include_usage=True, accounts=None):
+        accounts = [] if accounts is None else accounts
         manifest = {
             "format": 2,
-            "account_count": 0,
+            "account_count": len(accounts),
             "database_sha256": hashlib.sha256(b"database rows").hexdigest(),
         }
         members = {
             "manifest.json": json.dumps(manifest).encode(),
             "database.dump": database,
-            "accounts.json": b"[]",
+            "accounts.json": json.dumps(accounts).encode(),
             "panel.env": b"DJANGO_SECRET_KEY=source-key\nDB_NAME=sshvpn\n",
             "usage.json": b"{}",
             "nginx.conf": b"server {}",
@@ -65,6 +66,20 @@ class BackupArchiveTests(unittest.TestCase):
             self.make_archive(path, database=b"changed rows")
             with self.assertRaisesRegex(ValueError, "checksum"):
                 backup.read_archive(path, extracted)
+
+    def test_archive_preserves_pending_activation_and_traffic_limit(self):
+        account = {"username": "alice", "password_hash": "$6$example", "policy": {
+            "expires_at": None, "max_connections": 2, "valid_days": 30,
+            "activated_at": None, "traffic_limit_bytes": 2 * 1024 ** 3,
+        }}
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            archive = directory / "backup.tar.gz"
+            self.make_archive(archive, accounts=[account])
+            extracted = directory / "extracted"
+            extracted.mkdir()
+            restored, _ = backup.read_archive(archive, extracted)
+            self.assertEqual(restored[0]["policy"], account["policy"])
 
 
 if __name__ == "__main__":

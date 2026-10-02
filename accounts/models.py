@@ -14,6 +14,7 @@ class VpnAccount(models.Model):
     referral_code = models.CharField(max_length=12, unique=True, null=True, blank=True)
     referred_by = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="referrals")
     max_connections = models.PositiveIntegerField(null=True, blank=True)
+    traffic_limit_bytes = models.PositiveBigIntegerField(null=True, blank=True)
     password_ciphertext = models.TextField(blank=True)
 
     def __str__(self):

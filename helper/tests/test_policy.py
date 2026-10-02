@@ -1,6 +1,8 @@
 """Connection admission behavior; filesystem locking runs natively on Linux."""
 
 import importlib
+import importlib.machinery
+import importlib.util
 import json
 from pathlib import Path
 import sys
@@ -10,7 +12,7 @@ import unittest
 from unittest.mock import patch
 
 
-for module_name in ("fcntl", "pwd", "grp"):
+for module_name in ("fcntl", "pwd", "grp", "spwd"):
     try:
         importlib.import_module(module_name)
     except ImportError:  # Windows development host
@@ -26,6 +28,10 @@ if not hasattr(sys.modules["fcntl"], "flock"):
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import sshvpn_policy as policy  # noqa: E402
 import sshvpn_usage as usage  # noqa: E402
+loader = importlib.machinery.SourceFileLoader("sshvpnctl_test", str(Path(__file__).resolve().parents[1] / "sshvpnctl"))
+spec = importlib.util.spec_from_loader(loader.name, loader)
+ctl = importlib.util.module_from_spec(spec)
+loader.exec_module(ctl)
 
 
 class PolicyTests(unittest.TestCase):
@@ -65,6 +71,13 @@ class PolicyTests(unittest.TestCase):
             self.assertTrue(policy.admit_connection("alice", 101, now=1002))
             self.assertEqual(policy.read_policy("alice")["expires_at"], 1000 + 30 * 86400)
 
+    def test_traffic_quota_denies_new_connection(self):
+        policy.write_policy("alice", 2000, 2, traffic_limit_bytes=1024)
+        with patch.object(policy, "process_start_time", return_value="one"), \
+             patch.object(usage, "snapshot", return_value={"alice": {"upload_bytes": 600, "download_bytes": 424}}):
+            self.assertFalse(policy.admit_connection("alice", 101, now=1000))
+        self.assertEqual(json.loads(policy.lease_path("alice").read_text() or "[]"), [])
+
     def test_records_ip_on_live_lease_without_duplicating_connection(self):
         policy.write_policy("alice", 2000, 2)
         with patch.object(policy, "process_start_time", return_value="one"):
@@ -94,6 +107,21 @@ class UsageResetTests(unittest.TestCase):
             usage.reset_account("alice")
         self.assertEqual(state["alice"], {"up": 0, "down": 0, "last_up": 950, "last_down": 1350})
         save.assert_called_once_with(state)
+
+
+class QuotaSweepTests(unittest.TestCase):
+    def test_reached_quota_disconnects_existing_sessions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            (directory / "alice.json").write_text("{}")
+            with patch.object(ctl, "POLICY_DIR", directory), \
+                 patch.object(ctl, "managed_user"), \
+                 patch.object(ctl.grp, "getgrnam", return_value=types.SimpleNamespace(gr_gid=1001), create=True), \
+                 patch.object(ctl, "read_policy", return_value={"expires_at": None, "traffic_limit_bytes": 1024}), \
+                 patch.object(ctl, "usage_snapshot", return_value={"alice": {"upload_bytes": 600, "download_bytes": 424}}), \
+                 patch.object(ctl, "run") as run:
+                ctl.sweep_expired_accounts()
+            run.assert_called_once_with("/usr/bin/pkill", "-KILL", "-u", "alice", ok=(0, 1))
 
 
 if __name__ == "__main__":
