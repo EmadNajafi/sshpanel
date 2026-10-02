@@ -10,6 +10,8 @@ table inet sshvpn_egress {
 
         # VPN users reach UDPGW only through SSH forwarding to loopback TCP.
         meta skgid sshvpn ip daddr 127.0.0.1 tcp dport __UDPGW_PORT__ accept
+        # Let the gateway answer those TCP sessions without opening other local destinations.
+        meta skgid "sshvpn-udpgw" ip daddr 127.0.0.1 tcp sport __UDPGW_PORT__ ct state established accept
 
         # Keep forwarding sockets away from this host and non-public networks.
         meta skgid sshvpn fib daddr type local reject
