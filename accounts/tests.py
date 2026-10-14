@@ -24,6 +24,11 @@ class AccountViewsTests(TestCase):
         self.staff = get_user_model().objects.create_user("owner", password="correct-long-password", is_staff=True)
         self.client.force_login(self.staff)
 
+    def test_login_url_redirects_existing_session_and_shows_form_after_logout(self):
+        self.assertRedirects(self.client.get(reverse("login")), reverse("dashboard"))
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("login")).status_code, 200)
+
     @patch("accounts.services.call_helper", return_value='{"port": 6677}')
     def test_current_ssh_port_comes_from_privileged_helper(self, helper):
         self.assertEqual(get_ssh_port(), 6677)
