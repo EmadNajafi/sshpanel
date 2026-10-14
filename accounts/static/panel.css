@@ -107,7 +107,10 @@ h1, h2, p { margin-top: 0; }
 
 .panel, .login-card { background: #fff; border: 1px solid var(--border); box-shadow: var(--shadow); }
 .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-bottom: 20px; }
-.summary-card { position: relative; display: grid; align-content: start; min-height: 169px; padding: 23px 25px; overflow: hidden; border: 1px solid var(--border); border-radius: 18px; background: #fff; box-shadow: var(--shadow); }
+.summary-card { position: relative; display: grid; align-content: start; width: 100%; min-height: 169px; padding: 23px 25px; overflow: hidden; border: 1px solid var(--border); border-radius: 18px; background: #fff; box-shadow: var(--shadow); color: inherit; font: inherit; text-align: start; cursor: pointer; transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease; }
+.summary-card:hover { transform: translateY(-2px); border-color: var(--summary-color); }
+.summary-card[aria-pressed="true"] { border-color: var(--summary-color); box-shadow: 0 0 0 2px var(--summary-wash), var(--shadow); }
+.summary-card:focus-visible { outline: 3px solid var(--summary-color); outline-offset: 3px; }
 .summary-card::after { content: ""; position: absolute; right: -26px; bottom: -60px; width: 150px; height: 150px; border-radius: 50%; background: var(--summary-wash); }
 .summary-total { --summary-color: #356de5; --summary-wash: #eff4ff; }
 .summary-online { --summary-color: #139774; --summary-wash: #e9f9f3; }

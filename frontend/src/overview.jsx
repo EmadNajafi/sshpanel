@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 function AccountOverview({ element }) {
+  const [filter, setFilter] = useState(() => new URLSearchParams(window.location.search).get("status") || "total");
   const [summary, setSummary] = useState({
     total: Number(element.dataset.total) || 0,
     online: element.dataset.online === "" ? null : Number(element.dataset.online),
@@ -13,7 +14,12 @@ function AccountOverview({ element }) {
       if (event.detail && typeof event.detail.total === "number") setSummary(event.detail);
     };
     window.addEventListener("sshvpn:account-summary", update);
-    return () => window.removeEventListener("sshvpn:account-summary", update);
+    const updateFilter = (event) => setFilter(event.detail?.filter || "total");
+    window.addEventListener("sshvpn:account-filter-changed", updateFilter);
+    return () => {
+      window.removeEventListener("sshvpn:account-summary", update);
+      window.removeEventListener("sshvpn:account-filter-changed", updateFilter);
+    };
   }, []);
 
   const cards = [
@@ -23,12 +29,13 @@ function AccountOverview({ element }) {
   ];
   return <section className="summary-grid" aria-label="VPN account overview">
     {cards.map(({ key, title, detail, icon }) =>
-      <article className={`summary-card summary-${key}`} key={key}>
+      <button className={`summary-card summary-${key}`} type="button" data-summary-filter={key}
+              aria-pressed={filter === key} key={key}>
         <span className="summary-icon" aria-hidden="true">{icon}</span>
         <span className="summary-label">{title}</span>
         <strong className="summary-value">{summary[key] ?? "—"}</strong>
         <span className="summary-detail">{detail}</span>
-      </article>
+      </button>
     )}
   </section>;
 }

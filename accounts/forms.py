@@ -21,9 +21,8 @@ class CreateAccountForm(forms.Form):
     traffic_gb = forms.DecimalField(required=False, min_value=Decimal("0.001"), max_value=Decimal("100000"),
                                     max_digits=9, decimal_places=3, label="Traffic limit (GiB)",
                                     help_text="Leave blank for unlimited traffic.")
-    referral_code = forms.CharField(required=False, label="This user's referral code",
-                                    help_text="Choose any unique code. Leave blank to set it later.")
-    referred_by_code = forms.CharField(required=False, label="Introduced by referral code")
+    referral_note = forms.CharField(required=False, label="Referral (optional)",
+                                    help_text="Any text identifying the referrer; no account link is created.")
     start_on_first_connection = forms.BooleanField(required=False, label="Start validity on first connection")
 
     def clean_username(self):
@@ -38,11 +37,8 @@ class CreateAccountForm(forms.Form):
             raise forms.ValidationError("The password cannot contain a line break or NUL character.")
         return value
 
-    def clean_referral_code(self):
-        return valid_referral_text(self.cleaned_data["referral_code"])
-
-    def clean_referred_by_code(self):
-        return valid_referral_text(self.cleaned_data["referred_by_code"])
+    def clean_referral_note(self):
+        return valid_referral_text(self.cleaned_data["referral_note"])
 
 
 class BulkCreateAccountForm(forms.Form):

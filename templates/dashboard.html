@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}Overview · SSH VPN Panel{% endblock %}
-{% block scripts %}<script src="{% static 'dashboard.js' %}?v=15" defer></script>{% endblock %}
+{% block scripts %}<script src="{% static 'dashboard.js' %}?v=16" defer></script>{% endblock %}
 {% block content %}
 <svg class="action-icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
   <symbol id="action-edit" viewBox="0 0 24 24"><path d="m4 16-.5 4.5L8 20l11-11-4-4L4 16Zm9.5-9.5 4 4M13 20h7"/></symbol>
@@ -22,9 +22,9 @@
 
 <div id="account-overview-root" data-total="{{ account_total }}" data-online="{{ account_online|default_if_none:'' }}" data-inactive="{{ account_inactive }}">
   <section class="summary-grid" aria-label="VPN account overview">
-    <article class="summary-card summary-total"><span class="summary-icon" aria-hidden="true">◎</span><span class="summary-label">Total users</span><strong class="summary-value">{{ account_total }}</strong><span class="summary-detail">All VPN accounts</span></article>
-    <article class="summary-card summary-online"><span class="summary-icon" aria-hidden="true">↗</span><span class="summary-label">Online now</span><strong class="summary-value">{{ account_online|default_if_none:'—' }}</strong><span class="summary-detail">Connected users, updated live</span></article>
-    <article class="summary-card summary-inactive"><span class="summary-icon" aria-hidden="true">◌</span><span class="summary-label">Inactive users</span><strong class="summary-value">{{ account_inactive }}</strong><span class="summary-detail">Disabled or expired</span></article>
+    <button class="summary-card summary-total" type="button" data-summary-filter="total" aria-pressed="true"><span class="summary-icon" aria-hidden="true">◎</span><span class="summary-label">Total users</span><strong class="summary-value">{{ account_total }}</strong><span class="summary-detail">All VPN accounts</span></button>
+    <button class="summary-card summary-online" type="button" data-summary-filter="online" aria-pressed="false"><span class="summary-icon" aria-hidden="true">↗</span><span class="summary-label">Online now</span><strong class="summary-value">{{ account_online|default_if_none:'—' }}</strong><span class="summary-detail">Connected users, updated live</span></button>
+    <button class="summary-card summary-inactive" type="button" data-summary-filter="inactive" aria-pressed="false"><span class="summary-icon" aria-hidden="true">◌</span><span class="summary-label">Inactive users</span><strong class="summary-value">{{ account_inactive }}</strong><span class="summary-detail">Disabled or expired</span></button>
   </section>
 </div>
 
@@ -67,7 +67,7 @@
         <thead><tr><th><input type="checkbox" data-select-all aria-label="Select all visible users"></th><th>Account</th><th>Password</th><th>Referral</th><th>Status</th><th>Online</th><th>Data usage</th><th>Days left</th><th>Limit</th><th>Actions</th></tr></thead>
         <tbody>
         {% for account in accounts %}
-          <tr data-account-username="{{ account.username }}" data-search="{{ account.username }} {{ account.referral_code }} {{ account.referral_note }} {{ account.referred_by.username }} {{ account.referred_by.referral_code }}" data-expires-at="{{ account.expires_at|date:'c' }}" data-valid-days="{% if account.valid_days and not account.activated_at %}{{ account.valid_days }}{% endif %}" data-traffic-limit="{{ account.traffic_limit_bytes|default_if_none:'' }}" data-traffic-display="{{ account.traffic_limit_display|default_if_none:'' }}" data-enabled="{{ account.enabled|yesno:'true,false' }}" {% if not account.matches_search %}hidden{% endif %}>
+          <tr data-account-username="{{ account.username }}" data-search="{{ account.username }} {{ account.referral_code }} {{ account.referral_note }} {{ account.referred_by.username }} {{ account.referred_by.referral_code }}" data-expires-at="{{ account.expires_at|date:'c' }}" data-valid-days="{% if account.valid_days and not account.activated_at %}{{ account.valid_days }}{% endif %}" data-traffic-limit="{{ account.traffic_limit_bytes|default_if_none:'' }}" data-traffic-display="{{ account.traffic_limit_display|default_if_none:'' }}" data-enabled="{{ account.enabled|yesno:'true,false' }}" data-online="{{ account.is_online|yesno:'true,false' }}" data-inactive="{{ account.is_inactive|yesno:'true,false' }}" {% if not account.matches_search %}hidden{% endif %}>
             <td><input type="checkbox" name="account_ids" value="{{ account.pk }}" form="bulk-account-action-form" data-select-account aria-label="Select {{ account.username }}"></td>
             <td><button class="account-name account-name-button" type="button" data-session-trigger {% if not account.usage.connections %}disabled{% endif %} aria-label="Show active IP addresses for {{ account.username }}">{{ account.username }}</button><small class="table-subtext" dir="auto">Created {{ account.created_at|date:"Y-m-d" }}</small></td>
             <td><div class="password-cell" {% if account.display_password is not None %}dir="ltr"{% else %}dir="auto"{% endif %}><span {% if account.display_password is not None %}data-password-value{% endif %}>{% if account.display_password is not None %}{{ account.display_password }}{% else %}Unavailable — set a new password{% endif %}</span></div></td>

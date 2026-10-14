@@ -102,6 +102,10 @@ def dashboard(request):
                                          if account.traffic_limit_bytes is not None else None)
         account.traffic_exhausted = (account.traffic_limit_bytes is not None and account.usage is not None and
                                      account.usage.get("total_bytes", 0) >= account.traffic_limit_bytes)
+        account.is_online = bool(account.usage and account.usage.get("connections", 0) > 0)
+        account.is_inactive = (not account.enabled or
+                               (account.expires_at is not None and account.expires_at <= now) or
+                               account.traffic_exhausted)
         account.display_password = decrypt_password(account.password_ciphertext)
         account.referral_users = referrals.get(account.pk, [])
         account.days_remaining = (max(0, math.ceil((account.expires_at - now).total_seconds() / 86400))
@@ -166,19 +170,6 @@ def traffic_bytes(gigabytes):
     return int(gigabytes * 1024 ** 3) if gigabytes is not None else None
 
 
-def referral_for(code):
-    try:
-        digest = referral_code_digest(code)
-    except ValueError as exc:
-        raise ProvisionError(str(exc)) from exc
-    if digest is None:
-        return None
-    referral = VpnAccount.objects.filter(referral_code_hash=digest).first()
-    if referral is None:
-        raise ProvisionError("Referral code was not found.")
-    return referral
-
-
 def unique_referral_code(code, *, exclude_pk=None):
     try:
         code = normalized_referral_code(code)
@@ -239,9 +230,9 @@ def create_account(request):
     try:
         provision_account(
             request.user, username, form.cleaned_data["password"], form.cleaned_data["valid_days"],
-            form.cleaned_data["max_connections"], referral_for(form.cleaned_data["referred_by_code"]),
+            form.cleaned_data["max_connections"], None,
             form.cleaned_data["start_on_first_connection"], traffic_bytes(form.cleaned_data["traffic_gb"]),
-            form.cleaned_data["referral_code"],
+            referral_note=form.cleaned_data["referral_note"],
         )
     except ProvisionError as exc:
         record(request, username, "create", False)

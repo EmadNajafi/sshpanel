@@ -22,6 +22,9 @@
   const bulkForm = document.querySelector("[data-bulk-action-form]");
   const actionSelect = bulkForm.querySelector("[data-bulk-action-select]");
   const daysSelect = bulkForm.querySelector("[data-bulk-days]");
+  const overview = document.getElementById("account-overview-root");
+  const requestedFilter = new URLSearchParams(window.location.search).get("status");
+  let accountFilter = ["online", "inactive"].includes(requestedFilter) ? requestedFilter : "total";
 
   function updateSelection() {
     const visible = accountRows.filter((row) => !row.hidden);
@@ -34,34 +37,52 @@
     bulkForm.querySelector("[data-selected-count]").textContent = `${selected.length} selected`;
   }
 
-  function filterAccounts() {
+  function filterAccounts({ resetSelection = true } = {}) {
     const needle = searchInput.value.trim().toLocaleLowerCase();
     let matches = 0;
     accountRows.forEach((row) => {
-      const match = !needle || row.dataset.search.toLocaleLowerCase().includes(needle);
+      const matchesText = !needle || row.dataset.search.toLocaleLowerCase().includes(needle);
+      const matchesCard = accountFilter === "total" || row.dataset[accountFilter] === "true";
+      const match = matchesText && matchesCard;
       row.hidden = !match;
       if (match) matches += 1;
-      row.querySelector("[data-select-account]").checked = false;
+      if (resetSelection || !match) row.querySelector("[data-select-account]").checked = false;
     });
-    actionSelect.value = "";
-    daysSelect.hidden = true;
-    clearSearch.hidden = !needle;
-    searchCount.hidden = !needle;
+    if (resetSelection) {
+      actionSelect.value = "";
+      daysSelect.hidden = true;
+    }
+    clearSearch.hidden = !needle && accountFilter === "total";
+    searchCount.hidden = !needle && accountFilter === "total";
     searchCount.textContent = `${matches} matching users`;
-    filterEmpty.hidden = !needle || matches > 0 || accountRows.length === 0;
-    if (listEmpty) listEmpty.textContent = needle ? "No users match this search." : "No accounts yet. Use the + New user button to create one.";
+    filterEmpty.hidden = (!needle && accountFilter === "total") || matches > 0 || accountRows.length === 0;
+    filterEmpty.querySelector("td").textContent = needle ? "No users match this search." : "No users match this filter.";
+    if (listEmpty) listEmpty.textContent = needle || accountFilter !== "total" ? "No users match this search." : "No accounts yet. Use the + New user button to create one.";
     const url = new URL(window.location.href);
     if (needle) url.searchParams.set("q", searchInput.value.trim());
     else url.searchParams.delete("q");
+    if (accountFilter !== "total") url.searchParams.set("status", accountFilter);
+    else url.searchParams.delete("status");
     window.history.replaceState(null, "", url);
     updateSelection();
   }
 
-  searchInput.addEventListener("input", filterAccounts);
+  overview?.addEventListener("click", (event) => {
+    const card = event.target.closest("[data-summary-filter]");
+    if (!card) return;
+    accountFilter = card.dataset.summaryFilter;
+    searchInput.value = "";
+    window.dispatchEvent(new CustomEvent("sshvpn:account-filter-changed", { detail: { filter: accountFilter } }));
+    filterAccounts();
+    document.querySelector(".accounts-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  searchInput.addEventListener("input", () => filterAccounts());
   searchForm.addEventListener("submit", (event) => { event.preventDefault(); filterAccounts(); });
   clearSearch.addEventListener("click", (event) => {
     event.preventDefault();
     searchInput.value = "";
+    accountFilter = "total";
+    window.dispatchEvent(new CustomEvent("sshvpn:account-filter-changed", { detail: { filter: accountFilter } }));
     filterAccounts();
     searchInput.focus();
   });
@@ -224,6 +245,10 @@
       if (!payload.available) return;
       usagePanel.querySelectorAll("[data-account-username]").forEach((row) => {
         const usage = payload.accounts[row.dataset.accountUsername];
+        row.dataset.online = usage?.connections > 0 ? "true" : "false";
+        row.dataset.inactive = (row.dataset.enabled !== "true" ||
+          (row.dataset.expiresAt && new Date(row.dataset.expiresAt) <= new Date()) ||
+          (usage && row.dataset.trafficLimit && usage.total_bytes >= Number(row.dataset.trafficLimit))) ? "true" : "false";
         const onlineCell = row.querySelector("[data-online-status]");
         const usageCell = row.querySelector("[data-usage-cell]");
         const nameButton = row.querySelector(".account-name-button");
@@ -261,6 +286,7 @@
           row.querySelector("[data-account-state]").replaceChildren(state);
         }
       });
+      filterAccounts({ resetSelection: false });
     } catch (_error) {
       // Keep the previous readings if a refresh fails.
     } finally {
