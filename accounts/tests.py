@@ -548,6 +548,7 @@ class AccountViewsTests(TestCase):
     def test_stage_web_address_shows_new_url_without_changing_current_request(self, helper):
         response = self.client.post(reverse("stage_web_address"), {"path": "/private-42", "port": "18080"})
         self.assertContains(response, "http://localhost:18080/private-42/settings/")
+        self.assertContains(response, "No confirmation is needed.")
         self.assertNotContains(response, "window.location.assign")
         helper.assert_called_once_with("web-stage", web_path="/private-42", web_port=18080)
 
@@ -557,14 +558,14 @@ class AccountViewsTests(TestCase):
         self.assertContains(response, "http://localhost/private-42/settings/")
         self.assertContains(response, "window.location.assign(link.href)")
         self.assertContains(response, "This page will open it automatically when ready.")
+        self.assertContains(response, "No confirmation is needed.")
 
     @patch("accounts.views.call_helper", return_value='{"url": "http://localhost:18080/private-42/"}')
     def test_web_change_requires_staff_and_post(self, helper):
         self.assertEqual(self.client.get(reverse("stage_web_address")).status_code, 405)
-        self.assertEqual(self.client.get(reverse("confirm_web_address")).status_code, 405)
+        self.assertEqual(self.client.post("/settings/web-address/confirm/").status_code, 404)
         self.client.logout()
         self.assertEqual(self.client.post(reverse("stage_web_address"), {"path": "/private-42", "port": "18080"}).status_code, 302)
-        self.assertEqual(self.client.post(reverse("confirm_web_address")).status_code, 302)
         helper.assert_not_called()
 
     @override_settings(TLS_ENABLED=True, HTTPS_PORT="8443", ALLOWED_HOSTS=["example.com"])

@@ -637,20 +637,6 @@ def stage_web_address(request):
 
 
 @staff_required
-@require_POST
-def confirm_web_address(request):
-    try:
-        call_helper("web-confirm")
-    except ProvisionError as exc:
-        record(request, "server", "web-confirm", False)
-        messages.error(request, str(exc))
-    else:
-        record(request, "server", "web-confirm", True)
-        messages.success(request, "The new panel address is confirmed.")
-    return redirect("panel_settings")
-
-
-@staff_required
 @require_GET
 def backup_settings(request):
     try:

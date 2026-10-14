@@ -153,7 +153,7 @@ server {
             self.assertEqual(site_file.read_text(), old_site)
             self.assertFalse(state_dir.exists())
 
-    def test_successful_activation_waits_for_confirmation(self):
+    def test_successful_activation_commits_without_confirmation(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             env_file = root / "panel.env"
@@ -185,12 +185,12 @@ server {
                  patch.object(web.time, "sleep") as pause, \
                  patch.object(web.http.client, "HTTPConnection", return_value=Connection()):
                 web.apply_change(token)
-                self.assertEqual(web.status()["phase"], "awaiting-confirmation")
                 self.assertIn("PANEL_WEB_PATH=/private-42", env_file.read_text())
-                self.assertEqual(web.confirm_change()["url"], "http://example.com:18080/private-42/")
+                self.assertIn("listen 18080", site_file.read_text())
+                self.assertIsNone(web.status())
                 self.assertFalse(state_dir.exists())
                 pause.assert_called_once_with(1)
-                self.assertTrue(any(call.args[0] == "/usr/bin/systemd-run" for call in command.call_args_list))
+                self.assertFalse(any(call.args[0] == "/usr/bin/systemd-run" for call in command.call_args_list))
 
 
 if __name__ == "__main__":

@@ -16,7 +16,6 @@ urlpatterns = [
     path("accounts/<int:pk>/password-view/", views.account_password, name="account_password"),
     path("settings/", views.panel_settings, name="panel_settings"),
     path("settings/web-address/stage/", views.stage_web_address, name="stage_web_address"),
-    path("settings/web-address/confirm/", views.confirm_web_address, name="confirm_web_address"),
     path("settings/backups/", views.backup_settings, name="backup_settings"),
     path("settings/backups/create/", views.create_backup, name="create_backup"),
     path("settings/backups/download/<str:name>/", views.download_backup, name="download_backup"),

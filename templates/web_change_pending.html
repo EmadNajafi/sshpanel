@@ -4,10 +4,10 @@
 <div class="panel web-change-panel">
   <p class="eyebrow">PANEL ACCESS</p>
   <h1>Open the new panel address</h1>
-  <p>The new address is being activated. {% if auto_follow %}This page will open it automatically when ready.{% else %}Open it after a few seconds.{% endif %} Confirm the change in Settings within five minutes.</p>
+  <p>The new address is being activated. {% if auto_follow %}This page will open it automatically when ready.{% else %}Open it after a few seconds.{% endif %} No confirmation is needed.</p>
   <a class="button button-primary" id="new-web-address" href="{{ new_url }}settings/">Open new address <span aria-hidden="true">→</span></a>
   <p class="settings-field-note">New address: <code>{{ new_url }}</code></p>
-  <p class="settings-field-note">If the new port is blocked or the page does not load, the previous address will return automatically after five minutes.</p>
+  <p class="settings-field-note">A failed local check restores the previous address. If the new port is blocked by your provider, allow it in the provider firewall.</p>
 </div>
 {% if auto_follow %}
 <script>

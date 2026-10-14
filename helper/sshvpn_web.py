@@ -1,4 +1,4 @@
-"""Validated, reversible HTTP address changes for the managed web panel."""
+"""Validated web address changes with automatic rollback on local failure."""
 import http.client
 import json
 import os
@@ -215,7 +215,7 @@ def _port_available(port):
 def stage_change(path, port):
     path = web_path(path)
     if _state() is not None:
-        raise ValueError("Confirm the pending web address change or wait for rollback first.")
+        raise ValueError("A web address change is already being applied. Try again in a few seconds.")
     old_env = ENV_FILE.read_text(encoding="utf-8")
     values = _env(old_env)
     tls = values.get("PANEL_TLS_ENABLED", "0") == "1"
@@ -301,26 +301,10 @@ def apply_change(token):
             if attempt == 11:
                 raise RuntimeError("The new panel login page did not respond.")
             time.sleep(1)
-        state["phase"] = "awaiting-confirmation"
-        _save_state(state)
-        _command("/usr/bin/systemd-run", f"--unit=sshvpn-web-rollback-{token}", "--on-active=5m",
-                 "/usr/bin/python3", "/usr/local/sbin/sshvpn_web.py", "rollback", token)
+        shutil.rmtree(STATE_DIR)
     except Exception:
         _restore()
         raise
-
-
-def confirm_change():
-    state = _state()
-    if state is None or state["phase"] != "awaiting-confirmation":
-        raise ValueError("There is no web address change ready to confirm.")
-    values = _env(ENV_FILE.read_text(encoding="utf-8"))
-    port_key = "PANEL_HTTPS_PORT" if state["tls"] else "PANEL_HTTP_PORT"
-    if values.get("PANEL_WEB_PATH", "") != state["path"] or int(values.get(port_key, "443" if state["tls"] else "80")) != state["port"]:
-        raise ValueError("The active web address does not match the pending change.")
-    shutil.rmtree(STATE_DIR)
-    return {"url": panel_url(state["domain"], state["port"], state["path"],
-                              local_only=state["local_only"], tls=state["tls"])}
 
 
 def rollback_change(token):
