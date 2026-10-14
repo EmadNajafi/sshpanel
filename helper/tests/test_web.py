@@ -33,7 +33,10 @@ class WebAddressTests(unittest.TestCase):
         self.assertIn("location /private-42/static/", config)
         self.assertIn("location = /private-42/login/", config)
         self.assertIn("location /private-42/", config)
-        self.assertIn('location / { default_type text/plain; return 404 "Not Found"; }', config)
+        self.assertIn("location / { return 444; }", config)
+        self.assertIn("if ($host != $server_name) { return 444; }", config)
+        self.assertIn("proxy_intercept_errors on;", config)
+        self.assertIn("error_page 404 = @sshvpn_no_response;", config)
         self.assertIn("server_tokens off;", config)
         self.assertIn("proxy_pass http://127.0.0.1:8000/;", config)
         self.assertNotIn("location = /login/", config)
@@ -56,6 +59,45 @@ class WebAddressTests(unittest.TestCase):
         self.assertIn("https://$host:18443$request_uri", config)
         self.assertIn("ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;", config)
         self.assertIn("location /private-42/", config)
+        self.assertIn("location / { return 444; }", config)
+        self.assertIn("location = /private-42 { return 308 https://$host:18443/private-42/; }", config)
+
+    def test_upgrades_existing_site_without_changing_listener_and_is_idempotent(self):
+        old = '''server {
+    listen 18080;
+    server_name example.com;
+    proxy_read_timeout 420s;
+    location /private-42/ { proxy_pass http://127.0.0.1:8000/; }
+    location / { default_type text/plain; return 404 "Not Found"; }
+}
+'''
+        updated = web.harden_existing_nginx_config(old, "/private-42")
+        self.assertIn("listen 18080;", updated)
+        self.assertIn("location / { return 444; }", updated)
+        self.assertIn("proxy_intercept_errors on;", updated)
+        self.assertIn("if ($host != $server_name) { return 444; }", updated)
+        self.assertEqual(web.harden_existing_nginx_config(updated, "/private-42"), updated)
+
+    def test_upgrades_legacy_https_redirect_only_for_panel_path(self):
+        old = '''server {
+    listen 443 ssl;
+    server_name example.com;
+    proxy_read_timeout 420s;
+    location /private-42/ { proxy_pass http://127.0.0.1:8000/; }
+    location / { return 404; }
+}
+server {
+    listen 80;
+    server_name example.com;
+    location / { return 301 https://$host$request_uri; }
+}
+'''
+        updated = web.harden_existing_nginx_config(old, "/private-42")
+        self.assertIn("location = /private-42 { return 308 https://$host/private-42/; }", updated)
+        self.assertIn("location /private-42/ { return 301 https://$host$request_uri; }", updated)
+        self.assertEqual(updated.count("location / { return 444; }"), 2)
+        self.assertEqual(updated.count("if ($host != $server_name) { return 444; }"), 2)
+        self.assertEqual(web.harden_existing_nginx_config(updated, "/private-42"), updated)
 
     def test_stage_preserves_active_config_until_background_apply(self):
         with TemporaryDirectory() as directory:

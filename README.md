@@ -44,6 +44,8 @@ For migration, install the same version of this panel on a fresh Ubuntu 24.04 se
 
 ## Install: HTTP first
 
+With a private panel path, Nginx closes requests to other paths and unknown hosts without an HTTP response. The correct panel path still works, and HTTPS redirects apply only to that path. This does not hide an open TCP port or a TLS certificate from network scans.
+
 In **Settings → Web address**, an administrator can set a single-segment URL path and the current HTTP or HTTPS listener port. Existing installations keep their current address until the form is submitted. Open the new URL and confirm it there within five minutes; an unconfirmed change or a failed local health check restores the previous Nginx and panel configuration. Allow the chosen port through host and provider firewalls first. HTTPS changes preserve the installed certificate and keep port 80 for renewal. The path is an address choice, not an authentication or TLS substitute.
 
 Run the same one-line command below on an existing installation to upgrade it. It detects the installed panel and checks the repository for a newer revision without asking for administrator credentials or an IP address. If the installed revision is current, it prints a short message and stops; otherwise it runs `deploy/upgrade.sh`. Successful installs and upgrades record the installed revision. Older installations without this record receive one upgrade to establish it. The upgrade backs up the database and configuration and retains the web administrator, VPN accounts, listener addresses, and current TLS mode. You can also run `git pull --ff-only` followed by `sudo bash deploy/upgrade.sh` from `/root/sshpanel`.

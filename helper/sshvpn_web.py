@@ -90,9 +90,13 @@ def nginx_config(domain, port, path, *, local_only=False, tls=False, ssl_directi
     config = f"""server {{
     listen {listen}{listen_suffix};
     server_name {domain};
+    if ($host != $server_name) {{ return 444; }}
     server_tokens off;
     client_max_body_size 1100m;
     proxy_read_timeout 420s;
+    proxy_intercept_errors on;
+    error_page 404 = @sshvpn_no_response;
+    location @sshvpn_no_response {{ return 444; }}
 {prefix_redirect}    location {static} {{ alias /opt/ssh-vpn-panel/staticfiles/; }}
     location = {login} {{
         limit_req zone=sshvpn_login burst=20 nodelay;
@@ -107,20 +111,56 @@ def nginx_config(domain, port, path, *, local_only=False, tls=False, ssl_directi
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
     }}
-{('    location / { default_type text/plain; return 404 "Not Found"; }' if path else '')}
+{('    location / { return 444; }' if path else '')}
 {ssl_directives if tls else ''}
 }}
 """
     if tls:
         redirect_port = "" if port == 443 else f":{port}"
+        redirect = f"https://$host{redirect_port}$request_uri"
+        http_locations = (f"    location = {path} {{ return 308 https://$host{redirect_port}{app}; }}\n"
+                          f"    location {app} {{ return 301 {redirect}; }}\n"
+                          "    location / { return 444; }") if path else f"    location / {{ return 301 {redirect}; }}"
         config += f"""server {{
     listen 80;
     server_name {domain};
+    if ($host != $server_name) {{ return 444; }}
     server_tokens off;
-    location / {{ return 301 https://$host{redirect_port}$request_uri; }}
+{http_locations}
 }}
 """
     return config
+
+
+def harden_existing_nginx_config(site, path):
+    """Upgrade only this panel's managed Nginx site without changing its listeners or TLS files."""
+    path = web_path(path)
+    if "proxy_pass http://127.0.0.1:8000/;" not in site:
+        raise ValueError("The panel Nginx site is not recognized.")
+    if "if ($host != $server_name) { return 444; }" not in site:
+        site = re.sub(r"(?m)^(\s*server_name\s+[^;]+;)$",
+                      r"\1\n    if ($host != $server_name) { return 444; }", site)
+    if "server_tokens off;" not in site:
+        site = re.sub(r"(?m)^server \{$", "server {\n    server_tokens off;", site)
+    if "location @sshvpn_no_response" not in site:
+        marker = "    proxy_read_timeout 420s;"
+        if marker not in site:
+            raise ValueError("The panel Nginx timeout directive is missing.")
+        site = site.replace(marker, marker + "\n    proxy_intercept_errors on;\n"
+                            "    error_page 404 = @sshvpn_no_response;\n"
+                            "    location @sshvpn_no_response { return 444; }", 1)
+    for old in ('location / { return 404; }',
+                'location / { default_type text/plain; return 404 "Not Found"; }'):
+        site = site.replace(old, "location / { return 444; }")
+    if path and "location / { return 444; }" not in site:
+        raise ValueError("The panel Nginx fallback location is missing.")
+    if path:
+        redirect = re.compile(r"(?m)^(\s*)location / \{ return 301 (https://[^;]+\$request_uri); \}$")
+        site = redirect.sub(lambda match:
+                            f"{match[1]}location = {path} {{ return 308 {match[2].replace('$request_uri', path + '/')}; }}\n"
+                            f"{match[1]}location {path}/ {{ return 301 {match[2]}; }}\n"
+                            f"{match[1]}location / {{ return 444; }}", site)
+    return site
 
 
 class _LocalHTTPSConnection(http.client.HTTPSConnection):
