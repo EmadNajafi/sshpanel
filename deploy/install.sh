@@ -164,6 +164,7 @@ print(nginx_config(sys.argv[1], int(sys.argv[2]), sys.argv[3], local_only=sys.ar
 PY
 printf '%s\n' 'limit_req_zone $binary_remote_addr zone=sshvpn_login:10m rate=10r/m;' > /etc/nginx/conf.d/sshvpn-rate.conf
 ln -s /etc/nginx/sites-available/sshvpn-panel /etc/nginx/sites-enabled/sshvpn-panel
+bash "$repo_dir/deploy/configure-nginx-catchall.sh"
 nginx -t
 
 set -a

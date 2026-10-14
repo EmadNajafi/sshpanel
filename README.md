@@ -45,6 +45,7 @@ For migration, install the same version of this panel on a fresh Ubuntu 24.04 se
 ## Install: HTTP first
 
 With a private panel path, Nginx closes requests to other paths and unknown hosts without an HTTP response. The correct panel path still works, and HTTPS redirects apply only to that path. This does not hide an open TCP port or a TLS certificate from network scans.
+On a standard Ubuntu Nginx installation, the installer also replaces the stock welcome page with a managed catch-all: unmatched HTTP hosts close without a response, and unmatched HTTPS handshakes are rejected. Other named virtual hosts continue to work. The original default site is restored if the panel is uninstalled.
 
 In **Settings → Web address**, an administrator can set a single-segment URL path and the current HTTP or HTTPS listener port. Existing installations keep their current address until the form is submitted. Open the new URL and confirm it there within five minutes; an unconfirmed change or a failed local health check restores the previous Nginx and panel configuration. Allow the chosen port through host and provider firewalls first. HTTPS changes preserve the installed certificate and keep port 80 for renewal. The path is an address choice, not an authentication or TLS substitute.
 

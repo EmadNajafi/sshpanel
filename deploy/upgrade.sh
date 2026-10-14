@@ -119,6 +119,7 @@ updated = harden_existing_nginx_config(old, os.environ.get("PANEL_WEB_PATH", "")
 if updated != old:
     site.write_text(updated, encoding="utf-8")
 PY
+bash "$repo_dir/deploy/configure-nginx-catchall.sh"
 if ! nginx -t; then
   install -m 0644 -o root -g root "$backup_dir/nginx-panel" /etc/nginx/sites-available/sshvpn-panel
   nginx -t

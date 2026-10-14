@@ -26,7 +26,17 @@ marker='# sshvpn-panel shared-port policy; keep this block at the end of sshd_co
 hook='account requisite pam_exec.so quiet /usr/local/sbin/sshvpn-authz'
 site=/etc/nginx/sites-available/sshvpn-panel
 enabled=/etc/nginx/sites-enabled/sshvpn-panel
+catchall_site=/etc/nginx/sites-available/sshvpn-catchall
+catchall_enabled=/etc/nginx/sites-enabled/sshvpn-catchall
+default_link=/etc/nginx/sites-enabled/default
+default_site=/etc/nginx/sites-available/default
+default_marker=/etc/sshvpn/default-nginx-site.disabled-by-panel
 checkout=/root/sshpanel
+
+if [[ -f $default_marker && $(cat "$default_marker") != "$default_site" ]]; then
+  echo 'The saved default Nginx site marker has changed; no changes made.' >&2
+  exit 1
+fi
 
 if [[ ! -f $ssh_config || ! -f $pam_config ]]; then
   echo 'SSH or PAM configuration is missing; no changes made.' >&2
@@ -35,6 +45,16 @@ fi
 if [[ -L $enabled && $(readlink "$enabled") != "$site" ]]; then
   echo 'The Nginx site link points elsewhere; no changes made.' >&2
   exit 1
+fi
+managed_catchall=0
+if [[ -e $catchall_site || -L $catchall_site || -e $catchall_enabled || -L $catchall_enabled ]]; then
+  if [[ ! -f $catchall_site || ! -L $catchall_enabled ||
+        $(readlink "$catchall_enabled") != "$catchall_site" ]] ||
+     ! cmp -s /opt/ssh-vpn-panel/deploy/nginx-catchall.conf "$catchall_site"; then
+    echo 'The Nginx catch-all has changed; review it before uninstalling.' >&2
+    exit 1
+  fi
+  managed_catchall=1
 fi
 if [[ -L $checkout ]]; then
   echo "$checkout is a symbolic link; no changes made." >&2
@@ -152,11 +172,26 @@ done
 
 if [[ -L $enabled ]]; then rm -- "$enabled"; fi
 if [[ -f $site ]]; then cp -a "$site" "$temp_dir/nginx-panel"; rm -- "$site"; fi
+if (( managed_catchall )); then
+  cp -a "$catchall_site" "$temp_dir/nginx-catchall"
+  rm -- "$catchall_enabled" "$catchall_site"
+fi
+restored_default=0
+if [[ -f $default_marker && $(cat "$default_marker") == "$default_site" &&
+      ! -e $default_link && ! -L $default_link ]]; then
+  ln -s "$default_site" "$default_link"
+  restored_default=1
+fi
 if [[ -f /etc/nginx/conf.d/sshvpn-rate.conf ]]; then
   cp -a /etc/nginx/conf.d/sshvpn-rate.conf "$temp_dir/nginx-rate"
 fi
 rm -f -- /etc/nginx/conf.d/sshvpn-rate.conf
 if ! nginx -t || ! systemctl reload nginx; then
+  if (( restored_default )); then rm -- "$default_link"; fi
+  if [[ -f $temp_dir/nginx-catchall ]]; then
+    cp -a "$temp_dir/nginx-catchall" "$catchall_site"
+    ln -s "$catchall_site" "$catchall_enabled"
+  fi
   if [[ -f $temp_dir/nginx-panel ]]; then cp -a "$temp_dir/nginx-panel" "$site"; fi
   if [[ -f $temp_dir/nginx-rate ]]; then cp -a "$temp_dir/nginx-rate" /etc/nginx/conf.d/sshvpn-rate.conf; fi
   if [[ -f $site && ! -e $enabled ]]; then ln -s "$site" "$enabled"; fi
