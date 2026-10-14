@@ -112,6 +112,7 @@ server {
                  patch.object(web, "_port_available", return_value=True), patch.object(web, "_command") as command:
                 result = web.stage_change("/private-42", 18080)
                 self.assertEqual(result["url"], "http://example.com:18080/private-42/")
+                self.assertFalse(result["same_port"])
                 self.assertIn("PANEL_HTTP_PORT=80", env_file.read_text())
                 self.assertIn("listen 80;", site_file.read_text())
                 self.assertIn("PANEL_WEB_PATH=/private-42", (state_dir / "new.env").read_text())

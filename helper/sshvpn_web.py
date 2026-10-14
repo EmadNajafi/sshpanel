@@ -250,7 +250,8 @@ def stage_change(path, port):
     except Exception:
         shutil.rmtree(STATE_DIR)
         raise
-    return {"url": panel_url(domain, port, path, local_only=local_only, tls=tls), "phase": "scheduled"}
+    return {"url": panel_url(domain, port, path, local_only=local_only, tls=tls),
+            "phase": "scheduled", "same_port": port == current_port}
 
 
 def status():

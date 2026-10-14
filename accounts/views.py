@@ -631,7 +631,9 @@ def stage_web_address(request):
         messages.error(request, str(exc))
         return redirect("panel_settings")
     record(request, "server", "web-stage", True)
-    return render(request, "web_change_pending.html", {"new_url": result["url"]})
+    return render(request, "web_change_pending.html", {
+        "new_url": result["url"], "auto_follow": result.get("same_port", False),
+    })
 
 
 @staff_required

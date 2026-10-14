@@ -543,7 +543,15 @@ class AccountViewsTests(TestCase):
     def test_stage_web_address_shows_new_url_without_changing_current_request(self, helper):
         response = self.client.post(reverse("stage_web_address"), {"path": "/private-42", "port": "18080"})
         self.assertContains(response, "http://localhost:18080/private-42/settings/")
+        self.assertNotContains(response, "window.location.assign")
         helper.assert_called_once_with("web-stage", web_path="/private-42", web_port=18080)
+
+    @patch("accounts.views.call_helper", return_value='{"url": "http://localhost/private-42/", "same_port": true}')
+    def test_path_only_change_opens_new_address_when_ready(self, helper):
+        response = self.client.post(reverse("stage_web_address"), {"path": "/private-42", "port": "80"})
+        self.assertContains(response, "http://localhost/private-42/settings/")
+        self.assertContains(response, "window.location.assign(link.href)")
+        self.assertContains(response, "This page will open it automatically when ready.")
 
     @patch("accounts.views.call_helper", return_value='{"url": "http://localhost:18080/private-42/"}')
     def test_web_change_requires_staff_and_post(self, helper):
