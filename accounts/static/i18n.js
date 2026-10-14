@@ -24,6 +24,9 @@
     "Sign in to manage VPN accounts and monitor your server.": "برای مدیریت حساب‌های VPN و پایش سرور وارد شوید.",
     "Invalid username or password.": "نام کاربری یا رمز عبور نادرست است.",
     "Username": "نام کاربری", "Password": "رمز عبور", "Old password": "رمز عبور فعلی",
+    "Close": "بستن", "This field is required.": "پر کردن این فیلد الزامی است.",
+    "Enter a whole number.": "یک عدد صحیح وارد کنید.", "Enter a number.": "یک عدد وارد کنید.",
+    "Enter a valid value.": "یک مقدار معتبر وارد کنید.",
     "New password confirmation": "تأیید رمز عبور جدید",
     "SERVER OVERVIEW": "نمای کلی سرور", "Manage SSH tunnel accounts and see who's connected right now.": "حساب‌های تونل SSH را مدیریت کنید و اتصال‌های فعال را ببینید.",
     "Total users": "کل کاربران", "All VPN accounts": "همهٔ حساب‌های VPN",
@@ -212,6 +215,8 @@
   };
 
   const patterns = [
+    [/^Ensure this value is greater than or equal to (\S+)\.$/, (_, minimum) => `مقدار باید حداقل ${minimum} باشد.`],
+    [/^Ensure this value is less than or equal to (\S+)\.$/, (_, maximum) => `مقدار باید حداکثر ${maximum} باشد.`],
     [/^Ports (\d+) and (\d+) are active\. Open a new SSH connection from outside the server on port (\d+) before confirming\.$/, (_, oldPort, newPort, testPort) => `پورت‌های ${oldPort} و ${newPort} فعال‌اند. پیش از تأیید، از بیرون سرور اتصال SSH روی پورت ${testPort} را آزمایش کنید.`],
     [/^Choose the URL path and (HTTP|HTTPS) port used to open this panel\.$/, (_, protocol) => `مسیر نشانی و پورت ${protocol} پنل را انتخاب کنید.`],
     [/^Use (\d+) or a port from 1024 to 65535\.$/, (_, port) => `از پورت ${port} یا پورتی بین ۱۰۲۴ تا ۶۵۵۳۵ استفاده کنید.`],
@@ -271,6 +276,10 @@
     const match = /^(\s*)([\s\S]*?)(\s*)$/.exec(value);
     const original = match[2];
     let result = fa[original];
+    if (result === undefined && original.endsWith(":")) {
+      const label = fa[original.slice(0, -1)];
+      if (label !== undefined) result = label + ":";
+    }
     if (result === undefined) {
       for (const [pattern, replace] of patterns) {
         if (pattern.test(original)) { result = original.replace(pattern, replace); break; }
