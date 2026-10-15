@@ -122,6 +122,7 @@
     "Administrator password": "رمز مدیر", "Update the password used to sign in to this panel.": "رمز ورود به پنل را تغییر دهید.",
     "Current password": "رمز فعلی", "Confirm new password": "تأیید رمز جدید",
     "Telegram bot": "ربات تلگرام", "REMOTE ADMINISTRATION": "مدیریت از راه دور",
+    "This panel currently uses HTTP. Enable HTTPS or use an administrator SSH tunnel before entering the bot token over an untrusted network.": "این پنل اکنون از HTTP استفاده می‌کند. پیش از وارد کردن توکن ربات در شبکهٔ نامطمئن، HTTPS را فعال کنید یا از تونل SSH مدیر استفاده کنید.",
     "Automatic backup schedule:": "زمان‌بندی بکاپ خودکار:", "Manage backup schedule": "مدیریت زمان‌بندی بکاپ",
     "Manage users and backups from a private Telegram chat.": "کاربران و بکاپ‌ها را از گفتگوی خصوصی تلگرام مدیریت کنید.",
     "BOT STATUS": "وضعیت ربات", "Enabled": "فعال", "Bot token": "توکن ربات",

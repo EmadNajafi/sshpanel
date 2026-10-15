@@ -84,6 +84,7 @@
           <div><p class="eyebrow">REMOTE ADMINISTRATION</p><h2>Telegram bot</h2><p>Manage users and backups from a private Telegram chat.</p></div>
         </div>
         <div class="settings-current-port"><div><span class="settings-detail-label">BOT STATUS</span><strong>{% if telegram.enabled %}Enabled{% else %}Disabled{% endif %}{% if telegram.bot_username %} · @{{ telegram.bot_username }}{% endif %}</strong></div></div>
+        {% if not tls_enabled %}<div class="settings-callout">This panel currently uses HTTP. Enable HTTPS or use an administrator SSH tunnel before entering the bot token over an untrusted network.</div>{% endif %}
         <p class="settings-field-note">Automatic backup schedule: {% if backup_schedule.enabled %}Enabled at {{ backup_schedule.time }} Tehran{% else %}Disabled{% endif %}. <a href="{% url 'backup_settings' %}">Manage backup schedule</a></p>
         <form method="post" action="{% url 'save_telegram_bot' %}" class="telegram-settings-form">{% csrf_token %}
           <div><label for="telegram-token">Bot token</label><input id="telegram-token" name="token" type="password" autocomplete="new-password" dir="ltr" placeholder="{% if telegram.token_ciphertext %}Saved — leave blank to keep{% else %}Paste token from @BotFather{% endif %}"><span class="helptext">Create a bot with @BotFather. The token is encrypted in the panel database and never shown here.</span></div>
