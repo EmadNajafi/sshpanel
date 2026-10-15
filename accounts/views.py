@@ -20,7 +20,7 @@ from django.utils import timezone
 
 from .forms import BulkCreateAccountForm, CreateAccountForm, EditAccountForm, PasswordForm
 from .backups import BACKUP_DIR, BACKUP_NAME, UPLOAD_DIR, BackupError, call_backup, list_backups, save_upload
-from .models import AuditEvent, TelegramBotConfig, VpnAccount, normalized_referral_code, referral_code_digest
+from .models import AuditEvent, PanelAppearance, TelegramBotConfig, VpnAccount, normalized_referral_code, referral_code_digest
 from .services import ProvisionError, call_helper, get_ssh_port
 from .secrets import decrypt_password, encrypt_password, encrypt_bot_token, decrypt_bot_token
 from .system_metrics import get_system_metrics
@@ -28,6 +28,20 @@ from .telegram_api import TelegramAPI, TelegramError
 
 
 staff_required = user_passes_test(lambda user: user.is_active and user.is_staff, login_url="login")
+
+
+@staff_required
+@require_POST
+def set_panel_language(request):
+    language = request.POST.get("language")
+    if language not in ("fa", "en"):
+        return JsonResponse({"error": "Invalid language."}, status=400)
+    PanelAppearance.objects.update_or_create(pk=1, defaults={"language": language})
+    response = JsonResponse({"language": language})
+    response.set_cookie("django_language", language, max_age=365 * 24 * 60 * 60,
+                        secure=settings.CSRF_COOKIE_SECURE, samesite="Lax", path="/")
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 def format_bytes(value):

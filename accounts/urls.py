@@ -15,6 +15,7 @@ urlpatterns = [
     path("accounts/<int:pk>/traffic-reset/", views.reset_account_traffic, name="reset_account_traffic"),
     path("accounts/<int:pk>/password-view/", views.account_password, name="account_password"),
     path("settings/", views.panel_settings, name="panel_settings"),
+    path("settings/language/", views.set_panel_language, name="set_panel_language"),
     path("settings/ssh/", views.panel_settings, {"section": "ssh"}, name="settings_ssh"),
     path("settings/web/", views.panel_settings, {"section": "web"}, name="settings_web"),
     path("settings/administrator/", views.panel_settings, {"section": "admin"}, name="settings_admin"),

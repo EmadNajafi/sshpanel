@@ -71,3 +71,9 @@ class TelegramBotConfig(models.Model):
     last_update_id = models.BigIntegerField(default=0)
     last_backup_name = models.CharField(max_length=128, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class PanelAppearance(models.Model):
+    """Language shared by the panel, including the sign-in page on new devices."""
+
+    language = models.CharField(max_length=2, choices=(("fa", "فارسی"), ("en", "English")), default="fa")

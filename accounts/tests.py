@@ -12,7 +12,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import get_script_prefix, reverse, set_script_prefix
 from django.utils import timezone
 
-from .models import AuditEvent, VpnAccount
+from .models import AuditEvent, PanelAppearance, VpnAccount
 from .secrets import decrypt_password, encrypt_password
 from .services import ProvisionError, get_ssh_port
 from .system_metrics import _cpu_metric, get_system_metrics
@@ -28,6 +28,28 @@ class AccountViewsTests(TestCase):
         self.assertRedirects(self.client.get(reverse("login")), reverse("dashboard"))
         self.client.logout()
         self.assertEqual(self.client.get(reverse("login")).status_code, 200)
+
+    def test_panel_language_persists_across_devices_and_requires_staff_and_csrf(self):
+        self.assertContains(Client().get(reverse("login")), '<html lang="fa" dir="rtl"')
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.force_login(self.staff)
+        self.assertEqual(csrf_client.post(reverse("set_panel_language"), {"language": "en"}).status_code, 403)
+        csrf_client.get(reverse("panel_settings"))
+        token = csrf_client.cookies["csrftoken"].value
+        response = csrf_client.post(reverse("set_panel_language"), {"language": "en"}, HTTP_X_CSRFTOKEN=token)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(PanelAppearance.objects.get(pk=1).language, "en")
+        self.assertContains(Client().get(reverse("login")), '<html lang="en" dir="ltr"')
+        another_device = Client()
+        another_device.force_login(self.staff)
+        self.assertContains(another_device.get(reverse("panel_settings")), '<html lang="en" dir="ltr"')
+        self.assertEqual(csrf_client.post(reverse("set_panel_language"), {"language": "fa"}, HTTP_X_CSRFTOKEN=token).status_code, 200)
+        another_device.cookies["django_language"] = "en"
+        self.assertContains(another_device.get(reverse("panel_settings")), '<html lang="fa" dir="rtl"')
+        self.assertContains(Client().get(reverse("login")), '<html lang="fa" dir="rtl"')
+        self.assertEqual(self.client.post(reverse("set_panel_language"), {"language": "other"}).status_code, 400)
+        self.client.logout()
+        self.assertEqual(self.client.post(reverse("set_panel_language"), {"language": "fa"}).status_code, 302)
 
     @patch("accounts.services.call_helper", return_value='{"port": 6677}')
     def test_current_ssh_port_comes_from_privileged_helper(self, helper):

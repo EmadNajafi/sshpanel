@@ -13,11 +13,11 @@
       <tbody>
         {% for event in page %}
           <tr>
-            <td class="nowrap">{{ event.created_at|date:"Y-m-d H:i" }}</td>
-            <td><strong class="account-name">{{ event.username }}</strong></td>
-            <td>{{ event.action|capfirst }}</td>
-            <td>{{ event.actor|default:"System" }}</td>
-            <td>{% if event.succeeded %}<span class="state state-active">Success</span>{% else %}<span class="state state-expired">Failed</span>{% endif %}</td>
+            <td class="nowrap" data-mobile-label="Time" data-mobile-label-fa="زمان">{{ event.created_at|date:"Y-m-d H:i" }}</td>
+            <td data-mobile-label="Account" data-mobile-label-fa="کاربر"><strong class="account-name">{{ event.username }}</strong></td>
+            <td data-mobile-label="Action" data-mobile-label-fa="عملیات">{{ event.action|capfirst }}</td>
+            <td data-mobile-label="Administrator" data-mobile-label-fa="مدیر">{{ event.actor|default:"System" }}</td>
+            <td data-mobile-label="Result" data-mobile-label-fa="نتیجه">{% if event.succeeded %}<span class="state state-active">Success</span>{% else %}<span class="state state-expired">Failed</span>{% endif %}</td>
           </tr>
         {% empty %}<tr><td colspan="5" class="empty-state">No activity has been recorded yet.</td></tr>{% endfor %}
       </tbody>

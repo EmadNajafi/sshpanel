@@ -170,6 +170,8 @@ tr[data-account-username][hidden] { display: none; }
 .telegram-enable input { width: 18px; height: 18px; min-height: 0; accent-color: var(--blue); }
 .telegram-secondary-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px; }
 input[data-select-all], input[data-select-account] { width: 17px; height: 17px; min-height: 0; padding: 0; accent-color: var(--blue); cursor: pointer; }
+.select-all-label { display: inline-flex; align-items: center; gap: 8px; margin: 0; cursor: pointer; }
+.select-all-label span { display: none; }
 tr[data-account-username].is-selected { background: #f3f7ff; }
 .create-trigger { display: inline-flex; align-items: center; gap: 9px; }
 .create-trigger span:first-child { font-size: 21px; font-weight: 400; line-height: .6; }
@@ -530,16 +532,55 @@ td { color: #506078; font-size: 12px; }
 :root[dir="rtl"] select { direction: ltr; text-align: left; }
 
 @media (max-width: 720px) {
+  .table-scroll { overflow: visible; margin: 0; }
+  .table-scroll table, .table-scroll tbody { display: block; width: 100%; }
+  .table-scroll thead { display: none; }
+  .table-scroll tbody tr { display: block; margin-bottom: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: #fff; }
+  .table-scroll tbody tr:last-child { margin-bottom: 0; }
+  .table-scroll tbody td { display: block; min-width: 0; padding: 5px 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
+  .table-scroll tbody td[data-mobile-label]::before { content: attr(data-mobile-label); display: block; margin-bottom: 3px; color: var(--muted); font-size: 10px; font-weight: 800; }
+  :root[dir="rtl"] .table-scroll tbody td[data-mobile-label]::before { content: attr(data-mobile-label-fa); }
+  .table-scroll tbody td.empty-state { padding: 15px 0; }
+  .table-scroll tbody tr[hidden] { display: none; }
+  .accounts-panel .table-scroll thead { display: block; margin-bottom: 11px; }
+  .accounts-panel .table-scroll thead tr { display: block; }
+  .accounts-panel .table-scroll thead th { display: none; }
+  .accounts-panel .table-scroll thead th:first-child { display: block; padding: 4px 0; border: 0; }
+  .accounts-panel .select-all-label span { display: inline; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0; text-transform: none; }
+  .accounts-panel .table-scroll tbody tr[data-account-username] { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 14px; row-gap: 4px; padding: 14px 16px; }
+  .accounts-panel .table-scroll tbody tr[data-account-username][hidden] { display: none; }
+  .accounts-panel .table-scroll tbody td:first-child { position: absolute; inset-inline-start: 16px; top: 19px; }
+  .accounts-panel .table-scroll tbody td:nth-child(2) { grid-column: 1 / -1; padding-inline-start: 29px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .accounts-panel .table-scroll tbody td:nth-child(3),
+  .accounts-panel .table-scroll tbody td:nth-child(4),
+  .accounts-panel .table-scroll tbody td:nth-child(7),
+  .accounts-panel .table-scroll tbody td:nth-child(10) { grid-column: 1 / -1; }
+  .accounts-panel .table-scroll tbody td:nth-child(10) { padding-top: 10px; border-top: 1px solid var(--border); }
+  .accounts-panel .password-cell, .accounts-panel .referral-cell { max-width: none; }
+  .accounts-panel .row-actions { min-width: 0; flex-wrap: wrap; }
+  .accounts-panel .row-actions .action-button { width: 40px; height: 40px; }
+  .accounts-panel .state, .accounts-panel .usage-total { white-space: normal; overflow-wrap: anywhere; }
+  .table-scroll td .account-name { overflow-wrap: anywhere; }
+  .backup-row-actions { gap: 8px; }
+  .audit-pagination { flex-wrap: wrap; justify-content: center; }
+  :root[data-theme="dark"] .table-scroll tbody tr { background: #1b2a3e; }
+  :root[data-theme="dark"] .table-scroll tbody tr[data-account-username].is-selected { background: #203149; }
   .backup-action-grid { grid-template-columns: 1fr; }
   .settings-layout { grid-template-columns: 1fr; gap: 16px; }
   .settings-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .settings-sidebar { position: static; padding: 12px; }
   .settings-sidebar-title, .settings-sidebar-note { display: none; }
-  .settings-nav { display: flex; overflow-x: auto; gap: 5px; }
-  .settings-nav a { flex: 0 0 auto; }
+  .settings-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+  .settings-nav a { min-width: 0; }
   .settings-hero { align-items: flex-start; flex-direction: column; padding: 28px 25px; }
   .settings-port-form { align-items: stretch; flex-direction: column; }
-  .settings-port-controls { flex: 0 0 auto; }
+  .settings-port-controls { flex: 0 0 auto; flex-wrap: wrap; }
+  .settings-current-port { flex-wrap: wrap; }
+  .settings-current-port > div { min-width: 0; flex-wrap: wrap; }
+  .settings-section-head > div { min-width: 0; }
+  .dialog-actions { flex-wrap: wrap; }
+  .sessions-list li { flex-wrap: wrap; }
+  .notice, .settings-callout, .backup-sensitive-note { overflow-wrap: anywhere; }
   .site-header-inner { padding: 0 18px; }
   .app-shell { padding: 25px 16px 50px; }
   .page-heading { align-items: stretch; flex-direction: column; }
@@ -557,6 +598,12 @@ td { color: #506078; font-size: 12px; }
   .menu-toggle > span:last-child { display: none; }
   .account-search-controls { flex-wrap: wrap; }
   .account-search-controls input { flex-basis: 100%; max-width: none; }
+  .panel-heading { align-items: stretch; flex-direction: column; }
+  .account-heading-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%; }
+  .account-heading-actions .button { min-width: 0; white-space: normal; text-align: center; }
+  .bulk-action-bar > strong { width: 100%; }
+  .bulk-action-bar > [data-clear-selection] { margin-inline-start: 0; }
+  .bulk-extend-options { position: fixed; inset: auto 16px 16px; z-index: 30; min-width: 0; justify-content: center; flex-wrap: wrap; }
   .bulk-grid { grid-template-columns: 1fr; }
   .theme-toggle [data-theme-label] { display: none; }
   .web-address-form { grid-template-columns: 1fr; }
@@ -566,8 +613,15 @@ td { color: #506078; font-size: 12px; }
   .settings-form-row:first-of-type { grid-column: auto; max-width: none; }
   .settings-password-form .settings-field-note { grid-column: auto; }
   .settings-recovery-row { align-items: stretch; flex-direction: column; }
-  .settings-port-controls input { flex: 1 1 auto; width: min(100%, 180px); }
-  .settings-port-controls .button { flex: 0 0 auto; }
+  .settings-port-controls { width: 100%; }
+  .settings-port-controls input { flex: 1 1 120px; width: auto; min-width: 0; }
+  .settings-port-controls .button { flex: 1 1 120px; }
+  .backup-schedule-form > label:not(.backup-schedule-toggle), .backup-schedule-form input[type=time], .backup-schedule-form > .button { width: 100%; }
+  .backup-schedule-toggle { margin-inline-end: 0; }
+  .backup-row-actions .button { min-height: 40px; }
+  .account-dialog { max-height: calc(100dvh - 24px); }
+  .account-dialog input, .account-dialog textarea, .login-form input { font-size: 16px; }
+  .settings-field-note code, .web-change-panel code { overflow-wrap: anywhere; }
   .nav-drawer { width: min(100%, 360px); border-radius: 0; }
   .drawer-content { padding: 25px 19px 20px; }
   .account-totals { display: none; }

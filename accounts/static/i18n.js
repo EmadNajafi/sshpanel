@@ -4,9 +4,29 @@
   if (toggle) {
     toggle.textContent = language === "fa" ? "English" : "فارسی";
     toggle.setAttribute("aria-label", language === "fa" ? "تغییر زبان به انگلیسی" : "Switch to Persian");
-    toggle.addEventListener("click", () => {
+    toggle.addEventListener("click", async () => {
       const nextLanguage = language === "fa" ? "en" : "fa";
-      try { localStorage.setItem("sshvpn-language", nextLanguage); } catch (_) { /* Storage may be unavailable. */ }
+      const saveUrl = document.documentElement.dataset.languageSaveUrl;
+      if (saveUrl) {
+        toggle.disabled = true;
+        try {
+          const csrf = document.querySelector('input[name="csrfmiddlewaretoken"]')?.value;
+          const response = await fetch(saveUrl, {
+            method: "POST", credentials: "same-origin",
+            headers: { "X-CSRFToken": csrf || "" },
+            body: new URLSearchParams({ language: nextLanguage }),
+          });
+          if (!response.ok) throw new Error("Could not save language");
+        } catch (_) {
+          toggle.disabled = false;
+          window.alert(language === "fa" ? "ذخیرهٔ زبان انجام نشد. دوباره تلاش کنید." : "Could not save the language. Please try again.");
+          return;
+        }
+      }
+      try {
+        if (saveUrl) localStorage.setItem("sshvpn-language", nextLanguage);
+        else sessionStorage.setItem("sshvpn-login-language", nextLanguage);
+      } catch (_) { /* Storage may be unavailable. */ }
       document.cookie = `django_language=${nextLanguage}; Path=/; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
       window.location.reload();
     });
