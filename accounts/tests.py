@@ -311,7 +311,7 @@ class AccountViewsTests(TestCase):
         self.assertEqual(helper.call_args_list[-1].args, ("usage-reset", "second"))
 
         with patch("accounts.views.sync_account_activation"):
-            self.client.post(action_url, {"action": "extend", "days": "30", "account_ids": selected})
+            self.client.post(action_url, {"action": "extend:30", "account_ids": selected})
         first.refresh_from_db()
         second.refresh_from_db()
         self.assertGreater(first.expires_at, timezone.now() + timedelta(days=29))
@@ -336,6 +336,7 @@ class AccountViewsTests(TestCase):
         url = reverse("bulk_account_action")
         self.assertEqual(self.client.get(url).status_code, 405)
         self.client.post(url, {"action": "extend", "days": "13", "account_ids": [str(account.pk)]})
+        self.client.post(url, {"action": "extend:13", "account_ids": [str(account.pk)]})
         account.refresh_from_db()
         self.assertIsNone(account.expires_at)
         helper.assert_not_called()
@@ -624,6 +625,9 @@ class AccountViewsTests(TestCase):
         page = self.client.get(reverse("dashboard"))
         self.assertContains(page, "Days left")
         self.assertContains(page, 'id="bulk-create-dialog"')
+        self.assertContains(page, 'name="action" value="extend:30"')
+        self.assertContains(page, 'name="action" value="usage-reset"')
+        self.assertNotContains(page, 'data-bulk-action-select')
         self.assertContains(page, "3 days")
         self.assertContains(page, "0 days")
         self.assertContains(page, "Unlimited")

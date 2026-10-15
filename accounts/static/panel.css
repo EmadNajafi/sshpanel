@@ -149,12 +149,16 @@ h1, h2, p { margin-top: 0; }
 .account-search-controls input { flex: 1 1 240px; min-width: 0; max-width: 440px; }
 .account-search-count { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
 .bulk-action-bar { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin: 0 0 16px; padding: 12px; border: 1px solid #d8e5f8; border-radius: 12px; background: #f4f8ff; }
-.bulk-action-bar[hidden], [data-filter-empty][hidden], [data-clear-search][hidden], [data-search-count][hidden], [data-bulk-days][hidden] { display: none; }
+.bulk-action-bar[hidden], [data-filter-empty][hidden], [data-clear-search][hidden], [data-search-count][hidden], [data-bulk-extend-options][hidden] { display: none; }
 tr[data-account-username][hidden] { display: none; }
 .bulk-action-bar > strong { margin-right: 5px; font-size: 12px; white-space: nowrap; }
-.bulk-action-bar label { margin: 0; }
-.bulk-action-bar select { min-height: 39px; padding: 7px 10px; border: 1px solid #d6dfeb; border-radius: 9px; background: #fff; color: var(--ink); }
-.bulk-action-days { display: inline-flex; align-items: center; gap: 6px; }
+.bulk-icon-actions { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.bulk-icon-actions .action-button { width: 38px; height: 38px; }
+.bulk-extend-group { position: relative; }
+.bulk-extend-options { position: absolute; z-index: 12; top: calc(100% + 7px); inset-inline-start: 0; display: flex; gap: 5px; min-width: max-content; padding: 7px; border: 1px solid #d6dfeb; border-radius: 10px; background: #fff; box-shadow: 0 12px 28px rgba(15, 35, 65, .16); }
+.bulk-extend-options button { padding: 8px 10px; border: 1px solid #d6dfeb; border-radius: 7px; background: #f7f9fc; color: var(--ink); font: inherit; font-size: 11px; font-weight: 750; cursor: pointer; }
+.bulk-extend-options button:hover, .bulk-extend-options button:focus-visible { border-color: #86b9a1; background: #e2f6ea; }
+.bulk-action-bar > [data-clear-selection] { margin-inline-start: auto; }
 input[data-select-all], input[data-select-account] { width: 17px; height: 17px; min-height: 0; padding: 0; accent-color: var(--blue); cursor: pointer; }
 tr[data-account-username].is-selected { background: #f3f7ff; }
 .create-trigger { display: inline-flex; align-items: center; gap: 9px; }
@@ -440,7 +444,12 @@ td { color: #506078; font-size: 12px; }
 :root[data-theme="dark"] .drawer-health { border-color: #304158; }
 :root[data-theme="dark"] .drawer-resource { background: #213149; border-color: #354862; }
 :root[data-theme="dark"] .bulk-action-bar { background: #203149; border-color: #39577e; }
-:root[data-theme="dark"] .bulk-action-bar select { background: #101c2d; border-color: #40536e; color: var(--ink); }
+:root[data-theme="dark"] .action-button { background: #26384f; border-color: #3d5470; color: #b9cce5; }
+:root[data-theme="dark"] .action-button:hover, :root[data-theme="dark"] .action-button:focus-visible { background: #315071; border-color: #6185b5; color: #fff; }
+:root[data-theme="dark"] .action-button-extend { background: #21493e; border-color: #326a58; color: #86e9bc; }
+:root[data-theme="dark"] .action-button-extend:hover, :root[data-theme="dark"] .action-button-extend:focus-visible { background: #2b614e; border-color: #459977; color: #b6f5d7; }
+:root[data-theme="dark"] .bulk-extend-options { border-color: #40536e; background: #1a2a40; }
+:root[data-theme="dark"] .bulk-extend-options button { border-color: #40536e; background: #23364d; color: var(--ink); }
 :root[data-theme="dark"] tr[data-account-username].is-selected { background: #203149; }
 :root[data-theme="dark"] .drawer-resource-head span,
 :root[data-theme="dark"] .drawer-resource > span,
@@ -458,6 +467,7 @@ td { color: #506078; font-size: 12px; }
 :root[data-theme="dark"] .state-disabled-account,
 :root[data-theme="dark"] .button-danger,
 :root[data-theme="dark"] .action-button-danger { background: #512d36; border-color: #79414e; color: #ffabb5; }
+:root[data-theme="dark"] .action-button-danger:hover, :root[data-theme="dark"] .action-button-danger:focus-visible { background: #713745; border-color: #a85062; color: #ffd2d8; }
 :root[data-theme="dark"] .settings-callout,
 :root[data-theme="dark"] .backup-sensitive-note { background: #4a3928; border-color: #7a5b36; color: #ffd58d; }
 :root[data-theme="dark"] .settings-callout strong,

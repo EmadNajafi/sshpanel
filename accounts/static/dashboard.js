@@ -20,11 +20,16 @@
   const listEmpty = document.querySelector("[data-account-list-empty] td");
   const selectAll = document.querySelector("[data-select-all]");
   const bulkForm = document.querySelector("[data-bulk-action-form]");
-  const actionSelect = bulkForm.querySelector("[data-bulk-action-select]");
-  const daysSelect = bulkForm.querySelector("[data-bulk-days]");
+  const extendTrigger = bulkForm.querySelector("[data-bulk-extend-trigger]");
+  const extendOptions = bulkForm.querySelector("[data-bulk-extend-options]");
   const overview = document.getElementById("account-overview-root");
   const requestedFilter = new URLSearchParams(window.location.search).get("status");
   let accountFilter = ["online", "inactive"].includes(requestedFilter) ? requestedFilter : "total";
+
+  function closeExtendOptions() {
+    extendOptions.hidden = true;
+    extendTrigger.setAttribute("aria-expanded", "false");
+  }
 
   function updateSelection() {
     const visible = accountRows.filter((row) => !row.hidden);
@@ -33,6 +38,7 @@
     selectAll.disabled = visible.length === 0;
     selectAll.checked = visible.length > 0 && visible.every((row) => row.querySelector("[data-select-account]").checked);
     selectAll.indeterminate = !selectAll.checked && visible.some((row) => row.querySelector("[data-select-account]").checked);
+    if (!selected.length) closeExtendOptions();
     bulkForm.hidden = selected.length === 0;
     bulkForm.querySelector("[data-selected-count]").textContent = `${selected.length} selected`;
   }
@@ -48,10 +54,7 @@
       if (match) matches += 1;
       if (resetSelection || !match) row.querySelector("[data-select-account]").checked = false;
     });
-    if (resetSelection) {
-      actionSelect.value = "";
-      daysSelect.hidden = true;
-    }
+    if (resetSelection) closeExtendOptions();
     clearSearch.hidden = !needle && accountFilter === "total";
     searchCount.hidden = !needle && accountFilter === "total";
     searchCount.textContent = `${matches} matching users`;
@@ -95,18 +98,27 @@
   });
   bulkForm.querySelector("[data-clear-selection]").addEventListener("click", () => {
     accountRows.forEach((row) => { row.querySelector("[data-select-account]").checked = false; });
-    actionSelect.value = "";
-    daysSelect.hidden = true;
+    closeExtendOptions();
     updateSelection();
   });
-  actionSelect.addEventListener("change", () => { daysSelect.hidden = actionSelect.value !== "extend"; });
+  extendTrigger.addEventListener("click", () => {
+    extendOptions.hidden = !extendOptions.hidden;
+    extendTrigger.setAttribute("aria-expanded", String(!extendOptions.hidden));
+  });
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".bulk-extend-group")) closeExtendOptions();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeExtendOptions();
+  });
   bulkForm.addEventListener("submit", (event) => {
     const selected = accountRows.filter((row) => row.querySelector("[data-select-account]").checked);
-    if (!selected.length || !actionSelect.value) {
+    const action = event.submitter?.value || "";
+    if (!selected.length || !action) {
       event.preventDefault();
       return;
     }
-    if (actionSelect.value === "delete" && !window.panelConfirm(`Delete ${selected.length} selected users? This cannot be undone.`)) {
+    if (action === "delete" && !window.panelConfirm(`Delete ${selected.length} selected users? This cannot be undone.`)) {
       event.preventDefault();
     }
   });

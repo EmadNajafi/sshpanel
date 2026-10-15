@@ -482,7 +482,10 @@ def delete_account(request, pk):
 @staff_required
 @require_POST
 def bulk_account_action(request):
-    action = request.POST.get("action", "")
+    requested_action = request.POST.get("action", "")
+    action, separator, selected_days = requested_action.partition(":")
+    if separator and action != "extend":
+        action = ""
     if action not in {"enable", "disable", "extend", "usage-reset", "delete"}:
         messages.error(request, "Choose a valid bulk action.")
         return redirect("dashboard")
@@ -498,7 +501,7 @@ def bulk_account_action(request):
     days = None
     if action == "extend":
         try:
-            days = int(request.POST.get("days", ""))
+            days = int(selected_days if separator else request.POST.get("days", ""))
         except ValueError:
             days = None
         if days not in (30, 60, 90):
