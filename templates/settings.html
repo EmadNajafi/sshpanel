@@ -83,9 +83,10 @@
           <span class="settings-section-icon settings-icon-blue" aria-hidden="true">04</span>
           <div><p class="eyebrow">REMOTE ADMINISTRATION</p><h2>Telegram bot</h2><p>Manage users and backups from a private Telegram chat.</p></div>
         </div>
-        <div class="settings-current-port"><div><span class="settings-detail-label">BOT STATUS</span><strong>{% if telegram.enabled %}Enabled{% else %}Disabled{% endif %}{% if telegram.bot_username %} · @{{ telegram.bot_username }}{% endif %}</strong></div></div>
-        {% if not tls_enabled %}<div class="settings-callout">This panel currently uses HTTP. Enable HTTPS or use an administrator SSH tunnel before entering the bot token over an untrusted network.</div>{% endif %}
+        <div class="settings-current-port"><div><span class="settings-detail-label">BOT STATUS</span><strong>{% if not tls_enabled %}Suspended until HTTPS{% elif telegram.enabled %}Enabled{% else %}Disabled{% endif %}{% if telegram.bot_username %} · @{{ telegram.bot_username }}{% endif %}</strong></div></div>
+        {% if not tls_enabled %}<div class="settings-callout">The Telegram bot works only when this panel uses HTTPS. Enable HTTPS to configure the bot, process commands, and send automatic backups.</div>{% endif %}
         <p class="settings-field-note">Automatic backup schedule: {% if backup_schedule.enabled %}Enabled at {{ backup_schedule.time }} Tehran{% else %}Disabled{% endif %}. <a href="{% url 'backup_settings' %}">Manage backup schedule</a></p>
+        {% if tls_enabled %}
         <form method="post" action="{% url 'save_telegram_bot' %}" class="telegram-settings-form">{% csrf_token %}
           <div><label for="telegram-token">Bot token</label><input id="telegram-token" name="token" type="password" autocomplete="new-password" dir="ltr" placeholder="{% if telegram.token_ciphertext %}Saved — leave blank to keep{% else %}Paste token from @BotFather{% endif %}"><span class="helptext">Create a bot with @BotFather. The token is encrypted in the panel database and never shown here.</span></div>
           <div><label for="telegram-ids">Allowed Telegram user IDs</label><textarea id="telegram-ids" name="allowed_ids" rows="3" dir="ltr" placeholder="123456789&#10;987654321">{{ telegram_allowed_ids }}</textarea><span class="helptext">One numeric ID per line. To find yours, enable the bot, send it /id in a private chat, then save the ID here. Only these IDs can manage the panel.</span></div>
@@ -93,9 +94,12 @@
           <p class="settings-field-note">Automatic backups are sent to every allowed ID when enabled. Large backups arrive in numbered parts. Telegram stores the messages and backup files you send.</p>
           <button class="button button-primary" type="submit">Save bot settings</button>
         </form>
+        {% endif %}
         {% if telegram.token_ciphertext %}
           <div class="telegram-secondary-actions">
+            {% if tls_enabled %}
             <form method="post" action="{% url 'test_telegram_bot' %}">{% csrf_token %}<button class="button button-secondary" type="submit">Send test message</button></form>
+            {% endif %}
             <form method="post" action="{% url 'save_telegram_bot' %}" onsubmit="return panelConfirm('Remove the Telegram bot token and allowed IDs?')">{% csrf_token %}<input type="hidden" name="remove" value="yes"><button class="button button-danger" type="submit">Remove bot token</button></form>
           </div>
         {% endif %}

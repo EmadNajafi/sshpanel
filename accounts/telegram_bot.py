@@ -134,6 +134,18 @@ def send_backup(api, chat_id, name):
     api.send_message(chat_id, f"برای بازسازی: cat {name}.part* > {name}")
 
 
+def panel_https_enabled():
+    # Re-read the live config: this worker is not restarted by every web change.
+    # Fail closed if the file is unavailable, even if the process has stale env.
+    try:
+        for line in Path("/etc/sshvpn/panel.env").read_text().splitlines():
+            if line.startswith("PANEL_TLS_ENABLED="):
+                return line.partition("=")[2].strip().strip('"\'') == "1"
+    except OSError:
+        pass
+    return False
+
+
 def read_panel_address():
     # The bot process survives web-address changes, so read the live environment file.
     values = {}
@@ -615,6 +627,8 @@ def dispatch(config, api, chat_id, user_id, command_line, pending, *, confirmed=
 
 
 def handle_update(config, api, update, pending):
+    if not panel_https_enabled():
+        return
     callback = update.get("callback_query")
     message = (callback or {}).get("message") if callback else update.get("message")
     sender = (callback or {}).get("from") if callback else (message or {}).get("from")
@@ -689,6 +703,12 @@ def run_polling():
     webhook_removed = False
     while True:
         close_old_connections()
+        if not panel_https_enabled():
+            configured_token = None
+            webhook_removed = False
+            pending.clear()
+            time.sleep(5)
+            continue
         config = TelegramBotConfig.objects.select_related("owner").filter(pk=1).first()
         token = decrypt_bot_token(config.token_ciphertext) if config and config.enabled else None
         if not token:
@@ -715,6 +735,8 @@ def run_polling():
             if not isinstance(updates, list):
                 raise TelegramError("Telegram returned an invalid update list.")
             for update in updates:
+                if not panel_https_enabled():
+                    break
                 if not isinstance(update, dict):
                     continue
                 update_id = update.get("update_id")
@@ -735,6 +757,8 @@ def run_polling():
 
 
 def send_latest_automatic_backup():
+    if not panel_https_enabled():
+        return "Telegram delivery requires HTTPS."
     config = TelegramBotConfig.objects.select_related("owner").filter(pk=1, enabled=True).first()
     if not config or not config.allowed_user_ids or not config.owner.is_active or not config.owner.is_staff:
         return "Telegram delivery is disabled."
@@ -747,6 +771,8 @@ def send_latest_automatic_backup():
     api = TelegramAPI(token)
     failures = []
     for chat_id in config.allowed_user_ids:
+        if not panel_https_enabled():
+            return "Telegram delivery requires HTTPS."
         try:
             send_backup(api, chat_id, latest["name"])
         except (TelegramError, OSError) as exc:

@@ -647,6 +647,9 @@ def save_telegram_bot(request):
             config.save()
         messages.success(request, "Telegram bot token and access list removed.")
         return redirect("panel_settings")
+    if not settings.TLS_ENABLED:
+        messages.error(request, "HTTPS is required to configure or use the Telegram bot.")
+        return redirect("panel_settings")
     token = request.POST.get("token", "").strip()
     enabled = request.POST.get("enabled") == "yes"
     raw_ids = request.POST.get("allowed_ids", "")
@@ -688,6 +691,9 @@ def save_telegram_bot(request):
 @staff_required
 @require_POST
 def test_telegram_bot(request):
+    if not settings.TLS_ENABLED:
+        messages.error(request, "HTTPS is required to configure or use the Telegram bot.")
+        return redirect("panel_settings")
     config = TelegramBotConfig.objects.filter(pk=1).first()
     token = decrypt_bot_token(config.token_ciphertext) if config else None
     if not token or not config.allowed_user_ids:

@@ -3,7 +3,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import TelegramBotConfig, VpnAccount
@@ -18,6 +18,7 @@ class TelegramSettingsTests(TestCase):
         self.client.force_login(self.owner)
 
     @patch("accounts.views.TelegramAPI")
+    @override_settings(TLS_ENABLED=True)
     def test_token_is_encrypted_and_never_rendered(self, api_class):
         api_class.return_value.call.return_value = {"is_bot": True, "username": "test_panel_bot"}
         token = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
@@ -32,6 +33,7 @@ class TelegramSettingsTests(TestCase):
         self.assertNotIn(token, self.client.get(reverse("panel_settings")).content.decode())
 
     @patch("accounts.views.TelegramAPI")
+    @override_settings(TLS_ENABLED=True)
     def test_invalid_ids_do_not_replace_existing_configuration(self, api_class):
         config = TelegramBotConfig.objects.create(
             pk=1, owner=self.owner, enabled=True,
@@ -57,6 +59,7 @@ class TelegramSettingsTests(TestCase):
         self.assertEqual(config.allowed_user_ids, [])
 
     @patch("accounts.views.TelegramAPI")
+    @override_settings(TLS_ENABLED=True)
     def test_test_message_targets_only_saved_ids(self, api_class):
         TelegramBotConfig.objects.create(
             pk=1, owner=self.owner, enabled=True,
@@ -70,9 +73,40 @@ class TelegramSettingsTests(TestCase):
             [12345, 67890],
         )
 
+    @patch("accounts.views.TelegramAPI")
+    def test_http_hides_token_and_rejects_configuration_and_test(self, api_class):
+        token = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
+        page = self.client.get(reverse("panel_settings")).content.decode()
+        self.assertIn("Suspended until HTTPS", page)
+        self.assertNotIn('name="token"', page)
+        response = self.client.post(reverse("save_telegram_bot"), {
+            "token": token, "enabled": "yes", "allowed_ids": "12345",
+        }, follow=True)
+        self.assertContains(response, "HTTPS is required to configure or use the Telegram bot.")
+        self.assertFalse(TelegramBotConfig.objects.exists())
+        response = self.client.post(reverse("test_telegram_bot"), follow=True)
+        self.assertContains(response, "HTTPS is required to configure or use the Telegram bot.")
+        api_class.assert_not_called()
+
+    def test_http_suspends_existing_bot_but_allows_token_removal(self):
+        TelegramBotConfig.objects.create(
+            pk=1, owner=self.owner, enabled=True,
+            token_ciphertext=encrypt_bot_token("123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"),
+            allowed_user_ids=[12345],
+        )
+        page = self.client.get(reverse("panel_settings")).content.decode()
+        self.assertIn("Suspended until HTTPS", page)
+        self.assertIn("Remove bot token", page)
+        self.assertNotIn('name="token"', page)
+        self.client.post(reverse("save_telegram_bot"), {"remove": "yes"})
+        self.assertFalse(TelegramBotConfig.objects.get(pk=1).enabled)
+
 
 class TelegramCommandTests(TestCase):
     def setUp(self):
+        https = patch("accounts.telegram_bot.panel_https_enabled", return_value=True)
+        https.start()
+        self.addCleanup(https.stop)
         self.owner = get_user_model().objects.create_user("owner", password="secret", is_staff=True)
         self.config = TelegramBotConfig.objects.create(
             pk=1, owner=self.owner, enabled=True,
@@ -103,6 +137,14 @@ class TelegramCommandTests(TestCase):
                               "from": {"id": 12345}, "text": "/status"}}
         handle_update(self.config, self.api, update, self.pending)
         self.api.send_message.assert_not_called()
+
+    def test_http_ignores_commands_and_suspends_backup_delivery(self):
+        with patch("accounts.telegram_bot.panel_https_enabled", return_value=False):
+            handle_update(self.config, self.api, self.message(12345, "/id"), self.pending)
+            self.api.send_message.assert_not_called()
+            with patch("accounts.telegram_bot.list_backups") as backups:
+                self.assertEqual(send_latest_automatic_backup(), "Telegram delivery requires HTTPS.")
+                backups.assert_not_called()
 
     @patch("accounts.telegram_bot.call_helper")
     def test_delete_needs_a_fresh_private_confirmation(self, helper):
