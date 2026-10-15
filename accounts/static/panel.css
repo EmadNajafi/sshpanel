@@ -549,7 +549,7 @@ td { color: #506078; font-size: 12px; }
   .accounts-panel .select-all-label span { display: inline; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0; text-transform: none; }
   .accounts-panel .table-scroll tbody tr[data-account-username] { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 14px; row-gap: 4px; padding: 14px 16px; }
   .accounts-panel .table-scroll tbody tr[data-account-username][hidden] { display: none; }
-  .accounts-panel .table-scroll tbody td:first-child { position: absolute; inset-inline-start: 16px; top: 19px; }
+  .accounts-panel .table-scroll tbody tr[data-account-username] td:first-child { position: absolute; inset-inline-start: 16px; top: 19px; }
   .accounts-panel .table-scroll tbody td:nth-child(2) { grid-column: 1 / -1; padding-inline-start: 29px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
   .accounts-panel .table-scroll tbody td:nth-child(3),
   .accounts-panel .table-scroll tbody td:nth-child(4),
