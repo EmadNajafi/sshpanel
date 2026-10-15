@@ -547,15 +547,19 @@ td { color: #506078; font-size: 12px; }
   .accounts-panel .table-scroll thead th { display: none; }
   .accounts-panel .table-scroll thead th:first-child { display: block; padding: 4px 0; border: 0; }
   .accounts-panel .select-all-label span { display: inline; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0; text-transform: none; }
-  .accounts-panel .table-scroll tbody tr[data-account-username] { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 14px; row-gap: 4px; padding: 14px 16px; }
+  .accounts-panel .table-scroll tbody tr[data-account-username] { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; row-gap: 2px; margin: 0; padding: 12px 2px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; }
+  .accounts-panel .table-scroll tbody tr[data-account-username]:last-of-type { border-bottom: 0; }
+  .accounts-panel .table-scroll tbody tr[data-account-username].is-selected { background: #f3f7ff; }
   .accounts-panel .table-scroll tbody tr[data-account-username][hidden] { display: none; }
-  .accounts-panel .table-scroll tbody tr[data-account-username] td:first-child { position: absolute; inset-inline-start: 16px; top: 19px; }
-  .accounts-panel .table-scroll tbody td:nth-child(2) { grid-column: 1 / -1; padding-inline-start: 29px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .accounts-panel .table-scroll tbody tr[data-account-username] td:first-child { position: absolute; inset-inline-start: 2px; top: 16px; }
+  .accounts-panel .table-scroll tbody td:nth-child(2) { grid-column: 1 / -1; padding-inline-start: 29px; padding-bottom: 5px; }
   .accounts-panel .table-scroll tbody td:nth-child(3),
   .accounts-panel .table-scroll tbody td:nth-child(4),
   .accounts-panel .table-scroll tbody td:nth-child(7),
   .accounts-panel .table-scroll tbody td:nth-child(10) { grid-column: 1 / -1; }
-  .accounts-panel .table-scroll tbody td:nth-child(10) { padding-top: 10px; border-top: 1px solid var(--border); }
+  .accounts-panel .table-scroll tbody td:nth-child(10) { padding-top: 7px; }
+  .accounts-panel .table-scroll tbody tr[data-account-list-empty],
+  .accounts-panel .table-scroll tbody tr[data-filter-empty] { margin: 0; padding: 10px 2px; border: 0; border-radius: 0; background: transparent; }
   .accounts-panel .password-cell, .accounts-panel .referral-cell { max-width: none; }
   .accounts-panel .row-actions { min-width: 0; flex-wrap: wrap; }
   .accounts-panel .row-actions .action-button { width: 40px; height: 40px; }
@@ -564,6 +568,9 @@ td { color: #506078; font-size: 12px; }
   .backup-row-actions { gap: 8px; }
   .audit-pagination { flex-wrap: wrap; justify-content: center; }
   :root[data-theme="dark"] .table-scroll tbody tr { background: #1b2a3e; }
+  :root[data-theme="dark"] .accounts-panel .table-scroll tbody tr[data-account-username],
+  :root[data-theme="dark"] .accounts-panel .table-scroll tbody tr[data-account-list-empty],
+  :root[data-theme="dark"] .accounts-panel .table-scroll tbody tr[data-filter-empty] { background: transparent; }
   :root[data-theme="dark"] .table-scroll tbody tr[data-account-username].is-selected { background: #203149; }
   .backup-action-grid { grid-template-columns: 1fr; }
   .settings-layout { grid-template-columns: 1fr; gap: 16px; }
