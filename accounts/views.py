@@ -644,7 +644,13 @@ def backup_settings(request):
     except OSError:
         backups = []
         messages.error(request, "Backups could not be listed.")
-    return render(request, "backups.html", {"backups": backups, "tls_enabled": settings.TLS_ENABLED})
+    try:
+        schedule = call_backup("schedule-status")
+    except BackupError as exc:
+        schedule = {"enabled": False, "time": "03:00"}
+        messages.error(request, str(exc))
+    return render(request, "backups.html", {"backups": backups, "schedule": schedule,
+                                             "tls_enabled": settings.TLS_ENABLED})
 
 
 @staff_required
@@ -679,13 +685,17 @@ def download_backup(request, name):
 @require_POST
 def restore_backup(request):
     upload = request.FILES.get("backup_file")
-    if not upload or request.POST.get("confirm_replace") != "yes":
-        messages.error(request, "Choose a backup file and confirm the restore.")
+    saved_name = request.POST.get("saved_name", "")
+    if bool(upload) == bool(saved_name) or request.POST.get("confirm_replace") != "yes":
+        messages.error(request, "Choose one backup and confirm the restore.")
         return redirect("backup_settings")
     name = None
     try:
-        name = save_upload(upload)
-        result = call_backup("restore", name=name)
+        if upload:
+            name = save_upload(upload)
+            result = call_backup("restore", name=name, actor_id=request.user.pk)
+        else:
+            result = call_backup("restore", name=saved_name, actor_id=request.user.pk)
     except (BackupError, OSError) as exc:
         messages.error(request, str(exc))
         return redirect("backup_settings")
@@ -695,32 +705,38 @@ def restore_backup(request):
                 (UPLOAD_DIR / name).unlink(missing_ok=True)
             except OSError:
                 pass
-    # The restored administrator accounts and signing key take effect after
-    # the background service restart scheduled by the privileged helper.
+    if result.get("type") == "users":
+        messages.success(request, f"Imported {result['accounts']} users. Recovery backup: {result['recovery_backup']}.")
+        return redirect("backup_settings")
+    # Restored administrator accounts and signing key take effect after restart.
     return render(request, "restore_complete.html", {"restored_accounts": result["accounts"]})
 
 
 @staff_required
 @require_POST
-def import_users_backup(request):
-    upload = request.FILES.get("backup_file")
-    if not upload or request.POST.get("confirm_import") != "yes":
-        messages.error(request, "Choose a users-only archive and confirm the import.")
-        return redirect("backup_settings")
-    name = None
+def update_backup_schedule(request):
+    enabled = request.POST.get("enabled") == "yes"
+    time = request.POST.get("time", "")
     try:
-        name = save_upload(upload)
-        result = call_backup("import-users", name=name, actor_id=request.user.pk)
-    except (BackupError, OSError) as exc:
+        call_backup("schedule-set", enabled=enabled, time=time)
+    except BackupError as exc:
         messages.error(request, str(exc))
     else:
-        messages.success(request, f"Imported {result['accounts']} users. Recovery backup: {result['recovery_backup']}.")
-    finally:
-        if name:
-            try:
-                (UPLOAD_DIR / name).unlink(missing_ok=True)
-            except OSError:
-                pass
+        messages.success(request, "Automatic backup schedule updated.")
+    return redirect("backup_settings")
+
+
+@staff_required
+@require_POST
+def remove_backup(request, name):
+    if not BACKUP_NAME.fullmatch(name):
+        raise Http404
+    try:
+        call_backup("remove", name=name)
+    except BackupError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, f"Backup removed: {name}.")
     return redirect("backup_settings")
 
 

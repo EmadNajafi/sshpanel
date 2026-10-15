@@ -43,8 +43,10 @@ class BackupArchiveTests(unittest.TestCase):
         }
         if not include_usage:
             del members["usage.json"]
-        if format_version == 3:
-            manifest = {"format": 3, "account_count": len(accounts), "sha256": {
+        if format_version == 4:
+            members["backup_schedule.json"] = b'{"enabled": true, "time": "04:15", "timezone": "Asia/Tehran"}'
+        if format_version in (3, 4):
+            manifest = {"format": format_version, "account_count": len(accounts), "sha256": {
                 name: hashlib.sha256(data).hexdigest() for name, data in members.items() if name != "manifest.json"
             }}
             members["manifest.json"] = json.dumps(manifest).encode()
@@ -98,7 +100,7 @@ class BackupArchiveTests(unittest.TestCase):
             with self.subTest(member=member), tempfile.TemporaryDirectory() as temporary:
                 directory = Path(temporary)
                 path = directory / "backup.tar.gz"
-                self.make_archive(path, format_version=3, corrupt=member)
+                self.make_archive(path, format_version=4, corrupt=member)
                 extracted = directory / "extracted"
                 extracted.mkdir()
                 with self.assertRaisesRegex(ValueError, "checksum mismatch"):
@@ -126,6 +128,57 @@ class BackupArchiveTests(unittest.TestCase):
             self.assertEqual(command.call_count, 7)
             self.assertIn(("/usr/bin/chage", "-E", "-1", "alice"),
                           [call.args for call in command.call_args_list])
+
+    def test_new_archive_carries_automatic_backup_schedule(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            archive = directory / "backup.tar.gz"
+            self.make_archive(archive, format_version=4)
+            extracted = directory / "extracted"
+            extracted.mkdir()
+            backup.read_archive(archive, extracted)
+            self.assertEqual(json.loads((extracted / "backup_schedule.json").read_text())["time"], "04:15")
+
+    def test_main_restore_detects_full_and_users_only_archives(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            name = "restore-" + "a" * 32 + ".tar.gz"
+            self.make_archive(directory / name)
+            with patch.object(backup, "UPLOAD_DIR", directory), patch.object(backup, "restore", return_value=2) as full:
+                self.assertEqual(backup.restore_archive(name, 7), {"type": "full", "accounts": 2})
+                full.assert_called_once_with(name)
+            with tarfile.open(directory / name, "w:gz") as archive:
+                backup.add_bytes(archive, "manifest.json", b"{}")
+                backup.add_bytes(archive, "users.json", b"[]")
+            with patch.object(backup, "UPLOAD_DIR", directory), patch.object(backup, "import_user_archive", return_value={"accounts": 1, "recovery_backup": "recovery"}) as users:
+                self.assertEqual(backup.restore_archive(name, 7), {"type": "users", "accounts": 1, "recovery_backup": "recovery"})
+                users.assert_called_once_with(name, 7)
+
+    def test_saved_backup_name_validation_and_removal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            name = "sshpanel-auto-20261014T000000Z-12345678.tar.gz"
+            (directory / name).write_bytes(b"archive")
+            with patch.object(backup, "BACKUP_DIR", directory):
+                self.assertEqual(backup.source_archive(name), directory / name)
+                with self.assertRaisesRegex(ValueError, "Invalid backup name"):
+                    backup.remove_saved("../outside.tar.gz")
+                self.assertEqual(backup.remove_saved(name), name)
+                self.assertFalse((directory / name).exists())
+
+    def test_schedule_uses_tehran_time_and_rejects_invalid_values(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            with patch.object(backup, "SCHEDULE_FILE", directory / "schedule.json"), \
+                 patch.object(backup, "TIMER_FILE", directory / "backup.timer"), \
+                 patch.object(backup, "run") as command:
+                self.assertEqual(backup.set_schedule(True, "04:15")["time"], "04:15")
+                self.assertIn("OnCalendar=*-*-* 04:15:00 Asia/Tehran", (directory / "backup.timer").read_text())
+                self.assertEqual(backup.schedule_status()["enabled"], True)
+                self.assertEqual(backup.set_schedule(False, "05:30")["enabled"], False)
+                self.assertIn("disable", [call.args[1] for call in command.call_args_list])
+                with self.assertRaisesRegex(ValueError, "valid backup time"):
+                    backup.set_schedule(True, "25:00")
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 BACKUP_DIR = Path("/var/lib/sshvpn-panel/backups")
 UPLOAD_DIR = Path("/var/lib/sshvpn-panel/restore-uploads")
-BACKUP_NAME = re.compile(r"^sshpanel-\d{8}T\d{6}Z-[0-9a-f]{8}\.tar\.gz$")
+BACKUP_NAME = re.compile(r"^sshpanel-(?:auto-)?\d{8}T\d{6}Z-[0-9a-f]{8}\.tar\.gz$")
 MAX_UPLOAD_SIZE = 1024 * 1024 * 1024
 
 
@@ -26,7 +26,9 @@ def list_backups():
     for path in BACKUP_DIR.iterdir():
         if BACKUP_NAME.fullmatch(path.name) and path.is_file() and not path.is_symlink():
             stat = path.stat()
-            result.append({"name": path.name, "size": stat.st_size, "created": datetime.fromtimestamp(stat.st_mtime, timezone.utc)})
+            result.append({"name": path.name, "size": stat.st_size,
+                           "automatic": path.name.startswith("sshpanel-auto-"),
+                           "created": datetime.fromtimestamp(stat.st_mtime, timezone.utc)})
     return sorted(result, key=lambda item: item["name"], reverse=True)
 
 

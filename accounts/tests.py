@@ -661,10 +661,13 @@ class AccountViewsTests(TestCase):
         self.assertEqual(len(second.context["page"]), 1)
         self.assertContains(first, 'href="?page=2"')
 
+    @patch("accounts.views.call_backup", return_value={"enabled": True, "time": "03:00"})
     @patch("accounts.views.list_backups", return_value=[])
-    def test_backup_settings_requires_staff(self, listing):
+    def test_backup_settings_requires_staff(self, listing, helper):
         page = self.client.get(reverse("backup_settings"))
         self.assertContains(page, "Backup and restore")
+        self.assertContains(page, "Automatic backups")
+        self.assertNotContains(page, "Import users from Shahan")
         self.assertContains(page, "Backups contain sensitive account data")
         self.assertNotContains(page, "Backup passphrase")
         self.assertNotContains(page, 'name="passphrase"')
@@ -672,6 +675,7 @@ class AccountViewsTests(TestCase):
         self.assertEqual(self.client.get(reverse("backup_settings")).status_code, 302)
         self.assertEqual(self.client.post(reverse("create_backup")).status_code, 302)
         listing.assert_called_once()
+        helper.assert_called_once_with("schedule-status")
 
     @patch("accounts.views.call_backup", return_value={"name": "sshpanel-20261001T000000Z-12345678.tar.gz"})
     def test_create_backup_needs_no_passphrase(self, helper):
@@ -690,7 +694,7 @@ class AccountViewsTests(TestCase):
             self.client.logout()
             self.assertEqual(self.client.get(reverse("download_backup", args=[name])).status_code, 302)
 
-    @patch("accounts.views.call_backup", return_value={"accounts": 2})
+    @patch("accounts.views.call_backup", return_value={"type": "full", "accounts": 2})
     def test_restore_requires_confirmation_and_calls_service(self, helper):
         with TemporaryDirectory() as directory, patch("accounts.backups.UPLOAD_DIR", Path(directory)), patch("accounts.views.UPLOAD_DIR", Path(directory)):
             data = {"backup_file": SimpleUploadedFile("backup.tar.gz", b"archive")}
@@ -701,7 +705,38 @@ class AccountViewsTests(TestCase):
             response = self.client.post(reverse("restore_backup"), data)
             self.assertContains(response, "2 VPN accounts")
             self.assertEqual(helper.call_args.args, ("restore",))
-            self.assertEqual(set(helper.call_args.kwargs), {"name"})
+            self.assertEqual(set(helper.call_args.kwargs), {"name", "actor_id"})
+
+    @patch("accounts.views.call_backup", return_value={"type": "users", "accounts": 3, "recovery_backup": "before-import.tar.gz"})
+    def test_restore_form_imports_users_archive_through_same_route(self, helper):
+        with TemporaryDirectory() as directory, patch("accounts.backups.UPLOAD_DIR", Path(directory)), patch("accounts.views.UPLOAD_DIR", Path(directory)):
+            response = self.client.post(reverse("restore_backup"), {
+                "backup_file": SimpleUploadedFile("users.tar.gz", b"archive"), "confirm_replace": "yes",
+            })
+            self.assertRedirects(response, reverse("backup_settings"), fetch_redirect_response=False)
+            helper.assert_called_once()
+            self.assertEqual(helper.call_args.args, ("restore",))
+
+    @patch("accounts.views.call_backup", return_value={"type": "full", "accounts": 2})
+    def test_saved_backup_restores_without_upload(self, helper):
+        name = "sshpanel-auto-20261014T000000Z-12345678.tar.gz"
+        response = self.client.post(reverse("restore_backup"), {"saved_name": name, "confirm_replace": "yes"})
+        self.assertContains(response, "2 VPN accounts")
+        helper.assert_called_once_with("restore", name=name, actor_id=self.staff.pk)
+
+    @patch("accounts.views.call_backup", return_value={"name": "sshpanel-20261014T000000Z-12345678.tar.gz"})
+    def test_remove_backup_requires_staff_and_valid_name(self, helper):
+        name = "sshpanel-20261014T000000Z-12345678.tar.gz"
+        self.assertEqual(self.client.post(reverse("remove_backup", args=["invalid.tar.gz"])).status_code, 404)
+        self.assertEqual(self.client.post(reverse("remove_backup", args=[name])).status_code, 302)
+        helper.assert_called_once_with("remove", name=name)
+        self.client.logout()
+        self.assertEqual(self.client.post(reverse("remove_backup", args=[name])).status_code, 302)
+
+    @patch("accounts.views.call_backup", return_value={"enabled": True, "time": "04:15"})
+    def test_backup_schedule_can_be_changed(self, helper):
+        self.assertEqual(self.client.post(reverse("update_backup_schedule"), {"enabled": "yes", "time": "04:15"}).status_code, 302)
+        helper.assert_called_once_with("schedule-set", enabled=True, time="04:15")
 
     @patch("accounts.views.call_helper")
     def test_cross_site_post_is_rejected(self, helper):

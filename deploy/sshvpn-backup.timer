@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily SSH VPN panel backup
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 Asia/Tehran
+Persistent=true
+Unit=sshvpn-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -30,9 +30,15 @@ LOCK = Path("/run/lock/sshvpn-backup.lock")
 ENV_FILE = Path("/etc/sshvpn/panel.env")
 POLICY_DIR = Path("/etc/sshvpn/accounts")
 USAGE_FILE = Path("/var/lib/sshvpn/usage.json")
+SCHEDULE_FILE = Path("/etc/sshvpn/backup-schedule.json")
+TIMER_FILE = Path("/etc/systemd/system/sshvpn-backup.timer")
 CHUNK = 1024 * 1024
 USERNAME = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
-MEMBERS = {"manifest.json", "database.dump", "panel.env", "accounts.json", "usage.json", "nginx.conf", "sshd_config"}
+SAVED_NAME = re.compile(r"^sshpanel-(?:auto-)?\d{8}T\d{6}Z-[0-9a-f]{8}\.tar\.gz$")
+UPLOAD_NAME = re.compile(r"^restore-[0-9a-f]{32}\.tar\.gz$")
+BACKUP_TIME = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+LEGACY_MEMBERS = {"manifest.json", "database.dump", "panel.env", "accounts.json", "usage.json", "nginx.conf", "sshd_config"}
+MEMBERS = LEGACY_MEMBERS | {"backup_schedule.json"}
 DATA_MEMBERS = MEMBERS - {"manifest.json"}
 
 
@@ -98,7 +104,7 @@ def file_hash(path):
     return digest.hexdigest()
 
 
-def create():
+def create(automatic=False):
     BACKUP_DIR.mkdir(mode=0o750, parents=True, exist_ok=True)
     os.chown(BACKUP_DIR, 0, grp.getgrnam("sshvpn-panel").gr_gid)
     os.chmod(BACKUP_DIR, 0o750)
@@ -128,9 +134,10 @@ def create():
             "usage.json": USAGE_FILE.read_bytes(),
             "nginx.conf": Path("/etc/nginx/sites-available/sshvpn-panel").read_bytes(),
             "sshd_config": Path("/etc/ssh/sshd_config").read_bytes(),
+            "backup_schedule.json": json.dumps(schedule_status()).encode(),
         }
         manifest = {
-            "format": 3, "created_at": datetime.now(timezone.utc).isoformat(),
+            "format": 4, "created_at": datetime.now(timezone.utc).isoformat(),
             "account_count": len(accounts),
             "sha256": {"database.dump": file_hash(database), **{
                 name: hashlib.sha256(data).hexdigest() for name, data in content.items()
@@ -142,7 +149,8 @@ def create():
             archive.add(database, arcname="database.dump", recursive=False)
             for member_name, data in content.items():
                 add_bytes(archive, member_name, data)
-        name = f"sshpanel-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{os.urandom(4).hex()}.tar.gz"
+        prefix = "sshpanel-auto-" if automatic else "sshpanel-"
+        name = f"{prefix}{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{os.urandom(4).hex()}.tar.gz"
         pending = BACKUP_DIR / f".{name}.tmp"
         try:
             shutil.copyfile(archive_path, pending)
@@ -157,7 +165,8 @@ def create():
 def read_archive(path, directory):
     with tarfile.open(path, "r:gz") as archive:
         members = archive.getmembers()
-        if len(members) != len(MEMBERS) or {member.name for member in members} != MEMBERS or any(not member.isfile() for member in members):
+        member_names = {member.name for member in members}
+        if member_names not in (MEMBERS, LEGACY_MEMBERS) or len(members) != len(member_names) or any(not member.isfile() for member in members):
             raise ValueError("Backup contents are incomplete or unexpected.")
         if sum(member.size for member in members) > 1024 * 1024 * 1024:
             raise ValueError("Backup expands beyond the 1 GiB restore limit.")
@@ -166,13 +175,17 @@ def read_archive(path, directory):
             with archive.extractfile(member) as source, destination.open("wb") as output:
                 shutil.copyfileobj(source, output, CHUNK)
     manifest = json.loads((directory / "manifest.json").read_text())
-    if not isinstance(manifest, dict) or manifest.get("format") not in (2, 3):
+    if not isinstance(manifest, dict) or manifest.get("format") not in (2, 3, 4):
         raise ValueError("Unsupported or incomplete backup.")
-    if manifest["format"] == 3:
+    if (manifest["format"] == 4 and member_names != MEMBERS or
+            manifest["format"] in (2, 3) and member_names != LEGACY_MEMBERS):
+        raise ValueError("Backup format does not match its contents.")
+    if manifest["format"] in (3, 4):
         hashes = manifest.get("sha256")
-        if not isinstance(hashes, dict) or set(hashes) != DATA_MEMBERS:
+        required = DATA_MEMBERS if manifest["format"] == 4 else LEGACY_MEMBERS - {"manifest.json"}
+        if not isinstance(hashes, dict) or set(hashes) != required:
             raise ValueError("Backup checksums are incomplete.")
-        for name in DATA_MEMBERS:
+        for name in required:
             if file_hash(directory / name) != hashes[name]:
                 raise ValueError(f"Backup checksum mismatch: {name}.")
     elif file_hash(directory / "database.dump") != manifest.get("database_sha256"):
@@ -199,7 +212,7 @@ def read_archive(path, directory):
         if not isinstance(password_hash, str) or not password_hash or any(char in password_hash for char in ":\n\r\x00"):
             raise ValueError("Invalid VPN password hash in backup.")
         linux = item.get("linux")
-        if manifest["format"] == 3 or linux is not None:
+        if manifest["format"] in (3, 4) or linux is not None:
             aging = ("shadow_last_change", "shadow_min", "shadow_max", "shadow_warn",
                      "shadow_inactive", "shadow_expire", "shadow_flag")
             if not isinstance(linux, dict) or not all(
@@ -232,7 +245,7 @@ def read_archive(path, directory):
         if validity is not None and ((expiry is None) != (activated is None)):
             raise ValueError("Invalid VPN activation state in backup.")
         seen.add(username)
-    if manifest["format"] == 3:
+    if manifest["format"] in (3, 4):
         if set(usage) != seen or any(
             not isinstance(entry, dict) or any(
                 type(entry.get(key)) is not int or entry[key] < 0
@@ -240,6 +253,11 @@ def read_archive(path, directory):
             ) for entry in usage.values()
         ):
             raise ValueError("Traffic data does not match the VPN accounts.")
+    if manifest["format"] == 4:
+        schedule = json.loads((directory / "backup_schedule.json").read_text())
+        if (not isinstance(schedule, dict) or type(schedule.get("enabled")) is not bool or
+                not isinstance(schedule.get("time"), str) or not BACKUP_TIME.fullmatch(schedule["time"])):
+            raise ValueError("Backup schedule is invalid.")
     return accounts, secret
 
 
@@ -258,12 +276,29 @@ def restore_linux_metadata(item):
             run("/usr/bin/chage", option, str(value), username)
 
 
-def restore(upload_name):
-    if not isinstance(upload_name, str) or not re.fullmatch(r"restore-[0-9a-f]{32}\.tar\.gz", upload_name):
-        raise ValueError("Invalid upload name.")
-    upload = UPLOAD_DIR / upload_name
-    if not upload.is_file() or upload.is_symlink():
-        raise ValueError("Uploaded backup was not found.")
+def source_archive(name):
+    if not isinstance(name, str):
+        raise ValueError("Invalid backup name.")
+    if UPLOAD_NAME.fullmatch(name):
+        source = UPLOAD_DIR / name
+    elif SAVED_NAME.fullmatch(name):
+        source = BACKUP_DIR / name
+    else:
+        raise ValueError("Invalid backup name.")
+    if not source.is_file() or source.is_symlink():
+        raise ValueError("Backup file was not found.")
+    return source
+
+
+def remove_saved(name):
+    if not isinstance(name, str) or not SAVED_NAME.fullmatch(name):
+        raise ValueError("Invalid backup name.")
+    source_archive(name).unlink()
+    return name
+
+
+def restore(archive_name):
+    upload = source_archive(archive_name)
     values = env_values()
     with tempfile.TemporaryDirectory(prefix="sshpanel-restore-") as temporary:
         directory = Path(temporary)
@@ -357,18 +392,18 @@ def restore(upload_name):
         os.chmod(temporary_env, 0o640)
         os.replace(temporary_env, ENV_FILE)
         run("/usr/local/sbin/sshvpnctl", "usage-sync", timeout=30)
+        schedule_file = directory / "backup_schedule.json"
+        if schedule_file.exists():
+            schedule = json.loads(schedule_file.read_text())
+            set_schedule(schedule["enabled"], schedule["time"])
         # The new signing key must be loaded by a fresh Gunicorn process after
         # this HTTP request has returned to the browser.
         run("/usr/bin/systemd-run", "--quiet", "--on-active=5s", "/usr/bin/systemctl", "restart", "sshvpn-panel")
     return len(accounts)
 
 
-def import_user_archive(upload_name, actor_id):
-    if not isinstance(upload_name, str) or not re.fullmatch(r"restore-[0-9a-f]{32}\.tar\.gz", upload_name):
-        raise ValueError("Invalid upload name.")
-    upload = UPLOAD_DIR / upload_name
-    if not upload.is_file() or upload.is_symlink():
-        raise ValueError("Uploaded user archive was not found.")
+def import_user_archive(archive_name, actor_id):
+    upload = source_archive(archive_name)
     if type(actor_id) is not int or actor_id <= 0:
         raise ValueError("Invalid importing administrator.")
     users = read_user_import_archive(upload)
@@ -376,20 +411,100 @@ def import_user_archive(upload_name, actor_id):
     return {"accounts": import_users(users, actor_id, env_values()), "recovery_backup": recovery_name}
 
 
+def restore_archive(name, actor_id):
+    source = source_archive(name)
+    with tarfile.open(source, "r:gz") as archive:
+        members = archive.getmembers()
+        names = {member.name for member in members}
+        if len(members) == len(names) and names in (MEMBERS, LEGACY_MEMBERS):
+            return {"type": "full", "accounts": restore(name)}
+        if len(members) == 2 and names == {"manifest.json", "users.json"}:
+            return {"type": "users", **import_user_archive(name, actor_id)}
+    raise ValueError("Unsupported backup archive.")
+
+
+def schedule_status():
+    if not SCHEDULE_FILE.exists():
+        return {"enabled": False, "time": "03:00", "timezone": "Asia/Tehran"}
+    state = json.loads(SCHEDULE_FILE.read_text(encoding="utf-8"))
+    if (not isinstance(state, dict) or type(state.get("enabled")) is not bool or
+            not isinstance(state.get("time"), str) or not BACKUP_TIME.fullmatch(state["time"])):
+        raise ValueError("Automatic backup schedule is invalid.")
+    return {"enabled": state["enabled"], "time": state["time"], "timezone": "Asia/Tehran"}
+
+
+def _atomic_file(path, content, mode):
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+            output.write(content)
+        os.chmod(temporary, mode)
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def set_schedule(enabled, time):
+    if type(enabled) is not bool or not isinstance(time, str) or not BACKUP_TIME.fullmatch(time):
+        raise ValueError("Choose a valid backup time in HH:MM format.")
+    old_state = schedule_status()
+    old_timer = TIMER_FILE.read_text(encoding="utf-8") if TIMER_FILE.exists() else None
+    old_schedule = SCHEDULE_FILE.read_text(encoding="utf-8") if SCHEDULE_FILE.exists() else None
+    timer = ("[Unit]\nDescription=Daily SSH VPN panel backup\n\n[Timer]\n"
+             f"OnCalendar=*-*-* {time}:00 Asia/Tehran\nPersistent=true\n"
+             "Unit=sshvpn-backup.service\n\n[Install]\nWantedBy=timers.target\n")
+    try:
+        _atomic_file(TIMER_FILE, timer, 0o644)
+        _atomic_file(SCHEDULE_FILE, json.dumps({"enabled": enabled, "time": time}) + "\n", 0o600)
+        run("/usr/bin/systemctl", "daemon-reload", timeout=30)
+        if enabled:
+            run("/usr/bin/systemctl", "enable", "--now", "sshvpn-backup.timer", timeout=30)
+            run("/usr/bin/systemctl", "restart", "sshvpn-backup.timer", timeout=30)
+        else:
+            run("/usr/bin/systemctl", "disable", "--now", "sshvpn-backup.timer", timeout=30)
+    except Exception:
+        if old_timer is None:
+            TIMER_FILE.unlink(missing_ok=True)
+        else:
+            _atomic_file(TIMER_FILE, old_timer, 0o644)
+        if old_schedule is None:
+            SCHEDULE_FILE.unlink(missing_ok=True)
+        else:
+            _atomic_file(SCHEDULE_FILE, old_schedule, 0o600)
+        try:
+            run("/usr/bin/systemctl", "daemon-reload", timeout=30)
+            if old_state["enabled"]:
+                run("/usr/bin/systemctl", "enable", "--now", "sshvpn-backup.timer", timeout=30)
+            else:
+                run("/usr/bin/systemctl", "disable", "--now", "sshvpn-backup.timer", timeout=30)
+        except Exception:
+            pass
+        raise
+    return schedule_status()
+
+
 def main():
-    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in {"create", "restore", "import-users"}:
+    actions = {"create", "create-auto", "restore", "remove", "schedule-status", "schedule-set"}
+    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in actions:
         print("Invalid backup operation.", file=sys.stderr)
         return 1
     try:
-        request = json.loads(sys.stdin.read(4097))
+        action = sys.argv[1]
+        request = {} if action in {"create-auto", "schedule-status"} else json.loads(sys.stdin.read(4097))
         with LOCK.open("a+") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
-            if sys.argv[1] == "create":
+            if action == "create":
                 print(json.dumps({"name": create()}))
-            elif sys.argv[1] == "import-users":
-                print(json.dumps(import_user_archive(request["name"], request["actor_id"])))
+            elif action == "create-auto":
+                print(json.dumps({"name": create(automatic=True)}))
+            elif action == "restore":
+                print(json.dumps(restore_archive(request["name"], request["actor_id"])))
+            elif action == "remove":
+                print(json.dumps({"name": remove_saved(request["name"])}))
+            elif action == "schedule-status":
+                print(json.dumps(schedule_status()))
             else:
-                print(json.dumps({"accounts": restore(request["name"])}))
+                print(json.dumps(set_schedule(request["enabled"], request["time"])))
     except (KeyError, ValueError, OSError, RuntimeError, subprocess.TimeoutExpired, tarfile.TarError, json.JSONDecodeError) as exc:
         print(str(exc), file=sys.stderr)
         return 1

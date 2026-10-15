@@ -99,6 +99,10 @@ install -m 0644 "$repo_dir/deploy/sshvpn-policy.service" /etc/systemd/system/ssh
 install -m 0644 "$repo_dir/deploy/sshvpn-policy.timer" /etc/systemd/system/sshvpn-policy.timer
 install -m 0644 "$repo_dir/deploy/sshvpn-usage.service" /etc/systemd/system/sshvpn-usage.service
 install -m 0644 "$repo_dir/deploy/sshvpn-usage.timer" /etc/systemd/system/sshvpn-usage.timer
+install -m 0644 "$repo_dir/deploy/sshvpn-backup.service" /etc/systemd/system/sshvpn-backup.service
+if [[ ! -f /etc/sshvpn/backup-schedule.json ]]; then
+  install -m 0644 "$repo_dir/deploy/sshvpn-backup.timer" /etc/systemd/system/sshvpn-backup.timer
+fi
 install -m 0644 "$repo_dir/deploy/sshvpn-panel.service" /etc/systemd/system/sshvpn-panel.service
 old_egress_checksum="$(sha256sum /etc/sshvpn/egress.nft 2>/dev/null | cut -d' ' -f1)"
 bash "$repo_dir/deploy/install-udpgw.sh" "$udpgw_port"
@@ -136,6 +140,9 @@ runuser -u sshvpn-panel -- .venv/bin/python manage.py migrate --noinput
 /usr/local/sbin/sshvpnctl seed-legacy
 sshvpn-install-pam-hook "$backup_dir/pam-sshd"
 systemctl daemon-reload
+if [[ ! -f /etc/sshvpn/backup-schedule.json ]]; then
+  printf '%s\n' '{"enabled":true,"time":"03:00"}' | /usr/local/sbin/sshvpn-backup schedule-set
+fi
 if [[ "$old_egress_checksum" != "$new_egress_checksum" ]] || ! systemctl is-active --quiet sshvpn-egress; then
   systemctl restart sshvpn-egress
 fi

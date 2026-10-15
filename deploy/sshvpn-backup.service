@@ -1,0 +1,8 @@
+[Unit]
+Description=Create a complete automatic SSH VPN panel backup
+After=postgresql.service sshvpn-panel.service sshvpn-egress.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sshvpn-backup create-auto
+

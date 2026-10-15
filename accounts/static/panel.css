@@ -342,6 +342,12 @@ td { color: #506078; font-size: 12px; }
 .backup-restore-form input[type=file] { height: auto; min-height: 42px; }
 .backup-empty { padding: 25px; border: 1px dashed #dce5f0; border-radius: 12px; background: #fafcff; color: #8794a6; font-size: 12px; text-align: center; }
 .backup-list-panel { margin-top: 20px; }
+.backup-schedule-form { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 15px; }
+.backup-schedule-form input[type=time] { width: 145px; }
+.backup-schedule-toggle { display: inline-flex; align-items: center; gap: 8px; margin-inline-end: auto; }
+.backup-schedule-toggle input { width: 17px; height: 17px; min-height: 0; margin: 0; }
+.backup-row-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.backup-row-actions form { margin: 0; }
 .restore-confirm label { display: flex; align-items: flex-start; gap: 9px; font-weight: 600; color: var(--muted); }
 .restore-confirm input { width: auto; min-height: 0; margin-top: 4px; }
 .restore-complete { max-width: 620px; margin: 30px auto; }
