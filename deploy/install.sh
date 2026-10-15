@@ -152,6 +152,7 @@ install -m 0644 "$repo_dir/deploy/sshvpn-policy.timer" /etc/systemd/system/sshvp
 install -m 0644 "$repo_dir/deploy/sshvpn-usage.service" /etc/systemd/system/sshvpn-usage.service
 install -m 0644 "$repo_dir/deploy/sshvpn-usage.timer" /etc/systemd/system/sshvpn-usage.timer
 install -m 0644 "$repo_dir/deploy/sshvpn-backup.service" /etc/systemd/system/sshvpn-backup.service
+install -m 0644 "$repo_dir/deploy/sshvpn-telegram.service" /etc/systemd/system/sshvpn-telegram.service
 install -m 0644 "$repo_dir/deploy/sshvpn-backup.timer" /etc/systemd/system/sshvpn-backup.timer
 install -m 0755 -o root -g root "$repo_dir/deploy/configure-main-ssh.sh" /usr/local/sbin/sshvpn-configure-main-ssh
 install -m 0755 -o root -g root "$repo_dir/deploy/menu.sh" /usr/local/bin/sshvpn-menu
@@ -181,7 +182,7 @@ sshvpn-install-pam-hook
 systemctl daemon-reload
 systemctl enable --now sshvpn-egress
 sshvpn-configure-main-ssh
-systemctl enable --now postgresql nginx sshvpn-panel sshvpn-policy.timer sshvpn-usage.timer sshvpn-udpgw.service
+systemctl enable --now postgresql nginx sshvpn-panel sshvpn-telegram.service sshvpn-policy.timer sshvpn-usage.timer sshvpn-udpgw.service
 printf '%s\n' '{"enabled":true,"time":"03:00"}' | /usr/local/sbin/sshvpn-backup schedule-set
 systemctl is-active --quiet sshvpn-udpgw.service
 systemctl reload nginx

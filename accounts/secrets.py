@@ -23,3 +23,21 @@ def decrypt_password(token):
         return _cipher().decrypt(token.encode("ascii")).decode("utf-8")
     except (InvalidToken, ValueError, UnicodeError):
         return None
+
+
+def _telegram_cipher():
+    material = hashlib.sha256(b"sshvpn-telegram-bot-v1:" + settings.SECRET_KEY.encode()).digest()
+    return Fernet(base64.urlsafe_b64encode(material))
+
+
+def encrypt_bot_token(token):
+    return _telegram_cipher().encrypt(token.encode("utf-8")).decode("ascii")
+
+
+def decrypt_bot_token(token):
+    if not token:
+        return None
+    try:
+        return _telegram_cipher().decrypt(token.encode("ascii")).decode("utf-8")
+    except (InvalidToken, ValueError, UnicodeError):
+        return None

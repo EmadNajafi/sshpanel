@@ -159,6 +159,12 @@ tr[data-account-username][hidden] { display: none; }
 .bulk-extend-options button { padding: 8px 10px; border: 1px solid #d6dfeb; border-radius: 7px; background: #f7f9fc; color: var(--ink); font: inherit; font-size: 11px; font-weight: 750; cursor: pointer; }
 .bulk-extend-options button:hover, .bulk-extend-options button:focus-visible { border-color: #86b9a1; background: #e2f6ea; }
 .bulk-action-bar > [data-clear-selection] { margin-inline-start: auto; }
+.telegram-settings-form { display: grid; gap: 16px; }
+.telegram-settings-form > div { display: grid; gap: 7px; }
+.telegram-settings-form textarea { width: 100%; min-height: 90px; resize: vertical; }
+.telegram-enable { display: inline-flex; align-items: center; gap: 9px; }
+.telegram-enable input { width: 18px; height: 18px; min-height: 0; accent-color: var(--blue); }
+.telegram-secondary-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px; }
 input[data-select-all], input[data-select-account] { width: 17px; height: 17px; min-height: 0; padding: 0; accent-color: var(--blue); cursor: pointer; }
 tr[data-account-username].is-selected { background: #f3f7ff; }
 .create-trigger { display: inline-flex; align-items: center; gap: 9px; }

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone as datetime_timezone
 import json
 import math
+import re
 import secrets
 import string
 
@@ -19,10 +20,11 @@ from django.utils import timezone
 
 from .forms import BulkCreateAccountForm, CreateAccountForm, EditAccountForm, PasswordForm
 from .backups import BACKUP_DIR, BACKUP_NAME, UPLOAD_DIR, BackupError, call_backup, list_backups, save_upload
-from .models import AuditEvent, VpnAccount, normalized_referral_code, referral_code_digest
+from .models import AuditEvent, TelegramBotConfig, VpnAccount, normalized_referral_code, referral_code_digest
 from .services import ProvisionError, call_helper, get_ssh_port
-from .secrets import decrypt_password, encrypt_password
+from .secrets import decrypt_password, encrypt_password, encrypt_bot_token, decrypt_bot_token
 from .system_metrics import get_system_metrics
+from .telegram_api import TelegramAPI, TelegramError
 
 
 staff_required = user_passes_test(lambda user: user.is_active and user.is_staff, login_url="login")
@@ -610,6 +612,7 @@ def panel_settings(request):
     web_port = settings.HTTPS_PORT if settings.TLS_ENABLED else settings.HTTP_PORT
     web_scheme = "https" if settings.TLS_ENABLED else "http"
     web_port_suffix = "" if web_port == ("443" if settings.TLS_ENABLED else "80") else f":{web_port}"
+    telegram = TelegramBotConfig.objects.filter(pk=1).first()
     return render(request, "settings.html", {
         "password_form": PasswordChangeForm(request.user),
         "ssh_port": get_ssh_port(),
@@ -620,7 +623,80 @@ def panel_settings(request):
         "panel_web_port": web_port,
         "panel_web_url": f"{web_scheme}://{settings.ALLOWED_HOSTS[0]}{web_port_suffix}{web_path}/",
         "tls_enabled": settings.TLS_ENABLED,
+        "telegram": telegram,
+        "telegram_allowed_ids": "\n".join(str(item) for item in telegram.allowed_user_ids) if telegram else "",
     })
+
+
+@staff_required
+@require_POST
+def save_telegram_bot(request):
+    config = TelegramBotConfig.objects.filter(pk=1).first()
+    if request.POST.get("remove") == "yes":
+        if config:
+            config.enabled = False
+            config.token_ciphertext = ""
+            config.bot_username = ""
+            config.allowed_user_ids = []
+            config.last_update_id = 0
+            config.save()
+        messages.success(request, "Telegram bot token and access list removed.")
+        return redirect("panel_settings")
+    token = request.POST.get("token", "").strip()
+    enabled = request.POST.get("enabled") == "yes"
+    raw_ids = request.POST.get("allowed_ids", "")
+    try:
+        parts = [item.strip() for item in re.split(r"[,\s]+", raw_ids) if item.strip()]
+        if len(parts) > 10 or any(
+            len(item) > 20 or not item.isascii() or not item.isdecimal() or int(item) <= 0
+            for item in parts
+        ):
+            raise ValueError("Enter up to 10 positive numeric Telegram user IDs.")
+        allowed_ids = list(dict.fromkeys(int(item) for item in parts))
+        if token and not re.fullmatch(r"[0-9]{5,15}:[A-Za-z0-9_-]{20,}", token):
+            raise ValueError("The Telegram bot token format is invalid.")
+        if enabled and not token and not (config and decrypt_bot_token(config.token_ciphertext)):
+            raise ValueError("Enter a bot token before enabling Telegram.")
+        bot_username = config.bot_username if config else ""
+        if token:
+            identity = TelegramAPI(token).call("getMe", timeout=10)
+            if not isinstance(identity, dict) or not identity.get("is_bot") or not identity.get("username"):
+                raise ValueError("Telegram did not identify this token as a bot.")
+            bot_username = identity["username"][:64]
+    except (ValueError, TelegramError) as exc:
+        messages.error(request, str(exc))
+        return redirect("panel_settings")
+    if config is None:
+        config = TelegramBotConfig(pk=1, owner=request.user)
+    config.owner = request.user
+    config.enabled = enabled
+    config.allowed_user_ids = allowed_ids
+    config.bot_username = bot_username
+    if token:
+        config.token_ciphertext = encrypt_bot_token(token)
+        config.last_update_id = 0
+    config.save()
+    messages.success(request, "Telegram bot settings saved.")
+    return redirect("panel_settings")
+
+
+@staff_required
+@require_POST
+def test_telegram_bot(request):
+    config = TelegramBotConfig.objects.filter(pk=1).first()
+    token = decrypt_bot_token(config.token_ciphertext) if config else None
+    if not token or not config.allowed_user_ids:
+        messages.error(request, "Save a bot token and at least one Telegram user ID first.")
+        return redirect("panel_settings")
+    try:
+        api = TelegramAPI(token)
+        for user_id in config.allowed_user_ids:
+            api.send_message(user_id, "SSH VPN Panel: test message from your server.")
+    except TelegramError as exc:
+        messages.error(request, f"Telegram test failed: {exc}")
+    else:
+        messages.success(request, "Telegram test message sent.")
+    return redirect("panel_settings")
 
 
 @staff_required

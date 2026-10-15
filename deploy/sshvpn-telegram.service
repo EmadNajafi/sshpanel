@@ -1,0 +1,21 @@
+[Unit]
+Description=SSH VPN panel Telegram administrator bot
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=sshvpn-panel
+Group=sshvpn-panel
+WorkingDirectory=/opt/ssh-vpn-panel
+EnvironmentFile=/etc/sshvpn/panel.env
+ExecStart=/opt/ssh-vpn-panel/.venv/bin/python manage.py telegram_bot
+Restart=always
+RestartSec=5
+NoNewPrivileges=no
+PrivateTmp=yes
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

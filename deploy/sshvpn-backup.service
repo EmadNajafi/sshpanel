@@ -4,5 +4,9 @@ After=postgresql.service sshvpn-panel.service sshvpn-egress.service
 
 [Service]
 Type=oneshot
+TimeoutStartSec=1h
+WorkingDirectory=/opt/ssh-vpn-panel
+EnvironmentFile=/etc/sshvpn/panel.env
 ExecStart=/usr/local/sbin/sshvpn-backup create-auto
+ExecStartPost=-/usr/sbin/runuser -u sshvpn-panel -- /opt/ssh-vpn-panel/.venv/bin/python manage.py telegram_send_latest_auto
 

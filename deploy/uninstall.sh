@@ -156,7 +156,7 @@ if ! /usr/sbin/sshd -t || ! systemctl reload ssh; then
   exit 1
 fi
 
-systemctl disable --now sshvpn-policy.timer sshvpn-usage.timer sshvpn-backup.timer sshvpn-panel.service 2>/dev/null || true
+systemctl disable --now sshvpn-policy.timer sshvpn-usage.timer sshvpn-backup.timer sshvpn-telegram.service sshvpn-panel.service 2>/dev/null || true
 systemctl stop sshvpn-policy.service sshvpn-usage.service sshvpn-backup.service 2>/dev/null || true
 systemctl disable --now sshvpn-sshd.service 2>/dev/null || true
 systemctl disable --now sshvpn-udpgw.service 2>/dev/null || true
@@ -216,6 +216,7 @@ rm -f -- /etc/systemd/system/sshvpn-egress.service /etc/systemd/system/sshvpn-pa
   /etc/systemd/system/sshvpn-policy.service /etc/systemd/system/sshvpn-policy.timer \
   /etc/systemd/system/sshvpn-usage.service /etc/systemd/system/sshvpn-usage.timer \
   /etc/systemd/system/sshvpn-backup.service /etc/systemd/system/sshvpn-backup.timer \
+  /etc/systemd/system/sshvpn-telegram.service \
   /etc/systemd/system/sshvpn-sshd.service /etc/systemd/system/sshvpn-udpgw.service /etc/ssh/sshvpn_sshd_config \
   /etc/sudoers.d/sshvpn-panel
 systemctl daemon-reload

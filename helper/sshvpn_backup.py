@@ -391,6 +391,13 @@ def restore(archive_name):
         os.chown(temporary_env, 0, grp.getgrnam("sshvpn-panel").gr_gid)
         os.chmod(temporary_env, 0o640)
         os.replace(temporary_env, ENV_FILE)
+        # An older archive may predate tables used by the installed panel code.
+        run(
+            "/usr/sbin/runuser", "-u", "sshvpn-panel", "--", "/bin/bash", "-c",
+            "set -a; source /etc/sshvpn/panel.env; set +a; "
+            "cd /opt/ssh-vpn-panel; exec .venv/bin/python manage.py migrate --noinput",
+            timeout=120,
+        )
         run("/usr/local/sbin/sshvpnctl", "usage-sync", timeout=30)
         schedule_file = directory / "backup_schedule.json"
         if schedule_file.exists():
@@ -399,6 +406,7 @@ def restore(archive_name):
         # The new signing key must be loaded by a fresh Gunicorn process after
         # this HTTP request has returned to the browser.
         run("/usr/bin/systemd-run", "--quiet", "--on-active=5s", "/usr/bin/systemctl", "restart", "sshvpn-panel")
+        run("/usr/bin/systemd-run", "--quiet", "--on-active=5s", "/usr/bin/systemctl", "restart", "sshvpn-telegram")
     return len(accounts)
 
 

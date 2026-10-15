@@ -100,6 +100,7 @@ install -m 0644 "$repo_dir/deploy/sshvpn-policy.timer" /etc/systemd/system/sshvp
 install -m 0644 "$repo_dir/deploy/sshvpn-usage.service" /etc/systemd/system/sshvpn-usage.service
 install -m 0644 "$repo_dir/deploy/sshvpn-usage.timer" /etc/systemd/system/sshvpn-usage.timer
 install -m 0644 "$repo_dir/deploy/sshvpn-backup.service" /etc/systemd/system/sshvpn-backup.service
+install -m 0644 "$repo_dir/deploy/sshvpn-telegram.service" /etc/systemd/system/sshvpn-telegram.service
 if [[ ! -f /etc/sshvpn/backup-schedule.json ]]; then
   install -m 0644 "$repo_dir/deploy/sshvpn-backup.timer" /etc/systemd/system/sshvpn-backup.timer
 fi
@@ -154,6 +155,8 @@ if systemctl cat sshvpn-sshd.service >/dev/null 2>&1; then
 fi
 systemctl enable --now sshvpn-policy.timer
 systemctl enable --now sshvpn-usage.timer
+systemctl enable --now sshvpn-telegram.service
+systemctl restart sshvpn-telegram.service
 systemctl enable sshvpn-udpgw.service
 systemctl restart sshvpn-udpgw.service
 systemctl is-active --quiet sshvpn-udpgw.service

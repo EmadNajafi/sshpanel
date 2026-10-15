@@ -58,3 +58,16 @@ class AuditEvent(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class TelegramBotConfig(models.Model):
+    """One panel-managed bot. Its token is encrypted with the panel secret."""
+
+    enabled = models.BooleanField(default=False)
+    token_ciphertext = models.TextField(blank=True)
+    bot_username = models.CharField(max_length=64, blank=True)
+    allowed_user_ids = models.JSONField(default=list)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    last_update_id = models.BigIntegerField(default=0)
+    last_backup_name = models.CharField(max_length=128, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
