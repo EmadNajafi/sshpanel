@@ -122,6 +122,7 @@
     "Administrator password": "رمز مدیر", "Update the password used to sign in to this panel.": "رمز ورود به پنل را تغییر دهید.",
     "Current password": "رمز فعلی", "Confirm new password": "تأیید رمز جدید",
     "Telegram bot": "ربات تلگرام", "REMOTE ADMINISTRATION": "مدیریت از راه دور",
+    "Automatic backup schedule:": "زمان‌بندی بکاپ خودکار:", "Manage backup schedule": "مدیریت زمان‌بندی بکاپ",
     "Manage users and backups from a private Telegram chat.": "کاربران و بکاپ‌ها را از گفتگوی خصوصی تلگرام مدیریت کنید.",
     "BOT STATUS": "وضعیت ربات", "Enabled": "فعال", "Bot token": "توکن ربات",
     "Allowed Telegram user IDs": "شناسه‌های مجاز تلگرام",
@@ -240,6 +241,8 @@
   };
 
   const patterns = [
+    [/^Automatic backup schedule: Disabled\.$/, () => "زمان‌بندی بکاپ خودکار: غیرفعال."],
+    [/^Automatic backup schedule: Enabled at ([0-9:]+) Tehran\.$/, (_, time) => `زمان‌بندی بکاپ خودکار: فعال در ساعت ${time} تهران.`],
     [/^Ensure this value is greater than or equal to (\S+)\.$/, (_, minimum) => `مقدار باید حداقل ${minimum} باشد.`],
     [/^Backup removed: (.+)\.$/, (_, name) => `بکاپ حذف شد: ${name}.`],
     [/^Ensure this value is less than or equal to (\S+)\.$/, (_, maximum) => `مقدار باید حداکثر ${maximum} باشد.`],

@@ -613,6 +613,10 @@ def panel_settings(request):
     web_scheme = "https" if settings.TLS_ENABLED else "http"
     web_port_suffix = "" if web_port == ("443" if settings.TLS_ENABLED else "80") else f":{web_port}"
     telegram = TelegramBotConfig.objects.filter(pk=1).first()
+    try:
+        backup_schedule = call_backup("schedule-status")
+    except BackupError:
+        backup_schedule = None
     return render(request, "settings.html", {
         "password_form": PasswordChangeForm(request.user),
         "ssh_port": get_ssh_port(),
@@ -625,6 +629,7 @@ def panel_settings(request):
         "tls_enabled": settings.TLS_ENABLED,
         "telegram": telegram,
         "telegram_allowed_ids": "\n".join(str(item) for item in telegram.allowed_user_ids) if telegram else "",
+        "backup_schedule": backup_schedule,
     })
 
 
