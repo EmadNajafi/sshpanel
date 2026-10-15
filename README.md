@@ -67,7 +67,7 @@ From an interactive root shell, run this command:
 bash <(curl -fsSL --ipv4 https://raw.githubusercontent.com/EmadNajafi/sshpanel/main/install.sh)
 ```
 
-When you choose to use HTTPS later, point your domain to the server, allow ports 80 and 443, and run `sudo menu ssl panel.example.com admin@example.com`. A failed certificate request restores the previous HTTP configuration. Until HTTPS is enabled, administrator credentials travel over HTTP; use a trusted network or an SSH tunnel.
+When you choose to use HTTPS later, point your domain to the server and run `sudo menu ssl panel.example.com admin@example.com [HTTPS_PORT]`. The optional HTTPS port defaults to 443; for example, `sudo menu ssl panel.example.com admin@example.com 8443` opens the panel at `https://panel.example.com:8443/PRIVATE_PATH/`. Allow inbound TCP 80 for certificate issuance and renewal, plus the selected HTTPS port for panel access. The certificate is obtained without letting Certbot change the panel listener; renewal keeps the selected port. A failed certificate request restores the previous HTTP configuration. Until HTTPS is enabled, administrator credentials travel over HTTP; use a trusted network or an SSH tunnel.
 
 The installer targets Ubuntu 24.04. Its one-line bootstrap upgrades an existing installation and refuses to overwrite a partial installation. It does not change the existing administrator SSH port or firewall. It installs Git if needed, downloads all project files from GitHub, and runs entirely on the destination server. No GitHub credentials are required.
 
@@ -79,7 +79,7 @@ Run `sudo bash deploy/install.sh --local-test`. This binds **the web panel** to 
 ssh -N -L 127.0.0.1:8080:127.0.0.1:8080 root@SERVER_IP
 ```
 
-Open the full `http://localhost:8080/.../` URL printed by the installer on the computer running the tunnel. The installer asks for and creates the administrator before it starts the web service. When you are ready to use a domain, point its DNS record to the server, make ports 80 and 443 reachable, and run `sudo menu ssl panel.example.com admin@example.com`. This switches the panel from the local test listener to HTTPS while retaining its path. A failed certificate request restores the local Nginx settings. Any preexisting Nginx sites remain active.
+Open the full `http://localhost:8080/.../` URL printed by the installer on the computer running the tunnel. The installer asks for and creates the administrator before it starts the web service. When you are ready to use a domain, point its DNS record to the server, make TCP 80 and your chosen HTTPS port reachable, and run `sudo menu ssl panel.example.com admin@example.com [HTTPS_PORT]`. This switches the panel from the local test listener to HTTPS while retaining its path. A failed certificate request restores the local Nginx settings. Any preexisting Nginx sites remain active.
 
 `sudo menu` opens an interactive list. Direct commands include `ssl`, `renew`, `status`, `restart`, `logs`, `backup`, and `admin-password USERNAME`.
 

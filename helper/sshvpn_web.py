@@ -116,6 +116,13 @@ def nginx_config(domain, port, path, *, local_only=False, tls=False, ssl_directi
 }}
 """
     if tls:
+        if port != 443 and not local_only:
+            config += f"""server {{
+    listen {port} ssl default_server;
+    server_name _;
+    ssl_reject_handshake on;
+}}
+"""
         redirect_port = "" if port == 443 else f":{port}"
         redirect = f"https://$host{redirect_port}$request_uri"
         http_locations = (f"    location = {path} {{ return 308 https://$host{redirect_port}{app}; }}\n"

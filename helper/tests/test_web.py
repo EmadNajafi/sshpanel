@@ -54,6 +54,8 @@ class WebAddressTests(unittest.TestCase):
         config = web.nginx_config("example.com", 18443, "/private-42", tls=True,
                                   ssl_directives=directives)
         self.assertIn("listen 18443 ssl;", config)
+        self.assertIn("listen 18443 ssl default_server;", config)
+        self.assertIn("ssl_reject_handshake on;", config)
         self.assertIn("listen 80;", config)
         self.assertEqual(config.count("server_tokens off;"), 2)
         self.assertIn("https://$host:18443$request_uri", config)
@@ -118,6 +120,29 @@ server {
                 self.assertIn("PANEL_WEB_PATH=/private-42", (state_dir / "new.env").read_text())
                 self.assertEqual(web.status()["phase"], "scheduled")
                 command.assert_called_once()
+
+    def test_stage_tls_change_uses_selected_https_port_and_keeps_certificate(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            env_file = root / "panel.env"
+            site_file = root / "sshvpn-panel"
+            state_dir = root / "pending"
+            env_file.write_text("PANEL_DOMAIN=example.com\nPANEL_TLS_ENABLED=1\n"
+                                "PANEL_HTTPS_PORT=443\nPANEL_WEB_PATH=/secret\n")
+            site_file.write_text("server {\n    listen 443 ssl;\n"
+                                 "    ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;\n"
+                                 "    ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;\n}\n")
+            with patch.object(web, "ENV_FILE", env_file), patch.object(web, "SITE_FILE", site_file), \
+                 patch.object(web, "STATE_DIR", state_dir), patch.object(web, "STATE_FILE", state_dir / "state.json"), \
+                 patch.object(web, "_port_available", return_value=True), patch.object(web, "_command"):
+                result = web.stage_change("/secret", 8443)
+            self.assertEqual(result["url"], "https://example.com:8443/secret/")
+            self.assertIn("PANEL_HTTPS_PORT=8443", (state_dir / "new.env").read_text())
+            new_site = (state_dir / "new.nginx").read_text()
+            self.assertIn("listen 8443 ssl;", new_site)
+            self.assertIn("https://$host:8443$request_uri", new_site)
+            self.assertIn("ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;", new_site)
+            self.assertIn("PANEL_HTTPS_PORT=443", env_file.read_text())
 
     def test_failed_activation_restores_previous_address(self):
         with TemporaryDirectory() as directory:

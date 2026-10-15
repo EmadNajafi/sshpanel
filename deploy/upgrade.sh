@@ -79,6 +79,9 @@ install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_policy.py /usr/
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_port.py /usr/local/sbin/sshvpn_port.py
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_usage.py /usr/local/sbin/sshvpn_usage.py
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_web.py /usr/local/sbin/sshvpn_web.py
+install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_tls.py /usr/local/sbin/sshvpn-tls
+install -d -m 0755 -o root -g root /etc/letsencrypt/renewal-hooks/deploy
+install -m 0755 -o root -g root /opt/ssh-vpn-panel/deploy/sshvpn-tls-renew-hook.sh /etc/letsencrypt/renewal-hooks/deploy/sshvpn-panel
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn-authz /usr/local/sbin/sshvpn-authz
 install -d -m 0700 -o root -g root /etc/sshvpn/accounts
 install -d -m 0750 -o root -g sshvpn-panel /var/lib/sshvpn-panel/backups

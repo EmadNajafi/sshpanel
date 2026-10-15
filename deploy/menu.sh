@@ -28,7 +28,7 @@ admin_usernames() {
 show_menu() {
   local reset=$'\033[0m' blue=$'\033[1;34m' cyan=$'\033[1;36m'
   local green=$'\033[1;32m' yellow=$'\033[1;33m' magenta=$'\033[1;35m'
-  local dim=$'\033[2m' choice admins
+  local dim=$'\033[2m' choice admins requested_domain requested_email requested_port
   if [[ ! -t 1 || -n "${NO_COLOR:-}" ]]; then
     reset='' blue='' cyan='' green='' yellow='' magenta='' dim=''
   fi
@@ -57,12 +57,13 @@ show_menu() {
       if [[ "${PANEL_TLS_ENABLED:-1}" == "0" ]]; then
         read -r -p "Panel domain: " requested_domain
         read -r -p "Certificate email: " requested_email
-        issue_ssl "$requested_domain" "$requested_email"
+        read -r -p "HTTPS panel port [443]: " requested_port
+        issue_ssl "$requested_domain" "$requested_email" "${requested_port:-443}"
       else
         issue_ssl
       fi
       ;;
-    2) certbot renew ;;
+    2) renew_ssl ;;
     3) systemctl status --no-pager sshvpn-panel sshvpn-telegram ssh sshvpn-egress sshvpn-udpgw sshvpn-policy.timer nginx postgresql ;;
     4) systemctl restart sshvpn-panel sshvpn-telegram sshvpn-udpgw; /usr/sbin/sshd -t && systemctl reload ssh ;;
     5) journalctl -u sshvpn-panel -u sshvpn-telegram -u ssh -u sshvpn-udpgw -u sshvpn-policy.service -n 100 --no-pager ;;
@@ -160,30 +161,61 @@ PY
 
 issue_ssl() {
   if [[ "${PANEL_TLS_ENABLED:-1}" == "0" ]]; then
-    if [[ $# -ne 2 ]]; then
-      echo "Usage: sudo menu ssl panel.example.com admin@example.com" >&2
+    if [[ $# -lt 2 || $# -gt 3 ]]; then
+      echo "Usage: sudo menu ssl panel.example.com admin@example.com [HTTPS_PORT]" >&2
       return 1
     fi
-    activate_tls "$1" "$2"
+    activate_tls "$1" "$2" "${3:-443}"
     return
   fi
   if [[ $# -ne 0 ]]; then
     echo "This installation already uses $PANEL_DOMAIN. Run sudo menu ssl without arguments." >&2
     return 1
   fi
-  certbot --nginx -d "$PANEL_DOMAIN" --non-interactive --agree-tos --email "${PANEL_EMAIL:?PANEL_EMAIL missing}" --redirect
-  nginx -t
-  systemctl reload nginx
+  certbot certonly --nginx -d "$PANEL_DOMAIN" --cert-name "$PANEL_DOMAIN" \
+    --non-interactive --agree-tos --email "${PANEL_EMAIL:?PANEL_EMAIL missing}" --keep-until-expiring
+  /usr/local/sbin/sshvpn-tls reconcile "/etc/letsencrypt/live/$PANEL_DOMAIN"
+  echo "Panel HTTPS is active at $(panel_url)"
+}
+
+renew_ssl() {
+  if [[ "${PANEL_TLS_ENABLED:-0}" != "1" ]]; then
+    echo "Enable panel HTTPS before renewing its certificate." >&2
+    return 1
+  fi
+  certbot renew --cert-name "$PANEL_DOMAIN"
+  /usr/local/sbin/sshvpn-tls reconcile "/etc/letsencrypt/live/$PANEL_DOMAIN"
+}
+
+restore_tls_settings() {
+  install -m 0640 -o root -g sshvpn-panel "$2" "$1"
+  install -m 0644 -o root -g root "$4" "$3"
+  nginx -t && systemctl reload nginx || true
+  systemctl restart sshvpn-panel || true
 }
 
 activate_tls() {
-  local domain="$1" email="$2" nginx_config env_file nginx_backup env_backup candidate
+  local domain="$1" email="$2" port="$3" nginx_config env_file nginx_backup env_backup candidate
+  local panel_path="${PANEL_WEB_PATH:-}" attempt ready=0
   if [[ ! "$domain" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$ ]]; then
     echo "Invalid domain." >&2
     return 1
   fi
   if [[ ! "$email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
     echo "Invalid email." >&2
+    return 1
+  fi
+  if [[ ! "$port" =~ ^[0-9]+$ ]] || ! python3 - "$port" <<'PY'
+import sys
+sys.path.insert(0, "/opt/ssh-vpn-panel/helper")
+from sshvpn_web import web_port
+try:
+    web_port(int(sys.argv[1]), tls=True)
+except ValueError:
+    sys.exit(1)
+PY
+  then
+    echo "Use HTTPS port 443 or a port from 1024 to 65535." >&2
     return 1
   fi
 
@@ -194,36 +226,71 @@ activate_tls() {
   candidate="$(mktemp)"
   cp "$nginx_config" "$nginx_backup"
   cp "$env_file" "$env_backup"
-  if ! sed -i -e "s/^PANEL_DOMAIN=.*/PANEL_DOMAIN=$domain/" \
-      -e "s/^PANEL_EMAIL=.*/PANEL_EMAIL=$email/" \
-      -e 's/^PANEL_TLS_ENABLED=.*/PANEL_TLS_ENABLED=1/' \
-      -e 's/^PANEL_HTTP_PORT=.*/PANEL_HTTP_PORT=80/' \
-      -e 's/^PANEL_HTTPS_PORT=.*/PANEL_HTTPS_PORT=443/' "$env_file" || \
-     ! chown root:sshvpn-panel "$env_file" || ! chmod 0640 "$env_file" || \
-     ! systemctl restart sshvpn-panel; then
-    install -m 0640 -o root -g sshvpn-panel "$env_backup" "$env_file"
-    systemctl restart sshvpn-panel || true
+  if ! PYTHONPATH=/opt/ssh-vpn-panel/helper python3 - "$domain" "$panel_path" > "$candidate" <<'PY'
+import sys
+from sshvpn_web import nginx_config, web_path
+print(nginx_config(sys.argv[1], 80, web_path(sys.argv[2])), end="")
+PY
+  then
     rm -f "$nginx_backup" "$env_backup" "$candidate"
-    echo "Panel activation failed; local panel settings were restored." >&2
     return 1
   fi
-  sed -E -e 's/listen (127\.0\.0\.1:)?[0-9]+;/listen 80;/' \
-      -e "s/server_name [^;]*;/server_name $domain;/" "$nginx_config" > "$candidate"
-  install -m 0644 -o root -g root "$candidate" "$nginx_config"
-  rm -f "$candidate"
-
-  if ! nginx -t || ! systemctl reload nginx || \
-     ! certbot --nginx -d "$domain" --non-interactive --agree-tos --email "$email" --redirect; then
-    install -m 0640 -o root -g sshvpn-panel "$env_backup" "$env_file"
-    install -m 0644 -o root -g root "$nginx_backup" "$nginx_config"
-    systemctl reload nginx || true
-    systemctl restart sshvpn-panel || true
-    rm -f "$nginx_backup" "$env_backup"
-    echo "Certificate request failed; local panel settings were restored." >&2
+  if ! install -m 0644 -o root -g root "$candidate" "$nginx_config"; then
+    rm -f "$nginx_backup" "$env_backup" "$candidate"
     return 1
   fi
-  rm -f "$nginx_backup" "$env_backup"
-  echo "Panel HTTPS is active at https://$domain${PANEL_WEB_PATH:-}/"
+  if ! python3 - "$env_file" "$domain" "$email" "$port" <<'PY'
+import sys
+sys.path.insert(0, "/opt/ssh-vpn-panel/helper")
+from pathlib import Path
+from sshvpn_web import _set_env
+path = Path(sys.argv[1])
+path.write_text(_set_env(path.read_text(), {
+    "PANEL_DOMAIN": sys.argv[2], "PANEL_EMAIL": sys.argv[3],
+    "PANEL_TLS_ENABLED": "0", "PANEL_HTTP_PORT": "80",
+    "PANEL_HTTPS_PORT": sys.argv[4],
+}))
+PY
+  then
+    restore_tls_settings "$env_file" "$env_backup" "$nginx_config" "$nginx_backup"
+    rm -f "$nginx_backup" "$env_backup" "$candidate"
+    return 1
+  fi
+  if ! chown root:sshvpn-panel "$env_file" || ! chmod 0640 "$env_file" || \
+     ! nginx -t || ! systemctl reload nginx || ! systemctl restart sshvpn-panel || \
+     ! certbot certonly --nginx -d "$domain" --cert-name "$domain" \
+       --non-interactive --agree-tos --email "$email" --keep-until-expiring || \
+     ! /usr/local/sbin/sshvpn-tls render "$domain" "$port" "$panel_path" > "$candidate"; then
+    restore_tls_settings "$env_file" "$env_backup" "$nginx_config" "$nginx_backup"
+    rm -f "$nginx_backup" "$env_backup" "$candidate"
+    echo "Certificate request failed; previous panel settings were restored." >&2
+    return 1
+  fi
+  if ! install -m 0644 -o root -g root "$candidate" "$nginx_config" || \
+     ! sed -i 's/^PANEL_TLS_ENABLED=.*/PANEL_TLS_ENABLED=1/' "$env_file" || \
+     ! nginx -t || ! systemctl reload nginx || ! systemctl restart sshvpn-panel; then
+    restore_tls_settings "$env_file" "$env_backup" "$nginx_config" "$nginx_backup"
+    rm -f "$nginx_backup" "$env_backup" "$candidate"
+    echo "HTTPS activation failed; previous panel settings were restored." >&2
+    return 1
+  fi
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    if curl --silent --show-error --fail --output /dev/null --noproxy '*' \
+      --resolve "$domain:$port:127.0.0.1" "https://$domain:$port$panel_path/login/"; then
+      ready=1
+      break
+    fi
+    sleep 1
+  done
+  if (( ! ready )); then
+    restore_tls_settings "$env_file" "$env_backup" "$nginx_config" "$nginx_backup"
+    rm -f "$nginx_backup" "$env_backup" "$candidate"
+    echo "HTTPS did not answer locally; previous panel settings were restored." >&2
+    return 1
+  fi
+  rm -f "$nginx_backup" "$env_backup" "$candidate"
+  echo "Panel HTTPS is active at https://$domain$([[ "$port" == 443 ]] || printf ':%s' "$port")$panel_path/"
+  echo "Allow inbound TCP $port for the panel and TCP 80 for certificate renewal."
 }
 
 change_admin_password() {
@@ -246,7 +313,7 @@ backup_db() {
 case "${1:-menu}" in
   menu) show_menu ;;
   ssl) shift; issue_ssl "$@" ;;
-  renew) certbot renew ;;
+  renew) renew_ssl ;;
   status) systemctl status --no-pager sshvpn-panel sshvpn-telegram ssh sshvpn-egress sshvpn-udpgw sshvpn-policy.timer nginx postgresql ;;
   restart) systemctl restart sshvpn-panel sshvpn-telegram sshvpn-udpgw; /usr/sbin/sshd -t && systemctl reload ssh ;;
   logs) journalctl -u sshvpn-panel -u sshvpn-telegram -u ssh -u sshvpn-policy.service -n 100 --no-pager ;;
@@ -255,5 +322,5 @@ case "${1:-menu}" in
   vpn-public|vpn-local) echo 'VPN accounts now use the main SSH port; no separate VPN listener exists.' >&2; exit 1 ;;
   web-public) shift; web_public "$@" ;;
   uninstall) shift; bash /opt/ssh-vpn-panel/deploy/uninstall.sh "$@" ;;
-  *) echo "Usage: sshvpn-menu [menu|ssl [DOMAIN EMAIL]|renew|status|restart|logs|backup|admin-password USERNAME|web-public SERVER_PUBLIC_IPV4|uninstall [--dry-run]]" >&2; exit 1 ;;
+  *) echo "Usage: sshvpn-menu [menu|ssl [DOMAIN EMAIL [HTTPS_PORT]]|renew|status|restart|logs|backup|admin-password USERNAME|web-public SERVER_PUBLIC_IPV4|uninstall [--dry-run]]" >&2; exit 1 ;;
 esac
