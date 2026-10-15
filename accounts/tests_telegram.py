@@ -30,7 +30,7 @@ class TelegramSettingsTests(TestCase):
         self.assertTrue(config.enabled)
         self.assertEqual(config.allowed_user_ids, [12345, 67890])
         self.assertEqual(decrypt_bot_token(config.token_ciphertext), token)
-        self.assertNotIn(token, self.client.get(reverse("panel_settings")).content.decode())
+        self.assertNotIn(token, self.client.get(reverse("settings_telegram")).content.decode())
 
     @patch("accounts.views.TelegramAPI")
     @override_settings(TLS_ENABLED=True)
@@ -76,7 +76,7 @@ class TelegramSettingsTests(TestCase):
     @patch("accounts.views.TelegramAPI")
     def test_http_hides_token_and_rejects_configuration_and_test(self, api_class):
         token = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
-        page = self.client.get(reverse("panel_settings")).content.decode()
+        page = self.client.get(reverse("settings_telegram")).content.decode()
         self.assertIn("Suspended until HTTPS", page)
         self.assertNotIn('name="token"', page)
         response = self.client.post(reverse("save_telegram_bot"), {
@@ -94,7 +94,7 @@ class TelegramSettingsTests(TestCase):
             token_ciphertext=encrypt_bot_token("123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"),
             allowed_user_ids=[12345],
         )
-        page = self.client.get(reverse("panel_settings")).content.decode()
+        page = self.client.get(reverse("settings_telegram")).content.decode()
         self.assertIn("Suspended until HTTPS", page)
         self.assertIn("Remove bot token", page)
         self.assertNotIn('name="token"', page)

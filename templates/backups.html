@@ -8,6 +8,9 @@
   </div>
   {% if not tls_enabled %}<div class="notice error" role="alert">Backups contain sensitive account data and are not encrypted. This panel is using HTTP; use an administrator SSH tunnel or enable HTTPS before downloading or uploading a backup over an untrusted network.</div>{% endif %}
 
+  <div class="settings-layout">
+    {% include 'settings_nav.html' %}
+    <div class="settings-content">
   <div class="backup-action-grid">
     <section class="panel settings-section backup-action">
       <div class="settings-section-head"><span class="settings-section-icon settings-icon-blue" aria-hidden="true">01</span><div><p class="eyebrow">EXPORT</p><h2>Create a backup</h2><p>Download a full copy of this panel.</p></div></div>
@@ -46,5 +49,7 @@
       </tbody></table></div>
     {% else %}<div class="backup-empty">No backups on this server yet. Create one above, then download it.</div>{% endif %}
   </section>
+    </div>
+  </div>
 </div>
 {% endblock %}

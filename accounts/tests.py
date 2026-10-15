@@ -33,8 +33,28 @@ class AccountViewsTests(TestCase):
     def test_current_ssh_port_comes_from_privileged_helper(self, helper):
         self.assertEqual(get_ssh_port(), 6677)
         self.assertContains(self.client.get(reverse("dashboard")), 'data-ssh-port="6677"')
-        self.assertEqual(self.client.get(reverse("panel_settings")).context["ssh_port"], 6677)
+        self.assertEqual(self.client.get(reverse("settings_ssh")).context["ssh_port"], 6677)
         helper.assert_any_call("port-current")
+
+    @patch("accounts.views.call_backup", return_value={"enabled": False, "time": "03:00"})
+    @patch("accounts.views.get_ssh_port", return_value=5656)
+    @patch("accounts.views.call_helper", return_value="null")
+    def test_settings_open_as_separate_pages(self, helper, port, backup):
+        overview = self.client.get(reverse("panel_settings"))
+        self.assertContains(overview, 'class="settings-overview-grid"')
+        self.assertContains(overview, f'href="{reverse("settings_ssh")}"')
+        self.assertNotContains(overview, 'id="new-ssh-port"')
+        self.assertNotContains(overview, 'id="panel-web-path"')
+        self.assertContains(self.client.get(reverse("settings_ssh")), 'id="new-ssh-port"')
+        self.assertNotContains(self.client.get(reverse("settings_ssh")), 'id="panel-web-path"')
+        self.assertContains(self.client.get(reverse("settings_web")), 'id="panel-web-path"')
+        self.assertNotContains(self.client.get(reverse("settings_web")), 'id="new-ssh-port"')
+        self.assertContains(self.client.get(reverse("settings_admin")), 'class="settings-password-form"')
+        self.assertContains(self.client.get(reverse("settings_telegram")), 'id="telegram-bot"')
+        self.assertRedirects(
+            self.client.post(reverse("stage_ssh_port"), {"port": "0"}),
+            reverse("settings_ssh"), fetch_redirect_response=False,
+        )
 
     def bulk_post(self, data):
         session = self.client.session
@@ -548,7 +568,7 @@ class AccountViewsTests(TestCase):
     @patch("accounts.views.call_helper", return_value='{"url": "http://localhost:18080/private-42/"}')
     def test_stage_web_address_shows_new_url_without_changing_current_request(self, helper):
         response = self.client.post(reverse("stage_web_address"), {"path": "/private-42", "port": "18080"})
-        self.assertContains(response, "http://localhost:18080/private-42/settings/")
+        self.assertContains(response, "http://localhost:18080/private-42/settings/web/")
         self.assertContains(response, "No confirmation is needed.")
         self.assertNotContains(response, "window.location.assign")
         helper.assert_called_once_with("web-stage", web_path="/private-42", web_port=18080)
@@ -556,7 +576,7 @@ class AccountViewsTests(TestCase):
     @patch("accounts.views.call_helper", return_value='{"url": "http://localhost/private-42/", "same_port": true}')
     def test_path_only_change_opens_new_address_when_ready(self, helper):
         response = self.client.post(reverse("stage_web_address"), {"path": "/private-42", "port": "80"})
-        self.assertContains(response, "http://localhost/private-42/settings/")
+        self.assertContains(response, "http://localhost/private-42/settings/web/")
         self.assertContains(response, "window.location.assign(link.href)")
         self.assertContains(response, "This page will open it automatically when ready.")
         self.assertContains(response, "No confirmation is needed.")
@@ -572,7 +592,7 @@ class AccountViewsTests(TestCase):
     @override_settings(TLS_ENABLED=True, HTTPS_PORT="8443", ALLOWED_HOSTS=["example.com"])
     @patch("accounts.views.call_helper", return_value="null")
     def test_settings_shows_https_address_and_port_control(self, helper):
-        page = self.client.get(reverse("panel_settings"), HTTP_HOST="example.com:8443", secure=True)
+        page = self.client.get(reverse("settings_web"), HTTP_HOST="example.com:8443", secure=True)
         self.assertContains(page, "https://example.com:8443/")
         self.assertContains(page, "HTTPS port")
         self.assertContains(page, 'value="8443"')

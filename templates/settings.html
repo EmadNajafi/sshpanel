@@ -6,25 +6,25 @@
     <div>
       <p class="eyebrow">CONTROL PANEL</p>
       <h1>Settings</h1>
-      <p>Manage server access, the panel address, your account, and data recovery.</p>
+      <p>{% if section %}Manage this setting and return to the overview at any time.{% else %}Choose a section to manage server access, your account, and backups.{% endif %}</p>
     </div>
     <a class="button button-secondary" href="{% url 'dashboard' %}">← Back to dashboard</a>
   </div>
 
   <div class="settings-layout">
-    <aside class="settings-sidebar" aria-label="Settings navigation">
-      <p class="settings-sidebar-title">PREFERENCES</p>
-      <nav class="settings-nav">
-        <a href="#ssh-access"><span class="settings-nav-number">01</span><span>SSH access</span></a>
-        <a href="#web-address"><span class="settings-nav-number">02</span><span>Web address</span></a>
-        <a href="#admin-security"><span class="settings-nav-number">03</span><span>Administrator</span></a>
-        <a href="#telegram-bot"><span class="settings-nav-number">04</span><span>Telegram bot</span></a>
-        <a href="#data-recovery"><span class="settings-nav-number">05</span><span>Backup & recovery</span></a>
-      </nav>
-      <div class="settings-sidebar-note"><span class="status-dot"></span><span>Panel services are managed on this server.</span></div>
-    </aside>
+    {% include 'settings_nav.html' %}
 
     <div class="settings-content">
+      {% if not section %}
+      <div class="settings-overview-grid">
+        <a class="settings-overview-card" href="{% url 'settings_ssh' %}"><span class="settings-overview-number">01</span><strong>SSH access</strong><span>Change the SSH port and view the UDPGW port.</span><span class="settings-overview-arrow" aria-hidden="true">→</span></a>
+        <a class="settings-overview-card" href="{% url 'settings_web' %}"><span class="settings-overview-number">02</span><strong>Web address</strong><span>Manage the private path and panel port.</span><span class="settings-overview-arrow" aria-hidden="true">→</span></a>
+        <a class="settings-overview-card" href="{% url 'settings_admin' %}"><span class="settings-overview-number">03</span><strong>Administrator</strong><span>Change your panel sign-in password.</span><span class="settings-overview-arrow" aria-hidden="true">→</span></a>
+        <a class="settings-overview-card" href="{% url 'settings_telegram' %}"><span class="settings-overview-number">04</span><strong>Telegram bot</strong><span>Configure private-chat administration.</span><span class="settings-overview-arrow" aria-hidden="true">→</span></a>
+        <a class="settings-overview-card" href="{% url 'backup_settings' %}"><span class="settings-overview-number">05</span><strong>Backup & recovery</strong><span>Create, schedule, download, and restore backups.</span><span class="settings-overview-arrow" aria-hidden="true">→</span></a>
+      </div>
+      {% endif %}
+      {% if section == 'ssh' %}
       <section id="ssh-access" class="panel settings-section">
         <div class="settings-section-head">
           <span class="settings-section-icon settings-icon-blue" aria-hidden="true">01</span>
@@ -45,7 +45,9 @@
           </form>
         {% endif %}
       </section>
+      {% endif %}
 
+      {% if section == 'web' %}
       <section id="web-address" class="panel settings-section">
         <div class="settings-section-head">
           <span class="settings-section-icon settings-icon-green" aria-hidden="true">02</span>
@@ -63,7 +65,9 @@
           </form>
         {% endif %}
       </section>
+      {% endif %}
 
+      {% if section == 'admin' %}
       <section id="admin-security" class="panel settings-section">
         <div class="settings-section-head">
           <span class="settings-section-icon settings-icon-purple" aria-hidden="true">03</span>
@@ -77,7 +81,9 @@
           <button class="button button-primary" type="submit">Update password</button>
         </form>
       </section>
+      {% endif %}
 
+      {% if section == 'telegram' %}
       <section id="telegram-bot" class="panel settings-section">
         <div class="settings-section-head">
           <span class="settings-section-icon settings-icon-blue" aria-hidden="true">04</span>
@@ -104,14 +110,7 @@
           </div>
         {% endif %}
       </section>
-
-      <section id="data-recovery" class="panel settings-section settings-recovery-section">
-        <div class="settings-section-head">
-          <span class="settings-section-icon settings-icon-green" aria-hidden="true">05</span>
-          <div><p class="eyebrow">DATA & RECOVERY</p><h2>Backup and restore</h2><p>Keep a complete copy of panel data for migration or recovery.</p></div>
-        </div>
-        <div class="settings-recovery-row"><div><strong>Panel backup</strong><p>Export the database, VPN accounts, limits, traffic totals, and administrator data.</p></div><a class="button button-secondary" href="{% url 'backup_settings' %}">Manage backups <span aria-hidden="true">→</span></a></div>
-      </section>
+      {% endif %}
     </div>
   </div>
 </div>

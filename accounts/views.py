@@ -599,38 +599,46 @@ def account_password(request, pk):
 
 
 @staff_required
-def panel_settings(request):
-    try:
-        pending_port = json.loads(call_helper("port-status"))
-    except (ProvisionError, ValueError):
-        pending_port = None
-    try:
-        pending_web = json.loads(call_helper("web-status"))
-    except (ProvisionError, ValueError, TypeError):
-        pending_web = None
-    web_path = settings.WEB_PATH
-    web_port = settings.HTTPS_PORT if settings.TLS_ENABLED else settings.HTTP_PORT
-    web_scheme = "https" if settings.TLS_ENABLED else "http"
-    web_port_suffix = "" if web_port == ("443" if settings.TLS_ENABLED else "80") else f":{web_port}"
-    telegram = TelegramBotConfig.objects.filter(pk=1).first()
-    try:
-        backup_schedule = call_backup("schedule-status")
-    except BackupError:
-        backup_schedule = None
-    return render(request, "settings.html", {
-        "password_form": PasswordChangeForm(request.user),
-        "ssh_port": get_ssh_port(),
-        "udpgw_port": settings.VPN_UDPGW_PORT,
-        "pending_port": pending_port,
-        "pending_web": pending_web,
-        "panel_web_path": web_path or "/",
-        "panel_web_port": web_port,
-        "panel_web_url": f"{web_scheme}://{settings.ALLOWED_HOSTS[0]}{web_port_suffix}{web_path}/",
-        "tls_enabled": settings.TLS_ENABLED,
-        "telegram": telegram,
-        "telegram_allowed_ids": "\n".join(str(item) for item in telegram.allowed_user_ids) if telegram else "",
-        "backup_schedule": backup_schedule,
-    })
+@require_GET
+def panel_settings(request, section=None):
+    context = {"section": section}
+    if section == "ssh":
+        try:
+            context["pending_port"] = json.loads(call_helper("port-status"))
+        except (ProvisionError, ValueError):
+            context["pending_port"] = None
+        context["ssh_port"] = get_ssh_port()
+        context["udpgw_port"] = settings.VPN_UDPGW_PORT
+    elif section == "web":
+        try:
+            context["pending_web"] = json.loads(call_helper("web-status"))
+        except (ProvisionError, ValueError, TypeError):
+            context["pending_web"] = None
+        web_path = settings.WEB_PATH
+        web_port = settings.HTTPS_PORT if settings.TLS_ENABLED else settings.HTTP_PORT
+        web_scheme = "https" if settings.TLS_ENABLED else "http"
+        web_port_suffix = "" if web_port == ("443" if settings.TLS_ENABLED else "80") else f":{web_port}"
+        context.update({
+            "panel_web_path": web_path or "/",
+            "panel_web_port": web_port,
+            "panel_web_url": f"{web_scheme}://{settings.ALLOWED_HOSTS[0]}{web_port_suffix}{web_path}/",
+            "tls_enabled": settings.TLS_ENABLED,
+        })
+    elif section == "admin":
+        context["password_form"] = PasswordChangeForm(request.user)
+    elif section == "telegram":
+        telegram = TelegramBotConfig.objects.filter(pk=1).first()
+        try:
+            backup_schedule = call_backup("schedule-status")
+        except BackupError:
+            backup_schedule = None
+        context.update({
+            "tls_enabled": settings.TLS_ENABLED,
+            "telegram": telegram,
+            "telegram_allowed_ids": "\n".join(str(item) for item in telegram.allowed_user_ids) if telegram else "",
+            "backup_schedule": backup_schedule,
+        })
+    return render(request, "settings.html", context)
 
 
 @staff_required
@@ -646,10 +654,10 @@ def save_telegram_bot(request):
             config.last_update_id = 0
             config.save()
         messages.success(request, "Telegram bot token and access list removed.")
-        return redirect("panel_settings")
+        return redirect("settings_telegram")
     if not settings.TLS_ENABLED:
         messages.error(request, "HTTPS is required to configure or use the Telegram bot.")
-        return redirect("panel_settings")
+        return redirect("settings_telegram")
     token = request.POST.get("token", "").strip()
     enabled = request.POST.get("enabled") == "yes"
     raw_ids = request.POST.get("allowed_ids", "")
@@ -673,7 +681,7 @@ def save_telegram_bot(request):
             bot_username = identity["username"][:64]
     except (ValueError, TelegramError) as exc:
         messages.error(request, str(exc))
-        return redirect("panel_settings")
+        return redirect("settings_telegram")
     if config is None:
         config = TelegramBotConfig(pk=1, owner=request.user)
     config.owner = request.user
@@ -685,7 +693,7 @@ def save_telegram_bot(request):
         config.last_update_id = 0
     config.save()
     messages.success(request, "Telegram bot settings saved.")
-    return redirect("panel_settings")
+    return redirect("settings_telegram")
 
 
 @staff_required
@@ -693,12 +701,12 @@ def save_telegram_bot(request):
 def test_telegram_bot(request):
     if not settings.TLS_ENABLED:
         messages.error(request, "HTTPS is required to configure or use the Telegram bot.")
-        return redirect("panel_settings")
+        return redirect("settings_telegram")
     config = TelegramBotConfig.objects.filter(pk=1).first()
     token = decrypt_bot_token(config.token_ciphertext) if config else None
     if not token or not config.allowed_user_ids:
         messages.error(request, "Save a bot token and at least one Telegram user ID first.")
-        return redirect("panel_settings")
+        return redirect("settings_telegram")
     try:
         api = TelegramAPI(token)
         for user_id in config.allowed_user_ids:
@@ -707,7 +715,7 @@ def test_telegram_bot(request):
         messages.error(request, f"Telegram test failed: {exc}")
     else:
         messages.success(request, "Telegram test message sent.")
-    return redirect("panel_settings")
+    return redirect("settings_telegram")
 
 
 @staff_required
@@ -719,7 +727,7 @@ def stage_web_address(request):
     except (ValueError, ProvisionError) as exc:
         record(request, "server", "web-stage", False)
         messages.error(request, str(exc))
-        return redirect("panel_settings")
+        return redirect("settings_web")
     record(request, "server", "web-stage", True)
     return render(request, "web_change_pending.html", {
         "new_url": result["url"], "auto_follow": result.get("same_port", False),
@@ -739,7 +747,7 @@ def backup_settings(request):
     except BackupError as exc:
         schedule = {"enabled": False, "time": "03:00"}
         messages.error(request, str(exc))
-    return render(request, "backups.html", {"backups": backups, "schedule": schedule,
+    return render(request, "backups.html", {"section": "backups", "backups": backups, "schedule": schedule,
                                              "tls_enabled": settings.TLS_ENABLED})
 
 
@@ -842,7 +850,7 @@ def change_admin_password(request):
         for field_errors in form.errors.values():
             for error in field_errors:
                 messages.error(request, error)
-    return redirect("panel_settings")
+    return redirect("settings_admin")
 
 
 @staff_required
@@ -859,7 +867,7 @@ def stage_ssh_port(request):
     else:
         record(request, "server", "port-stage", True)
         messages.success(request, f"Port {port} is listening. Test a new SSH connection before closing the old port.")
-    return redirect("panel_settings")
+    return redirect("settings_ssh")
 
 
 @staff_required
@@ -873,7 +881,7 @@ def finalize_ssh_port(request):
     else:
         record(request, "server", "port-finalize", True)
         messages.success(request, f"SSH now uses port {result['new']}. The old port is closed.")
-    return redirect("panel_settings")
+    return redirect("settings_ssh")
 
 
 @staff_required
@@ -887,4 +895,4 @@ def cancel_ssh_port(request):
     else:
         record(request, "server", "port-cancel", True)
         messages.success(request, "Port change canceled; the original SSH port is active.")
-    return redirect("panel_settings")
+    return redirect("settings_ssh")
