@@ -234,6 +234,7 @@ td { color: #506078; font-size: 12px; }
 .account-name-button { border: 0; padding: 0; background: transparent; text-align: left; }
 .account-name-button:not(:disabled) { color: #2866e8; text-decoration: underline; text-underline-offset: 3px; }
 .account-name-button:disabled { cursor: default; }
+.mobile-account-toggle { display: none; }
 .online-trigger { border: 0; }
 .online-trigger:hover { background: #d8f3e7; }
 .sessions-list { list-style: none; margin: 0; padding: 0; }
@@ -553,6 +554,27 @@ td { color: #506078; font-size: 12px; }
   .accounts-panel .table-scroll tbody tr[data-account-username][hidden] { display: none; }
   .accounts-panel .table-scroll tbody tr[data-account-username] td:first-child { position: absolute; inset-inline-start: 2px; top: 16px; }
   .accounts-panel .table-scroll tbody td:nth-child(2) { grid-column: 1 / -1; padding-inline-start: 29px; padding-bottom: 5px; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready .mobile-account-toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 34px; padding: 0; border: 0; background: transparent; color: var(--ink); text-align: start; cursor: pointer; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready .mobile-account-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 4px; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready .account-name-button { display: none; }
+  .accounts-panel .mobile-account-chevron { flex: 0 0 auto; width: 9px; height: 9px; margin-inline: 5px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(225deg); transition: transform .15s ease; }
+  .accounts-panel .mobile-collapsed .mobile-account-chevron { transform: rotate(45deg); }
+  .accounts-panel .mobile-collapsed .account-created { display: none; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td:nth-child(5) { order: 1; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td:nth-child(6) { order: 2; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td:nth-child(3) { order: 3; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td:nth-child(4) { order: 4; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td:nth-child(7) { order: 5; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td:nth-child(8) { order: 6; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td:nth-child(9) { order: 7; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td:nth-child(10) { order: 8; }
+  .accounts-panel .table-scroll tbody tr.mobile-collapsed td:nth-child(3),
+  .accounts-panel .table-scroll tbody tr.mobile-collapsed td:nth-child(4),
+  .accounts-panel .table-scroll tbody tr.mobile-collapsed td:nth-child(7),
+  .accounts-panel .table-scroll tbody tr.mobile-collapsed td:nth-child(8),
+  .accounts-panel .table-scroll tbody tr.mobile-collapsed td:nth-child(9),
+  .accounts-panel .table-scroll tbody tr.mobile-collapsed td:nth-child(10) { display: none; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready:not(.mobile-collapsed) td:nth-child(3) { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
   .accounts-panel .table-scroll tbody td:nth-child(3),
   .accounts-panel .table-scroll tbody td:nth-child(4),
   .accounts-panel .table-scroll tbody td:nth-child(7),

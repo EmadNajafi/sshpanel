@@ -16,6 +16,20 @@
   const clearSearch = searchForm.querySelector("[data-clear-search]");
   const searchCount = searchForm.querySelector("[data-search-count]");
   const accountRows = [...document.querySelectorAll("tr[data-account-username]")];
+  accountRows.forEach((row) => {
+    const toggle = row.querySelector("[data-mobile-account-toggle]");
+    row.classList.add("mobile-accordion-ready", "mobile-collapsed");
+    const updateToggle = () => {
+      const expanded = !row.classList.contains("mobile-collapsed");
+      toggle.setAttribute("aria-expanded", String(expanded));
+      toggle.setAttribute("aria-label", `${expanded ? "Hide" : "Show"} details for ${row.dataset.accountUsername}`);
+    };
+    updateToggle();
+    toggle.addEventListener("click", () => {
+      row.classList.toggle("mobile-collapsed");
+      updateToggle();
+    });
+  });
   const filterEmpty = document.querySelector("[data-filter-empty]");
   const listEmpty = document.querySelector("[data-account-list-empty] td");
   const selectAll = document.querySelector("[data-select-all]");

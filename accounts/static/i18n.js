@@ -328,6 +328,8 @@
     [/^Copy connection details for (.+)$/, (_, username) => `کپی اطلاعات اتصال ${username}`],
     [/^Actions for (.+)$/, (_, username) => `عملیات ${username}`],
     [/^Show active IP addresses for (.+)$/, (_, username) => `نمایش IPهای فعال ${username}`],
+    [/^Show details for (.+)$/, (_, username) => `نمایش جزئیات ${username}`],
+    [/^Hide details for (.+)$/, (_, username) => `بستن جزئیات ${username}`],
   ];
 
   function translated(value) {
