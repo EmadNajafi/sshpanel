@@ -337,6 +337,13 @@ td { color: #506078; font-size: 12px; }
 .action-button-danger { color: #b85c66; }
 .action-button-danger:hover, .action-button-danger:focus-visible { border-color: #f2c2c9; background: #fff0f2; color: #b03042; }
 .extend-dialog { width: min(100% - 32px, 420px); }
+.reorder-dialog { width: min(100% - 32px, 440px); }
+.reorder-shortcuts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-bottom: 20px; }
+.reorder-shortcuts .button { min-width: 0; justify-content: center; }
+.reorder-dialog label { display: block; margin-bottom: 7px; }
+.reorder-position-row { display: flex; gap: 9px; }
+.reorder-position-row input { flex: 1 1 auto; min-width: 0; }
+.reorder-position-row .button { flex: 0 0 auto; }
 .extend-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .extend-option { display: grid; justify-items: center; gap: 2px; padding: 19px 7px; border: 1px solid #d9e7f6; border-radius: 13px; background: #f7faff; color: #2b5ab0; cursor: pointer; }
 .extend-option:hover, .extend-option:focus-visible { border-color: #7fa9ee; background: #eaf2ff; }

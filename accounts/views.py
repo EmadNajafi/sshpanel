@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone as datetime_timezone
+from urllib.parse import urlencode
 import json
 import math
 import re
@@ -10,10 +11,12 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.decorators import user_passes_test
 from django.conf import settings
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.http import FileResponse, Http404, JsonResponse
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.cache import never_cache
 from django.utils import timezone
@@ -104,7 +107,8 @@ def dashboard(request):
     bulk_token = secrets.token_urlsafe(24)
     request.session["bulk_create_token"] = bulk_token
     sync_account_activation()
-    accounts = list(VpnAccount.objects.select_related("created_by", "referred_by").order_by("created_at", "pk"))
+    accounts = list(VpnAccount.objects.select_related("created_by", "referred_by").order_by(
+        F("sort_order").asc(nulls_last=True), "created_at", "pk"))
     usage = get_account_usage()
     now = timezone.now()
     summary = account_summary(accounts, usage, now)
@@ -112,7 +116,8 @@ def dashboard(request):
     for account in accounts:
         if account.referred_by_id:
             referrals.setdefault(account.referred_by_id, []).append(account)
-    for account in accounts:
+    for position, account in enumerate(accounts, start=1):
+        account.list_position = position
         account.usage = usage.get(account.username) if usage is not None else None
         account.traffic_limit_display = (format_bytes(account.traffic_limit_bytes)
                                          if account.traffic_limit_bytes is not None else None)
@@ -329,6 +334,64 @@ def bulk_create_accounts(request):
     })
     response["Cache-Control"] = "no-store, private"
     return response
+
+
+@staff_required
+@require_POST
+def reorder_account(request, pk):
+    filters = {}
+    query = request.POST.get("q", "").strip()[:200]
+    status = request.POST.get("status", "")
+    if query:
+        filters["q"] = query
+    if status in ("online", "inactive"):
+        filters["status"] = status
+    dashboard_url = reverse("dashboard")
+    if filters:
+        dashboard_url += "?" + urlencode(filters)
+
+    move = request.POST.get("move", "")
+    if move not in ("top", "up", "down", "bottom", "position"):
+        messages.error(request, "Choose a valid position.")
+        return redirect(dashboard_url)
+    raw_position = request.POST.get("position", "").strip() if move == "position" else ""
+    if move == "position" and (not raw_position.isdecimal() or len(raw_position) > 19):
+        messages.error(request, "Enter a valid list position.")
+        return redirect(dashboard_url)
+
+    with transaction.atomic():
+        accounts = list(VpnAccount.objects.select_for_update().only(
+            "pk", "username", "sort_order", "created_at").order_by("pk"))
+        accounts.sort(key=lambda account: (
+            account.sort_order is None, account.sort_order or 0, account.created_at, account.pk))
+        current_index = next((index for index, account in enumerate(accounts) if account.pk == pk), None)
+        if current_index is None:
+            raise Http404("Account not found.")
+        if move == "position":
+            target_index = int(raw_position) - 1
+            if not 0 <= target_index < len(accounts):
+                messages.error(request, f"Position must be between 1 and {len(accounts)}.")
+                return redirect(dashboard_url)
+        else:
+            target_index = {
+                "top": 0,
+                "up": max(0, current_index - 1),
+                "down": min(len(accounts) - 1, current_index + 1),
+                "bottom": len(accounts) - 1,
+            }[move]
+        account = accounts.pop(current_index)
+        accounts.insert(target_index, account)
+        if current_index != target_index:
+            for position, item in enumerate(accounts, start=1):
+                item.sort_order = position
+            VpnAccount.objects.bulk_update(accounts, ["sort_order"])
+
+    if current_index != target_index:
+        record(request, account.username, "reorder", True)
+        messages.success(request, f"Moved {account.username} to position {target_index + 1}.")
+    else:
+        messages.info(request, f"{account.username} is already at that position.")
+    return redirect(dashboard_url)
 
 
 @staff_required

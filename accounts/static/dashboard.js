@@ -138,6 +138,21 @@
   });
   filterAccounts();
 
+  const reorderDialog = document.getElementById("reorder-account-dialog");
+  document.querySelectorAll("[data-reorder-account]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const form = reorderDialog.querySelector("[data-reorder-form]");
+      const filters = new URLSearchParams(window.location.search);
+      form.action = button.dataset.action;
+      form.querySelector("[data-reorder-query]").value = filters.get("q") || "";
+      form.querySelector("[data-reorder-status]").value = filters.get("status") || "";
+      form.querySelector("[name=position]").value = button.dataset.position;
+      reorderDialog.querySelector("[data-reorder-name]").textContent = button.dataset.username;
+      reorderDialog.querySelector("[data-reorder-current]").textContent = button.dataset.position;
+      reorderDialog.showModal();
+    });
+  });
+
   const editDialog = document.getElementById("edit-account-dialog");
   document.querySelectorAll("[data-edit-account]").forEach((button) => {
     button.addEventListener("click", () => {

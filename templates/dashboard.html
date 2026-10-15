@@ -1,13 +1,14 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}Overview · SSH VPN Panel{% endblock %}
-{% block scripts %}<script src="{% static 'dashboard.js' %}?v=18" defer></script>{% endblock %}
+{% block scripts %}<script src="{% static 'dashboard.js' %}?v=19" defer></script>{% endblock %}
 {% block content %}
 <svg class="action-icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
   <symbol id="action-edit" viewBox="0 0 24 24"><path d="m4 16-.5 4.5L8 20l11-11-4-4L4 16Zm9.5-9.5 4 4M13 20h7"/></symbol>
   <symbol id="action-extend" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-9 3v6m-3-3h6"/></symbol>
   <symbol id="action-reset" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 9m0-5v5h5m3-2v5l3 2"/></symbol>
   <symbol id="action-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+  <symbol id="action-reorder" viewBox="0 0 24 24"><path d="M4 6h9M4 12h9M4 18h9m5-13v14m-3-11 3-3 3 3m-6 8 3 3 3-3"/></symbol>
   <symbol id="action-pause" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 8v8m6-8v8"/></symbol>
   <symbol id="action-play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4V8Z"/></symbol>
   <symbol id="action-delete" viewBox="0 0 24 24"><path d="M4 7h16m-14 0 1 14h10l1-14M9 7V4h6v3m-5 4v6m4-6v6"/></symbol>
@@ -70,7 +71,7 @@
         <thead><tr><th><label class="select-all-label"><input type="checkbox" data-select-all aria-label="Select all visible users"><span>Select all visible users</span></label></th><th>Account</th><th>Password</th><th>Referral</th><th>Status</th><th>Online</th><th>Data usage</th><th>Days left</th><th>Limit</th><th>Actions</th></tr></thead>
         <tbody>
         {% for account in accounts %}
-          <tr data-account-username="{{ account.username }}" data-search="{{ account.username }} {{ account.referral_code }} {{ account.referral_note }} {{ account.referred_by.username }} {{ account.referred_by.referral_code }}" data-expires-at="{{ account.expires_at|date:'c' }}" data-valid-days="{% if account.valid_days and not account.activated_at %}{{ account.valid_days }}{% endif %}" data-traffic-limit="{{ account.traffic_limit_bytes|default_if_none:'' }}" data-traffic-display="{{ account.traffic_limit_display|default_if_none:'' }}" data-enabled="{{ account.enabled|yesno:'true,false' }}" data-online="{{ account.is_online|yesno:'true,false' }}" data-inactive="{{ account.is_inactive|yesno:'true,false' }}" {% if not account.matches_search %}hidden{% endif %}>
+          <tr data-account-username="{{ account.username }}" data-search="{{ account.username }} {{ account.referral_code }} {{ account.referral_note }} {{ account.referred_by.username }} {{ account.referred_by.referral_code }}" data-expires-at="{{ account.expires_at|date:'c' }}" data-valid-days="{% if account.valid_days and not account.activated_at %}{{ account.valid_days }}{% endif %}" data-traffic-limit="{{ account.traffic_limit_bytes|default_if_none:'' }}" data-traffic-display="{{ account.traffic_limit_display|default_if_none:'' }}" data-enabled="{{ account.enabled|yesno:'true,false' }}" data-online="{{ account.is_online|yesno:'true,false' }}" data-inactive="{{ account.is_inactive|yesno:'true,false' }}" data-list-position="{{ account.list_position }}" {% if not account.matches_search %}hidden{% endif %}>
             <td><input type="checkbox" name="account_ids" value="{{ account.pk }}" form="bulk-account-action-form" data-select-account aria-label="Select {{ account.username }}"></td>
             <td><button class="mobile-account-toggle" type="button" data-mobile-account-toggle aria-expanded="true" aria-label="Hide details for {{ account.username }}"><span class="account-name" dir="auto">{{ account.username }}</span><span class="mobile-account-chevron" aria-hidden="true"></span></button><button class="account-name account-name-button" type="button" data-session-trigger {% if not account.usage.connections %}disabled{% endif %} aria-label="Show active IP addresses for {{ account.username }}">{{ account.username }}</button><small class="table-subtext account-created" dir="auto">Created {{ account.created_at|date:"Y-m-d" }}</small></td>
             <td data-mobile-label="Password" data-mobile-label-fa="رمز عبور"><div class="password-cell" {% if account.display_password is not None %}dir="ltr"{% else %}dir="auto"{% endif %}><span {% if account.display_password is not None %}data-password-value{% endif %}>{% if account.display_password is not None %}{{ account.display_password }}{% else %}Unavailable — set a new password{% endif %}</span></div></td>
@@ -82,6 +83,7 @@
             <td data-mobile-label="Limit" data-mobile-label-fa="محدودیت">{{ account.max_connections|default:"Unlimited" }}</td>
             <td data-mobile-label="Actions" data-mobile-label-fa="عملیات">
               <div class="row-actions" role="group" aria-label="Actions for {{ account.username }}">
+                <button class="action-button" type="button" data-reorder-account data-action="{% url 'reorder_account' account.pk %}" data-username="{{ account.username }}" data-position="{{ account.list_position }}" aria-label="Move {{ account.username }} in list" title="Move in list"><svg><use href="#action-reorder"/></svg></button>
                 <button class="action-button" type="button" data-edit-account data-action="{% url 'edit_account' account.pk %}" data-username="{{ account.username }}" data-expires="{% if account.valid_days and not account.activated_at %}{{ account.valid_days }} days after first connection{% else %}{{ account.expires_at|date:'Y-m-d H:i'|default:'Unlimited' }}{% endif %}" data-connections="{{ account.max_connections|default_if_none:'' }}" data-referral-code="{{ account.referral_code|default_if_none:'' }}" aria-label="Edit {{ account.username }}" title="Edit"><svg><use href="#action-edit"/></svg></button>
                 <button class="action-button action-button-extend" type="button" data-extend-account data-action="{% url 'extend_account' account.pk %}" data-username="{{ account.username }}" aria-label="Extend {{ account.username }}" title="Extend validity"><svg><use href="#action-extend"/></svg></button>
                 <form method="post" action="{% url 'reset_account_traffic' account.pk %}" onsubmit="return panelConfirm('Reset traffic for {{ account.username|escapejs }}?')">{% csrf_token %}<button class="action-button" type="submit" aria-label="Reset traffic for {{ account.username }}" title="Reset traffic"><svg><use href="#action-reset"/></svg></button></form>
@@ -100,6 +102,23 @@
   </section>
 </div>
 <div class="action-feedback" role="status" aria-live="polite" data-action-feedback hidden></div>
+
+<dialog id="reorder-account-dialog" class="account-dialog reorder-dialog" aria-labelledby="reorder-dialog-title">
+  <div class="dialog-heading"><div><p class="eyebrow">USER ORDER</p><h2 id="reorder-dialog-title">Move <span data-reorder-name></span></h2></div><button type="button" class="dialog-close" data-close-dialog aria-label="Close">×</button></div>
+  <p class="panel-description"><span>Current position:</span> <strong data-reorder-current></strong> <span>of</span> <strong data-reorder-total>{{ account_total }}</strong>. <span>Positions refer to the full user list.</span></p>
+  <form method="post" data-reorder-form>{% csrf_token %}
+    <input type="hidden" name="q" data-reorder-query>
+    <input type="hidden" name="status" data-reorder-status>
+    <div class="reorder-shortcuts">
+      <button class="button button-secondary" type="submit" name="move" value="top">Move to top</button>
+      <button class="button button-secondary" type="submit" name="move" value="up">Move up one</button>
+      <button class="button button-secondary" type="submit" name="move" value="down">Move down one</button>
+      <button class="button button-secondary" type="submit" name="move" value="bottom">Move to bottom</button>
+    </div>
+    <label for="reorder-position">Move to position</label>
+    <div class="reorder-position-row"><input id="reorder-position" type="number" name="position" min="1" max="{{ account_total }}" step="1" inputmode="numeric"><button class="button button-primary" type="submit" name="move" value="position">Move</button></div>
+  </form>
+</dialog>
 
 <dialog id="extend-account-dialog" class="account-dialog extend-dialog" aria-labelledby="extend-dialog-title">
   <div class="dialog-heading"><div><p class="eyebrow">QUICK RENEWAL</p><h2 id="extend-dialog-title">Extend <span data-extend-name></span></h2></div><button type="button" class="dialog-close" data-close-dialog aria-label="Close">×</button></div>

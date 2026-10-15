@@ -12,6 +12,7 @@ import time
 import uuid
 
 from django.db import IntegrityError, close_old_connections
+from django.db.models import F, Q
 from django.utils import timezone
 
 from .backups import BACKUP_DIR, BACKUP_NAME, UPLOAD_DIR, BackupError, call_backup, list_backups
@@ -181,9 +182,8 @@ def status_text():
 
 
 def users_text(query=""):
-    accounts = VpnAccount.objects.order_by("created_at", "pk")
+    accounts = VpnAccount.objects.order_by(F("sort_order").asc(nulls_last=True), "created_at", "pk")
     if query:
-        from django.db.models import Q
         accounts = accounts.filter(
             Q(username__icontains=query) | Q(referral_note__icontains=query) | Q(referral_code__icontains=query)
         )

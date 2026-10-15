@@ -101,6 +101,62 @@ class AccountViewsTests(TestCase):
         self.assertEqual(page.context["accounts"][0].username, "z_existing")
         self.assertEqual(page.context["accounts"][1].username, "a_single")
 
+    @patch("accounts.views.get_system_metrics", return_value={})
+    @patch("accounts.views.get_account_usage", return_value={})
+    def test_user_order_can_move_to_edges_or_any_position_and_persists(self, usage, metrics):
+        accounts = [VpnAccount.objects.create(username=name, created_by=self.staff)
+                    for name in ("alpha", "bravo", "charlie", "delta")]
+
+        def names():
+            page = self.client.get(reverse("dashboard"))
+            self.assertEqual(page.status_code, 200)
+            return [account.username for account in page.context["accounts"]]
+
+        def move(account, direction, position=None):
+            data = {"move": direction}
+            if position is not None:
+                data["position"] = str(position)
+            response = self.client.post(reverse("reorder_account", args=[account.pk]), data)
+            self.assertEqual(response.status_code, 302)
+
+        self.assertEqual(names(), ["alpha", "bravo", "charlie", "delta"])
+        move(accounts[1], "bottom")
+        self.assertEqual(names(), ["alpha", "charlie", "delta", "bravo"])
+        move(accounts[3], "top")
+        self.assertEqual(names(), ["delta", "alpha", "charlie", "bravo"])
+        move(accounts[1], "up")
+        self.assertEqual(names(), ["delta", "alpha", "bravo", "charlie"])
+        move(accounts[0], "down")
+        self.assertEqual(names(), ["delta", "bravo", "alpha", "charlie"])
+        move(accounts[2], "position", 2)
+        self.assertEqual(names(), ["delta", "charlie", "bravo", "alpha"])
+        self.assertEqual(list(VpnAccount.objects.order_by("sort_order").values_list("sort_order", flat=True)),
+                         [1, 2, 3, 4])
+        VpnAccount.objects.create(username="echo", created_by=self.staff)
+        self.assertEqual(names(), ["delta", "charlie", "bravo", "alpha", "echo"])
+        page = self.client.get(reverse("dashboard"))
+        self.assertContains(page, f'data-action="{reverse("reorder_account", args=[accounts[2].pk])}"')
+        self.assertContains(page, 'data-list-position="2"')
+
+    def test_reorder_rejects_invalid_positions_and_requires_staff_and_csrf(self):
+        account = VpnAccount.objects.create(username="alpha", created_by=self.staff)
+        VpnAccount.objects.create(username="bravo", created_by=self.staff)
+        url = reverse("reorder_account", args=[account.pk])
+        for data in ({"move": "unknown"}, {"move": "position", "position": "0"},
+                     {"move": "position", "position": "3"}, {"move": "position", "position": "bad"}):
+            self.assertEqual(self.client.post(url, data).status_code, 302)
+            self.assertFalse(VpnAccount.objects.filter(sort_order__isnull=False).exists())
+        self.assertEqual(self.client.post(url, {"move": "bottom", "q": "alpha", "status": "inactive"})["Location"],
+                         reverse("dashboard") + "?q=alpha&status=inactive")
+        self.assertEqual(Client().post(url, {"move": "top"}).status_code, 302)
+        nonstaff = get_user_model().objects.create_user("viewer", password="x")
+        other_client = Client()
+        other_client.force_login(nonstaff)
+        self.assertEqual(other_client.post(url, {"move": "top"}).status_code, 302)
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.force_login(self.staff)
+        self.assertEqual(csrf_client.post(url, {"move": "top"}).status_code, 403)
+
     def test_dashboard_searches_username_and_referral_fields(self):
         owner = VpnAccount.objects.create(username="Owner", created_by=self.staff, referral_code="Spring-Campaign")
         VpnAccount.objects.create(username="member", created_by=self.staff, referred_by=owner)

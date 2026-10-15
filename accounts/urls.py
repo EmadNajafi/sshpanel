@@ -11,6 +11,7 @@ urlpatterns = [
     path("accounts/bulk-new/", views.bulk_create_accounts, name="bulk_create_accounts"),
     path("accounts/bulk-action/", views.bulk_account_action, name="bulk_account_action"),
     path("accounts/<int:pk>/edit/", views.edit_account, name="edit_account"),
+    path("accounts/<int:pk>/reorder/", views.reorder_account, name="reorder_account"),
     path("accounts/<int:pk>/extend/", views.extend_account, name="extend_account"),
     path("accounts/<int:pk>/traffic-reset/", views.reset_account_traffic, name="reset_account_traffic"),
     path("accounts/<int:pk>/password-view/", views.account_password, name="account_password"),

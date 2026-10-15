@@ -21,6 +21,7 @@ class VpnAccount(models.Model):
     username = models.CharField(max_length=32, unique=True)
     enabled = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    sort_order = models.PositiveBigIntegerField(null=True, blank=True, db_index=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     expires_at = models.DateTimeField(null=True, blank=True)
     valid_days = models.PositiveIntegerField(null=True, blank=True)
