@@ -22,9 +22,9 @@ def _cpu_times():
     return sum(counters), counters[3] + counters[4]
 
 
-def _cpu_metric():
+def _cpu_metric(sample_delay=0.75):
     before_total, before_idle = _cpu_times()
-    time.sleep(0.75)
+    time.sleep(sample_delay)
     after_total, after_idle = _cpu_times()
     total = after_total - before_total
     used = total - (after_idle - before_idle)
@@ -58,9 +58,10 @@ def _disk_metric():
     }
 
 
-def get_system_metrics():
+def get_system_metrics(*, cpu_sample_delay=0.75):
     result = {}
-    for name, collector in (("cpu", _cpu_metric), ("memory", _memory_metric), ("disk", _disk_metric)):
+    for name, collector in (("cpu", lambda: _cpu_metric(cpu_sample_delay)),
+                            ("memory", _memory_metric), ("disk", _disk_metric)):
         try:
             result[name] = collector()
         except (OSError, ValueError, KeyError, IndexError, TypeError):

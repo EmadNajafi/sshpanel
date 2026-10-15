@@ -1,6 +1,7 @@
 """Private-chat administration for the panel's Telegram bot."""
 
 from datetime import timedelta
+from decimal import Decimal, InvalidOperation
 import logging
 import math
 import os
@@ -16,7 +17,7 @@ from django.db.models import F, Q
 from django.utils import timezone
 
 from .backups import BACKUP_DIR, BACKUP_NAME, UPLOAD_DIR, BackupError, call_backup, list_backups
-from .forms import BulkCreateAccountForm, CreateAccountForm, EditAccountForm
+from .forms import BulkCreateAccountForm, CreateAccountForm, EditAccountForm, USERNAME_RE
 from .models import AuditEvent, TelegramBotConfig, VpnAccount
 from .secrets import decrypt_bot_token, decrypt_password, encrypt_password
 from .services import ProvisionError, call_helper, get_ssh_port
@@ -31,12 +32,53 @@ from .views import (
 log = logging.getLogger(__name__)
 
 MAIN_MENU = [
-    [{"text": "وضعیت سرور", "callback_data": "menu:status"},
-     {"text": "کاربران", "callback_data": "menu:users"}],
-    [{"text": "بکاپ‌ها", "callback_data": "menu:backups"},
-     {"text": "تنظیمات", "callback_data": "menu:settings"}],
-    [{"text": "راهنمای دستورها", "callback_data": "menu:help"}],
+    [{"text": "👥 کاربران", "callback_data": "menu:users:0"},
+     {"text": "➕ ساخت کاربر", "callback_data": "flow:create"}],
+    [{"text": "👥 ساخت گروهی", "callback_data": "flow:bulkcreate"},
+     {"text": "📊 وضعیت سرور", "callback_data": "menu:status"}],
+    [{"text": "💾 بکاپ‌ها", "callback_data": "menu:backups:0"},
+     {"text": "⚙️ تنظیمات", "callback_data": "menu:settings"}],
+    [{"text": "🧾 گزارش فعالیت", "callback_data": "menu:audit"},
+     {"text": "❔ راهنما", "callback_data": "menu:help"}],
 ]
+
+HOME_TEXT = "پنل مدیریت SSH VPN\nاز دکمه‌ها برای مدیریت کاربران و سرور استفاده کن. برای شروع دوباره /start را بزن."
+BACK_BUTTON = [{"text": "⌂ منوی اصلی", "callback_data": "menu:home"}]
+USER_PAGE_SIZE = 10
+BACKUP_PAGE_SIZE = 8
+
+WIZARD_FIELDS = {
+    "create": (
+        ("username", "نام کاربری انگلیسی را بفرست (مثل ali_1).", None),
+        ("password", "رمز کاربر را بفرست.", None),
+        ("days", "مدت اعتبار را به روز بفرست (۱ تا ۳۶۵۰۰).", None),
+        ("limit", "سقف اتصال هم‌زمان را بفرست؛ ۰ یعنی نامحدود.", "0"),
+        ("traffic", "سقف ترافیک به گیگابایت را بفرست؛ ۰ یعنی نامحدود.", "0"),
+        ("referral", "متن معرف را بفرست؛ می‌توانی خالی بگذاری.", ""),
+        ("first", "اعتبار از اولین اتصال شروع شود؟", "0"),
+    ),
+    "bulkcreate": (
+        ("count", "تعداد کاربران را بفرست (۱ تا ۱۰۰).", None),
+        ("prefix", "پیشوند نام کاربری را بفرست.", "user"),
+        ("start", "حداقل شمارهٔ تصادفی را بفرست.", "1000"),
+        ("days", "مدت اعتبار را به روز بفرست.", "30"),
+        ("password", "رمز ثابت همهٔ کاربران را بفرست؛ برای رمزهای تصادفی رد کن.", "auto"),
+        ("limit", "سقف اتصال هم‌زمان را بفرست؛ ۰ یعنی نامحدود.", "0"),
+        ("traffic", "سقف ترافیک به گیگابایت را بفرست؛ ۰ یعنی نامحدود.", "0"),
+        ("referral", "متن معرف مشترک را بفرست.", ""),
+        ("first", "اعتبار از اولین اتصال شروع شود؟", "0"),
+    ),
+}
+
+INPUT_PROMPTS = {
+    "search": "نام کاربری یا متن معرف را بفرست.",
+    "edit": "فیلدهای دلخواه را به شکل days=30 limit=0 traffic=0 referral=TEXT بفرست.",
+    "password": "رمز جدید این کاربر را بفرست.",
+    "sshport": "پورت جدید SSH را بفرست. تغییر نهایی به تأیید جدا نیاز دارد.",
+    "web": "مسیر و پورت جدید وب را بفرست؛ نمونه: /my-panel 8443",
+    "schedule": "وضعیت و ساعت بکاپ را بفرست؛ نمونه: on 03:00 یا off 03:00",
+    "adminpassword": "رمز فعلی و رمز جدید مدیر را با یک فاصله بفرست.",
+}
 
 HELP = """دستورهای ربات (مقادیر دارای فاصله را داخل کوتیشن بگذار):
 /status — وضعیت سرور و کاربران
@@ -168,7 +210,7 @@ def status_text():
     accounts = list(VpnAccount.objects.all())
     usage = get_account_usage()
     counts = account_summary(accounts, usage, timezone.now())
-    metrics = get_system_metrics()
+    metrics = get_system_metrics(cpu_sample_delay=0.1)
     resource = []
     for key, label in (("cpu", "CPU"), ("memory", "RAM"), ("disk", "Disk")):
         value = metrics.get(key, {}).get("percent")
@@ -191,6 +233,91 @@ def users_text(query=""):
     names = list(accounts.values_list("username", flat=True)[:30])
     suffix = f"\nو {total - 30} کاربر دیگر؛ جستجو را محدودتر کن." if total > 30 else ""
     return f"کاربران ({total}):\n" + ("\n".join(names) if names else "موردی پیدا نشد.") + suffix
+
+
+def users_page(query="", page=0):
+    accounts = VpnAccount.objects.order_by(F("sort_order").asc(nulls_last=True), "created_at", "pk")
+    if query:
+        accounts = accounts.filter(
+            Q(username__icontains=query) | Q(referral_note__icontains=query) | Q(referral_code__icontains=query)
+        )
+    total = accounts.count()
+    last_page = max(0, (total - 1) // USER_PAGE_SIZE)
+    page = min(max(0, page), last_page)
+    entries = list(accounts.values("username", "enabled", "expires_at")[
+        page * USER_PAGE_SIZE:(page + 1) * USER_PAGE_SIZE
+    ])
+    now = timezone.now()
+    buttons = []
+    for entry in entries:
+        inactive = not entry["enabled"] or entry["expires_at"] is not None and entry["expires_at"] <= now
+        buttons.append({"text": f"{'🔴' if inactive else '👤'} {entry['username']}",
+                        "callback_data": f"u:{entry['username']}"})
+    keyboard = [buttons[index:index + 2] for index in range(0, len(buttons), 2)]
+    if not query and total > USER_PAGE_SIZE:
+        navigation = []
+        if page:
+            navigation.append({"text": "◀️ قبلی", "callback_data": f"menu:users:{page - 1}"})
+        if page < last_page:
+            navigation.append({"text": "بعدی ▶️", "callback_data": f"menu:users:{page + 1}"})
+        keyboard.append(navigation)
+    keyboard.extend([
+        [{"text": "🔎 جستجو", "callback_data": "prompt:search"},
+         {"text": "➕ ساخت کاربر", "callback_data": "flow:create"}],
+        [{"text": "👥 ساخت گروهی", "callback_data": "flow:bulkcreate"}, *BACK_BUTTON],
+    ])
+    title = f"👥 کاربران: {total}"
+    if query:
+        title += f"\nجستجو: {query[:80]}"
+    else:
+        title += f" • صفحهٔ {page + 1} از {last_page + 1}"
+    return title + "\nبرای دیدن جزئیات و عملیات، روی نام کاربر بزن.", keyboard
+
+
+def backups_page(page=0):
+    backups = list_backups()
+    total = len(backups)
+    last_page = max(0, (total - 1) // BACKUP_PAGE_SIZE)
+    page = min(max(0, page), last_page)
+    keyboard = []
+    for item in backups[page * BACKUP_PAGE_SIZE:(page + 1) * BACKUP_PAGE_SIZE]:
+        label = f"{'⏱' if item['automatic'] else '💾'} {timezone.localtime(item['created']):%m/%d %H:%M} · {format_bytes(item['size'])}"
+        keyboard.append([{"text": label, "callback_data": f"b:{item['name']}"}])
+    if total > BACKUP_PAGE_SIZE:
+        navigation = []
+        if page:
+            navigation.append({"text": "◀️ قبلی", "callback_data": f"menu:backups:{page - 1}"})
+        if page < last_page:
+            navigation.append({"text": "بعدی ▶️", "callback_data": f"menu:backups:{page + 1}"})
+        keyboard.append(navigation)
+    keyboard.extend([
+        [{"text": "➕ ساخت بکاپ", "callback_data": "bk:create"},
+         {"text": "🕒 زمان‌بندی", "callback_data": "prompt:schedule"}],
+        BACK_BUTTON,
+    ])
+    return f"💾 بکاپ‌ها: {total}\n{'فایل موردنظر را انتخاب کن.' if total else 'هنوز بکاپی وجود ندارد.'}", keyboard
+
+
+def backup_detail(name):
+    path = backup_path(name)
+    size = format_bytes(path.stat().st_size)
+    return f"💾 {name}\nحجم: {size}\nاین فایل شامل همهٔ اطلاعات و رمزهای پنل است.", [
+        [{"text": "⬇️ دانلود", "callback_data": f"bk:dl:{name}"}],
+        [{"text": "♻️ ریستور", "callback_data": f"bk:restore:{name}"},
+         {"text": "🗑 حذف", "callback_data": f"bk:rm:{name}"}],
+        [{"text": "◀️ بکاپ‌ها", "callback_data": "menu:backups:0"}, *BACK_BUTTON],
+    ]
+
+
+def respond(api, chat_id, text, keyboard=None, *, message_id=None):
+    if isinstance(message_id, int) and len(str(text)) <= 4000:
+        try:
+            api.edit_message(chat_id, message_id, text, keyboard)
+            return
+        except TelegramError as exc:
+            if "message is not modified" in str(exc).lower():
+                return
+    api.send_message(chat_id, text, keyboard)
 
 
 def user_text(username):
@@ -421,11 +548,16 @@ def user_keyboard(username):
     if len(username.encode("utf-8")) > 32:
         return MAIN_MENU
     return [
-        [{"text": "فعال", "callback_data": f"act:enable:{username}"},
-         {"text": "غیرفعال", "callback_data": f"act:disable:{username}"}],
+        [{"text": "✅ فعال", "callback_data": f"act:enable:{username}"},
+         {"text": "⏸ غیرفعال", "callback_data": f"act:disable:{username}"}],
         [{"text": "+۳۰ روز", "callback_data": f"act:extend30:{username}"},
-         {"text": "ریست ترافیک", "callback_data": f"act:resettraffic:{username}"}],
-        [{"text": "حذف", "callback_data": f"act:delete:{username}"}],
+         {"text": "+۶۰ روز", "callback_data": f"act:extend60:{username}"},
+         {"text": "+۹۰ روز", "callback_data": f"act:extend90:{username}"}],
+        [{"text": "✏️ ویرایش", "callback_data": f"prompt:edit:{username}"},
+         {"text": "🔑 تغییر رمز", "callback_data": f"prompt:password:{username}"}],
+        [{"text": "🔄 ریست ترافیک", "callback_data": f"act:resettraffic:{username}"},
+         {"text": "🗑 حذف", "callback_data": f"act:delete:{username}"}],
+        [{"text": "◀️ کاربران", "callback_data": "menu:users:0"}, *BACK_BUTTON],
     ]
 
 
@@ -438,14 +570,19 @@ def execute(config, api, chat_id, command_line):
         return "از /help یا منوی پایین استفاده کن.", MAIN_MENU
     command = parts[0].split("@", 1)[0].lower().lstrip("/")
     args = parts[1:]
-    if command in ("start", "help"):
-        return HELP, MAIN_MENU
+    if command == "start":
+        return HOME_TEXT, MAIN_MENU
+    if command == "help":
+        return HELP, [BACK_BUTTON]
     if command == "id":
         return f"شناسهٔ تلگرام: {chat_id}", MAIN_MENU
     if command == "status":
-        return status_text(), MAIN_MENU
+        return "📊 وضعیت سرور\n" + status_text(), [
+            [{"text": "🔄 بروزرسانی", "callback_data": "menu:status"},
+             {"text": "👥 کاربران", "callback_data": "menu:users:0"}], BACK_BUTTON,
+        ]
     if command == "users":
-        return users_text(" ".join(args)), MAIN_MENU
+        return users_page(" ".join(args))
     if command == "user":
         require_args(args, 1, "/user NAME")
         return user_text(args[0]), user_keyboard(args[0])
@@ -508,11 +645,7 @@ def execute(config, api, chat_id, command_line):
             f" {'✓' if item.succeeded else '✗'}" for item in events
         ), MAIN_MENU
     if command == "backups":
-        backups = list_backups()[:20]
-        return "بکاپ‌های موجود:\n" + (
-            "\n".join(f"{item['name']} ({format_bytes(item['size'])})" for item in backups)
-            if backups else "هنوز بکاپی وجود ندارد."
-        ), MAIN_MENU
+        return backups_page()
     if command == "backup":
         result = call_backup("create")
         send_backup(api, chat_id, result["name"])
@@ -552,7 +685,15 @@ def execute(config, api, chat_id, command_line):
             status_text() + f"\nبکاپ خودکار: {'روشن' if schedule['enabled'] else 'خاموش'} "
             f"ساعت {schedule['time']} تهران\nوضعیت تغییر پورت SSH: {pending}\n"
             f"ربات: {'فعال' if config.enabled else 'غیرفعال'}"
-        ), MAIN_MENU
+        ), [
+            [{"text": "🌐 آدرس وب", "callback_data": "prompt:web"},
+             {"text": "🔌 پورت SSH", "callback_data": "prompt:sshport"}],
+            [{"text": "🕒 زمان بکاپ", "callback_data": "prompt:schedule"},
+             {"text": "🔐 رمز مدیر", "callback_data": "prompt:adminpassword"}],
+            [{"text": "✅ تأیید پورت SSH", "callback_data": "cmd:sshconfirm"},
+             {"text": "↩️ لغو تغییر پورت", "callback_data": "cmd:sshcancel"}],
+            BACK_BUTTON,
+        ]
     if command == "sshport":
         require_args(args, 1, "/sshport PORT")
         try:
@@ -608,22 +749,148 @@ def needs_confirmation(command_line):
     )
 
 
-def dispatch(config, api, chat_id, user_id, command_line, pending, *, confirmed=False):
+def wizard_prompt(api, chat_id, user_id, pending, *, message_id=None):
+    state = pending[("flow", user_id)]
+    fields = WIZARD_FIELDS[state["kind"]]
+    key, instruction, default = fields[state["index"]]
+    keyboard = []
+    if key == "first":
+        keyboard.append([{"text": "✅ بله", "callback_data": "flow:value:1"},
+                         {"text": "❌ خیر", "callback_data": "flow:value:0"}])
+    elif default is not None:
+        label = "رد کردن" if default == "" else f"پیش‌فرض: {default}"
+        keyboard.append([{"text": label, "callback_data": "flow:skip"}])
+    keyboard.append([{"text": "✖️ لغو", "callback_data": "flow:cancel"}])
+    title = "ساخت کاربر" if state["kind"] == "create" else "ساخت گروهی"
+    respond(api, chat_id, f"{title} · مرحلهٔ {state['index'] + 1} از {len(fields)}\n{instruction}",
+            keyboard, message_id=message_id)
+
+
+def start_wizard(api, chat_id, user_id, pending, kind, *, message_id=None):
+    pending.pop(user_id, None)
+    pending.pop(("input", user_id), None)
+    pending[("flow", user_id)] = {"kind": kind, "index": 0, "values": {},
+                                  "expires": time.monotonic() + 600}
+    wizard_prompt(api, chat_id, user_id, pending, message_id=message_id)
+
+
+def validate_wizard_value(kind, key, value):
+    if key in ("username", "prefix"):
+        if not USERNAME_RE.fullmatch(value) or key == "prefix" and len(value) > 20:
+            raise BotCommandError("فقط حروف کوچک انگلیسی، عدد، خط تیره یا زیرخط؛ شروع با حرف یا زیرخط.")
+    elif key == "password":
+        if not value or len(value) > 256 or any(char in value for char in "\r\n\x00"):
+            raise BotCommandError("رمز باید بین ۱ تا ۲۵۶ نویسه و بدون خط جدید باشد.")
+    elif key in ("count", "start", "days", "limit"):
+        limits = {"count": (1, 100), "start": (0, 999999999),
+                  "days": (1, 36500), "limit": (0, 10000)}
+        lower, upper = limits[key]
+        if not value.isascii() or not value.isdecimal() or not lower <= int(value) <= upper:
+            raise BotCommandError(f"برای این مرحله عددی بین {lower} و {upper} بفرست.")
+    elif key == "traffic":
+        try:
+            traffic = Decimal(value)
+        except InvalidOperation:
+            raise BotCommandError("ترافیک را به گیگابایت و به صورت عدد بفرست.") from None
+        if not traffic.is_finite() or traffic != 0 and not Decimal("0.001") <= traffic <= Decimal("100000"):
+            raise BotCommandError("ترافیک باید ۰ (نامحدود) یا بین ۰٫۰۰۱ تا ۱۰۰۰۰۰ گیگابایت باشد.")
+    elif key == "first" and value not in ("0", "1"):
+        raise BotCommandError("برای شروع از اولین اتصال، ۱ یا ۰ را بفرست.")
+    elif key == "referral" and "\x00" in value:
+        raise BotCommandError("متن معرف معتبر نیست.")
+
+
+def wizard_value(api, chat_id, user_id, pending, value, *, skip=False, message_id=None):
+    state = pending.get(("flow", user_id))
+    if not state or state["expires"] < time.monotonic():
+        pending.pop(("flow", user_id), None)
+        respond(api, chat_id, "فرم منقضی شد. دوباره از منو شروع کن.", MAIN_MENU, message_id=message_id)
+        return
+    fields = WIZARD_FIELDS[state["kind"]]
+    key, _, default = fields[state["index"]]
+    if skip:
+        if default is None:
+            wizard_prompt(api, chat_id, user_id, pending, message_id=message_id)
+            return
+        value = default
+    try:
+        validate_wizard_value(state["kind"], key, value)
+    except BotCommandError as exc:
+        respond(api, chat_id, f"{exc}\nدوباره مقدار را بفرست.",
+                [[{"text": "✖️ لغو", "callback_data": "flow:cancel"}]], message_id=message_id)
+        return
+    state["values"][key] = value
+    state["index"] += 1
+    state["expires"] = time.monotonic() + 600
+    if state["index"] < len(fields):
+        wizard_prompt(api, chat_id, user_id, pending, message_id=message_id)
+        return
+    command = "/" + state["kind"] + " " + " ".join(
+        shlex.quote(f"{field}={field_value}") for field, field_value in state["values"].items()
+    )
+    nonce = secrets.token_hex(6)
+    pending[user_id] = (nonce, time.monotonic() + 120, command)
+    pending.pop(("flow", user_id), None)
+    values = state["values"]
+    summary = (f"{'👥 ساخت گروهی' if state['kind'] == 'bulkcreate' else '👤 ساخت کاربر'}\n"
+               f"{'تعداد: ' + values['count'] + ' · پیشوند: ' + values['prefix'] if state['kind'] == 'bulkcreate' else 'نام: ' + values['username']}\n"
+               f"اعتبار: {values['days']} روز · اتصال: {values['limit']} · ترافیک: {values['traffic']} گیگابایت\n"
+               f"معرف: {values['referral'][:80] or '—'}\n"
+               f"شروع از اولین اتصال: {'بله' if values['first'] == '1' else 'خیر'}\n"
+               "رمز در این پیش‌نمایش نمایش داده نمی‌شود. ساخت را تأیید می‌کنی؟")
+    respond(api, chat_id, summary, [[
+        {"text": "✅ ساخت", "callback_data": f"ok:{nonce}"},
+        {"text": "✖️ لغو", "callback_data": f"cancel:{nonce}"},
+    ]], message_id=message_id)
+
+
+def start_input(api, chat_id, user_id, pending, kind, username="", *, message_id=None):
+    pending.pop(user_id, None)
+    pending.pop(("flow", user_id), None)
+    pending[("input", user_id)] = (kind, username, time.monotonic() + 300)
+    respond(api, chat_id, INPUT_PROMPTS[kind],
+            [[{"text": "✖️ لغو", "callback_data": "flow:cancel"}]], message_id=message_id)
+
+
+def consume_input(config, api, chat_id, user_id, pending, value):
+    kind, username, expires = pending.pop(("input", user_id))
+    if expires < time.monotonic():
+        api.send_message(chat_id, "درخواست منقضی شد. دوباره از منو شروع کن.", MAIN_MENU)
+        return
+    if not value.strip():
+        api.send_message(chat_id, "مقدار خالی است. دوباره از منو شروع کن.", MAIN_MENU)
+        return
+    if kind == "search":
+        text, keyboard = users_page(value.strip())
+        api.send_message(chat_id, text, keyboard)
+        return
+    commands = {
+        "edit": f"/edit {shlex.quote(username)} {value}",
+        "password": f"/password {shlex.quote(username)} {shlex.quote(value)}",
+        "sshport": f"/sshport {value}",
+        "web": f"/web {value}",
+        "schedule": f"/schedule {value}",
+        "adminpassword": f"/adminpassword {value}",
+    }
+    dispatch(config, api, chat_id, user_id, commands[kind], pending)
+
+
+def dispatch(config, api, chat_id, user_id, command_line, pending, *, confirmed=False, message_id=None):
     if needs_confirmation(command_line) and not confirmed:
         nonce = secrets.token_hex(6)
         pending[user_id] = (nonce, time.monotonic() + 120, command_line)
         command = command_line.split(maxsplit=1)[0]
-        api.send_message(chat_id, f"اجرای {command} را تأیید می‌کنی؟", [[
+        respond(api, chat_id, f"اجرای {command} را تأیید می‌کنی؟", [[
             {"text": "تأیید", "callback_data": f"ok:{nonce}"},
             {"text": "لغو", "callback_data": f"cancel:{nonce}"},
-        ]])
+        ]], message_id=message_id)
         return
     try:
         result, keyboard = execute(config, api, chat_id, command_line)
     except (BotCommandError, ProvisionError, BackupError, TelegramError, OSError, ValueError) as exc:
-        api.send_message(chat_id, f"خطا: {exc}", MAIN_MENU)
+        respond(api, chat_id, f"خطا: {exc}", MAIN_MENU, message_id=message_id)
     else:
-        api.send_message(chat_id, result, keyboard)
+        respond(api, chat_id, result, keyboard, message_id=message_id)
 
 
 def handle_update(config, api, update, pending):
@@ -651,27 +918,81 @@ def handle_update(config, api, update, pending):
         return
     if callback:
         data = callback.get("data", "")
+        message_id = message.get("message_id")
         if data.startswith("menu:"):
             command = data[5:]
-            if command in {"status", "users", "backups", "settings", "help"}:
-                dispatch(config, api, chat_id, user_id, f"/{command}", pending)
+            if command == "home":
+                respond(api, chat_id, HOME_TEXT, MAIN_MENU, message_id=message_id)
+            elif command.startswith("users:") and command[6:].isdecimal():
+                body, keyboard = users_page(page=int(command[6:]))
+                respond(api, chat_id, body, keyboard, message_id=message_id)
+            elif command.startswith("backups:") and command[8:].isdecimal():
+                body, keyboard = backups_page(page=int(command[8:]))
+                respond(api, chat_id, body, keyboard, message_id=message_id)
+            elif command in {"status", "users", "backups", "settings", "help", "audit"}:
+                dispatch(config, api, chat_id, user_id, f"/{command}", pending, message_id=message_id)
+        elif data.startswith("u:"):
+            dispatch(config, api, chat_id, user_id, f"/user {shlex.quote(data[2:])}",
+                     pending, message_id=message_id)
+        elif data.startswith("b:"):
+            try:
+                body, keyboard = backup_detail(data[2:])
+            except BotCommandError as exc:
+                respond(api, chat_id, f"خطا: {exc}", MAIN_MENU, message_id=message_id)
+            else:
+                respond(api, chat_id, body, keyboard, message_id=message_id)
+        elif data == "bk:create":
+            dispatch(config, api, chat_id, user_id, "/backup", pending, message_id=message_id)
+        elif data.startswith("bk:dl:"):
+            dispatch(config, api, chat_id, user_id, f"/download {shlex.quote(data[6:])}",
+                     pending, message_id=message_id)
+        elif data.startswith("bk:restore:"):
+            dispatch(config, api, chat_id, user_id, f"/restore {shlex.quote(data[11:])}",
+                     pending, message_id=message_id)
+        elif data.startswith("bk:rm:"):
+            dispatch(config, api, chat_id, user_id, f"/removebackup {shlex.quote(data[6:])}",
+                     pending, message_id=message_id)
+        elif data in {"flow:create", "flow:bulkcreate"}:
+            start_wizard(api, chat_id, user_id, pending, data[5:], message_id=message_id)
+        elif data == "flow:skip":
+            wizard_value(api, chat_id, user_id, pending, "", skip=True, message_id=message_id)
+        elif data in {"flow:value:0", "flow:value:1"}:
+            wizard_value(api, chat_id, user_id, pending, data[-1], message_id=message_id)
+        elif data == "flow:cancel":
+            pending.pop(user_id, None)
+            pending.pop(("flow", user_id), None)
+            pending.pop(("input", user_id), None)
+            respond(api, chat_id, HOME_TEXT, MAIN_MENU, message_id=message_id)
+        elif data.startswith("prompt:"):
+            _, kind, *rest = data.split(":", 2)
+            if kind in INPUT_PROMPTS:
+                start_input(api, chat_id, user_id, pending, kind, rest[0] if rest else "",
+                            message_id=message_id)
+        elif data in {"cmd:sshconfirm", "cmd:sshcancel"}:
+            dispatch(config, api, chat_id, user_id, "/" + data[4:], pending,
+                     message_id=message_id)
         elif data.startswith("act:"):
             _, action, username = (data.split(":", 2) + ["", ""])[:3]
             if action in {"enable", "disable", "resettraffic", "delete"}:
-                dispatch(config, api, chat_id, user_id, f"/{action} {shlex.quote(username)}", pending)
-            elif action == "extend30":
-                dispatch(config, api, chat_id, user_id, f"/extend {shlex.quote(username)} 30", pending)
+                dispatch(config, api, chat_id, user_id, f"/{action} {shlex.quote(username)}",
+                         pending, message_id=message_id)
+            elif action in {"extend30", "extend60", "extend90"}:
+                dispatch(config, api, chat_id, user_id,
+                         f"/extend {shlex.quote(username)} {action[6:]}", pending,
+                         message_id=message_id)
         elif data.startswith(("ok:", "cancel:")):
             operation, nonce = data.split(":", 1)
             saved = pending.get(user_id)
             if not saved or saved[0] != nonce or saved[1] < time.monotonic():
-                api.send_message(chat_id, "این درخواست منقضی شده است.")
+                respond(api, chat_id, "این درخواست منقضی شده است.", MAIN_MENU,
+                        message_id=message_id)
                 return
             pending.pop(user_id, None)
             if operation == "cancel":
-                api.send_message(chat_id, "لغو شد.", MAIN_MENU)
+                respond(api, chat_id, "لغو شد.", MAIN_MENU, message_id=message_id)
             else:
-                dispatch(config, api, chat_id, user_id, saved[2], pending, confirmed=True)
+                dispatch(config, api, chat_id, user_id, saved[2], pending,
+                         confirmed=True, message_id=message_id)
         return
     document = message.get("document")
     if isinstance(document, dict):
@@ -690,20 +1011,38 @@ def handle_update(config, api, update, pending):
             return
         api.send_message(chat_id, f"فایل دریافت شد. برای بازیابی: /restore {name}\nاین عملیات تأیید جدا می‌خواهد.")
         return
-    text = (message.get("text") or "").strip()
-    if not text.startswith("/"):
-        api.send_message(chat_id, "برای دیدن دستورها /help را بزن.", MAIN_MENU)
+    text = message.get("text") or ""
+    if text.strip() == "/cancel":
+        pending.pop(user_id, None)
+        pending.pop(("flow", user_id), None)
+        pending.pop(("input", user_id), None)
+        api.send_message(chat_id, HOME_TEXT, MAIN_MENU)
         return
-    dispatch(config, api, chat_id, user_id, text, pending)
+    if not text.lstrip().startswith("/") and ("flow", user_id) in pending:
+        wizard_value(api, chat_id, user_id, pending, text)
+        return
+    if not text.lstrip().startswith("/") and ("input", user_id) in pending:
+        consume_input(config, api, chat_id, user_id, pending, text)
+        return
+    if not text.lstrip().startswith("/"):
+        api.send_message(chat_id, HOME_TEXT, MAIN_MENU)
+        return
+    pending.pop(("flow", user_id), None)
+    pending.pop(("input", user_id), None)
+    dispatch(config, api, chat_id, user_id, text.strip(), pending)
 
 
 def run_polling():
     pending = {}
     configured_token = None
     webhook_removed = False
+    api = None
     while True:
         close_old_connections()
         if not panel_https_enabled():
+            if api is not None:
+                api.close()
+                api = None
             configured_token = None
             webhook_removed = False
             pending.clear()
@@ -712,16 +1051,21 @@ def run_polling():
         config = TelegramBotConfig.objects.select_related("owner").filter(pk=1).first()
         token = decrypt_bot_token(config.token_ciphertext) if config and config.enabled else None
         if not token:
+            if api is not None:
+                api.close()
+                api = None
             configured_token = None
             webhook_removed = False
             pending.clear()
             time.sleep(5)
             continue
         if token != configured_token:
+            if api is not None:
+                api.close()
             configured_token = token
             webhook_removed = False
             pending.clear()
-        api = TelegramAPI(token)
+            api = TelegramAPI(token)
         try:
             if not webhook_removed:
                 api.call("deleteWebhook", {"drop_pending_updates": False})

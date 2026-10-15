@@ -19,29 +19,39 @@ class TelegramError(Exception):
 class TelegramAPI:
     def __init__(self, token):
         self.token = token
+        self._connection = None
+
+    def close(self):
+        if self._connection is not None:
+            self._connection.close()
+            self._connection = None
 
     def call(self, method, payload=None, *, timeout=15):
         body = json.dumps(payload or {}).encode("utf-8")
-        request = urllib.request.Request(
-            f"https://api.telegram.org/bot{self.token}/{method}",
-            data=body,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                data = json.load(response)
-        except urllib.error.HTTPError as exc:
+        for attempt in range(2 if method == "getUpdates" else 1):
             try:
-                detail = json.load(exc).get("description", "Telegram rejected the request.")
-            except (ValueError, OSError):
-                detail = "Telegram rejected the request."
-            raise TelegramError(str(detail)[:250]) from None
-        except (OSError, ValueError):
-            raise TelegramError("Could not reach Telegram.") from None
+                if self._connection is None:
+                    self._connection = http.client.HTTPSConnection("api.telegram.org", timeout=timeout)
+                elif self._connection.sock is not None:
+                    self._connection.sock.settimeout(timeout)
+                self._connection.request(
+                    "POST", f"/bot{self.token}/{method}", body=body,
+                    headers={"Content-Type": "application/json"},
+                )
+                response = self._connection.getresponse()
+                status = response.status
+                data = json.loads(response.read())
+                if response.will_close:
+                    self.close()
+                break
+            except (OSError, ValueError, http.client.HTTPException):
+                self.close()
+                if attempt == 0 and method == "getUpdates":
+                    continue
+                raise TelegramError("Could not reach Telegram.") from None
         if not isinstance(data, dict):
             raise TelegramError("Telegram returned an invalid response.")
-        if not data.get("ok"):
+        if status >= 400 or not data.get("ok"):
             raise TelegramError(str(data.get("description", "Telegram rejected the request."))[:250])
         return data.get("result")
 
@@ -55,6 +65,11 @@ class TelegramAPI:
         if keyboard:
             payload["reply_markup"] = {"inline_keyboard": keyboard}
         self.call("sendMessage", payload)
+
+    def edit_message(self, chat_id, message_id, text, keyboard=None):
+        payload = {"chat_id": chat_id, "message_id": message_id, "text": str(text),
+                   "reply_markup": {"inline_keyboard": keyboard or []}}
+        self.call("editMessageText", payload)
 
     def download_file(self, file_id, destination):
         info = self.call("getFile", {"file_id": file_id})

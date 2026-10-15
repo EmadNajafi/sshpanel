@@ -3,13 +3,45 @@ from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
 from .models import TelegramBotConfig, VpnAccount
 from .secrets import decrypt_bot_token, encrypt_bot_token
 from .telegram_bot import handle_update, send_latest_automatic_backup
-from .telegram_api import TelegramError
+from .telegram_api import TelegramAPI, TelegramError
+
+
+class TelegramAPITests(SimpleTestCase):
+    @patch("accounts.telegram_api.http.client.HTTPSConnection")
+    def test_reuses_https_connection_for_poll_and_reply(self, connection_class):
+        connection = connection_class.return_value
+        connection.sock = Mock()
+        response = Mock(status=200, will_close=False)
+        response.read.return_value = b'{"ok": true, "result": []}'
+        connection.getresponse.return_value = response
+        api = TelegramAPI("test-token")
+        self.assertEqual(api.call("getUpdates", timeout=30), [])
+        api.send_message(12345, "hello")
+        connection_class.assert_called_once_with("api.telegram.org", timeout=30)
+        self.assertEqual(connection.request.call_count, 2)
+        connection.sock.settimeout.assert_called_once_with(15)
+        api.close()
+        connection.close.assert_called_once()
+
+    @patch("accounts.telegram_api.http.client.HTTPSConnection")
+    def test_poll_reconnects_after_stale_socket(self, connection_class):
+        stale = Mock()
+        stale.request.side_effect = OSError("stale socket")
+        fresh = Mock()
+        fresh.getresponse.return_value = Mock(status=200, will_close=False)
+        fresh.getresponse.return_value.read.return_value = b'{"ok": true, "result": []}'
+        connection_class.side_effect = [stale, fresh]
+        api = TelegramAPI("test-token")
+        self.assertEqual(api.call("getUpdates"), [])
+        self.assertEqual(connection_class.call_count, 2)
+        stale.close.assert_called_once()
+        api.close()
 
 
 class TelegramSettingsTests(TestCase):
@@ -125,6 +157,53 @@ class TelegramCommandTests(TestCase):
             "id": "callback-1", "from": {"id": 12345}, "data": data,
             "message": {"chat": {"id": 12345, "type": "private"}},
         }}
+
+    def test_menu_lists_users_and_edits_callback_message(self):
+        VpnAccount.objects.create(username="alice", created_by=self.owner)
+        update = self.callback("menu:users:0")
+        update["callback_query"]["message"]["message_id"] = 42
+        handle_update(self.config, self.api, update, self.pending)
+        self.api.call.assert_called_with("answerCallbackQuery", {"callback_query_id": "callback-1"})
+        self.api.edit_message.assert_called_once()
+        chat_id, message_id, body, keyboard = self.api.edit_message.call_args.args
+        self.assertEqual((chat_id, message_id), (12345, 42))
+        self.assertIn("کاربران: 1", body)
+        self.assertTrue(any(button["callback_data"] == "u:alice" for row in keyboard for button in row))
+        self.api.send_message.assert_not_called()
+
+    @patch("accounts.telegram_bot.get_account_usage", return_value={})
+    @patch("accounts.views.call_helper")
+    def test_create_wizard_requires_confirmation(self, helper, usage):
+        handle_update(self.config, self.api, self.callback("flow:create"), self.pending)
+        for value in ("alice", "abc", "30"):
+            handle_update(self.config, self.api, self.message(12345, value), self.pending)
+        for _ in range(3):
+            handle_update(self.config, self.api, self.callback("flow:skip"), self.pending)
+        handle_update(self.config, self.api, self.callback("flow:value:0"), self.pending)
+        self.assertFalse(VpnAccount.objects.filter(username="alice").exists())
+        nonce = self.pending[12345][0]
+        handle_update(self.config, self.api, self.callback(f"ok:{nonce}"), self.pending)
+        account = VpnAccount.objects.get(username="alice")
+        self.assertIsNone(account.max_connections)
+        create_call = next(item for item in helper.call_args_list if item.args[:3] == ("create", "alice", "abc"))
+        self.assertEqual(create_call.kwargs["max_connections"], 0)
+        self.assertIn("expires_at", create_call.kwargs)
+
+    def test_search_prompt_filters_referral_without_refresh(self):
+        VpnAccount.objects.create(username="alice", referral_note="friend-one", created_by=self.owner)
+        VpnAccount.objects.create(username="bob", referral_note="friend-two", created_by=self.owner)
+        handle_update(self.config, self.api, self.callback("prompt:search"), self.pending)
+        handle_update(self.config, self.api, self.message(12345, "friend-one"), self.pending)
+        body, keyboard = self.api.send_message.call_args.args[1:3]
+        self.assertIn("کاربران: 1", body)
+        self.assertTrue(any(button["callback_data"] == "u:alice" for row in keyboard for button in row))
+        self.assertFalse(any(button["callback_data"] == "u:bob" for row in keyboard for button in row))
+
+    def test_cancel_clears_wizard(self):
+        handle_update(self.config, self.api, self.callback("flow:create"), self.pending)
+        handle_update(self.config, self.api, self.message(12345, "/cancel"), self.pending)
+        self.assertNotIn(("flow", 12345), self.pending)
+        self.assertNotIn(12345, self.pending)
 
     def test_unknown_chat_cannot_manage_accounts_but_can_read_own_id(self):
         handle_update(self.config, self.api, self.message(99999, "/delete alice"), self.pending)
