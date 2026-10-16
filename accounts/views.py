@@ -744,7 +744,7 @@ def panel_settings(request, section=None):
             messages.error(request, "Website rules could not be loaded.")
         context["site_policy"] = site_policy
         context["global_domains_text"] = "\n".join(site_policy["global_domains"])
-        context["vpn_accounts"] = VpnAccount.objects.order_by("username").only("username")
+        context["vpn_account_search"] = list(VpnAccount.objects.order_by("username").values("id", "username"))
     return render(request, "settings.html", context)
 
 
@@ -772,9 +772,13 @@ def save_global_sites(request):
 @staff_required
 @require_POST
 def save_user_sites(request):
-    account = get_object_or_404(VpnAccount, pk=request.POST.get("account_id"))
+    account_id = request.POST.get("account_id", "")
+    if not account_id.isdecimal():
+        messages.error(request, "Select a user from the search results.")
+        return redirect("settings_sites")
+    account = get_object_or_404(VpnAccount, pk=account_id)
+    mode = request.POST.get("mode")
     try:
-        mode = request.POST.get("mode")
         if mode not in ("custom", "inherit"):
             raise ValueError("Choose a website rule mode.")
         domains = submitted_site_domains(request.POST.get("domains", "")) if mode == "custom" else None
@@ -782,11 +786,11 @@ def save_user_sites(request):
             raise ValueError("Enter at least one hostname for a custom rule.")
         call_helper("sites-user", username=account.username, domains=domains)
     except (ValueError, ProvisionError) as exc:
-        record(request, account.username, "sites-user", False)
+        record(request, account.username, "sites-user-remove" if mode == "inherit" else "sites-user", False)
         messages.error(request, str(exc))
     else:
-        record(request, account.username, "sites-user", True)
-        messages.success(request, "User website rules saved.")
+        record(request, account.username, "sites-user-remove" if mode == "inherit" else "sites-user", True)
+        messages.success(request, "Custom firewall rule removed; this user now uses the global list." if mode == "inherit" else "User website rules saved.")
     return redirect("settings_sites")
 
 

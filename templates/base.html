@@ -7,9 +7,9 @@
   <meta name="theme-color" content="#f3f6fb">
   <title>{% block title %}SSH VPN Panel{% endblock %}</title>
   <script>try { const saved = localStorage.getItem('sshvpn-theme'); const theme = saved === 'dark' || saved === 'light' ? saved : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); document.documentElement.dataset.theme = theme; document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#171e27' : '#f3f6fb'; } catch (_) { document.documentElement.dataset.theme = 'light'; } {% if not user.is_authenticated %}try { const language = sessionStorage.getItem('sshvpn-login-language'); if (language === 'fa' || language === 'en') { document.documentElement.lang = language; document.documentElement.dir = language === 'fa' ? 'rtl' : 'ltr'; } } catch (_) { /* Keep the server language. */ }{% endif %}</script>
-  <link rel="stylesheet" href="{% static 'panel.css' %}?v=37">
+  <link rel="stylesheet" href="{% static 'panel.css' %}?v=38">
   <link rel="stylesheet" href="{% static 'panel-tailwind.css' %}?v=6">
-  <script src="{% static 'i18n.js' %}?v=18" defer></script>
+  <script src="{% static 'i18n.js' %}?v=19" defer></script>
   <script src="{% static 'panel.js' %}?v=6" defer></script>
   {% if user.is_authenticated %}<script src="{% static 'overview-react.js' %}?v=6" defer></script>{% endif %}
   {% block scripts %}{% endblock %}

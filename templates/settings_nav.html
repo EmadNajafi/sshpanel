@@ -7,7 +7,7 @@
     <a href="{% url 'settings_admin' %}" class="{% if section == 'admin' %}is-active{% endif %}" {% if section == 'admin' %}aria-current="page"{% endif %}><span class="settings-nav-number">03</span><span>Administrator</span></a>
     <a href="{% url 'settings_telegram' %}" class="{% if section == 'telegram' %}is-active{% endif %}" {% if section == 'telegram' %}aria-current="page"{% endif %}><span class="settings-nav-number">04</span><span>Telegram bot</span></a>
     <a href="{% url 'backup_settings' %}" class="{% if section == 'backups' %}is-active{% endif %}" {% if section == 'backups' %}aria-current="page"{% endif %}><span class="settings-nav-number">05</span><span>Backup & recovery</span></a>
-    <a href="{% url 'settings_sites' %}" class="{% if section == 'sites' %}is-active{% endif %}" {% if section == 'sites' %}aria-current="page"{% endif %}><span class="settings-nav-number">06</span><span>Website access</span></a>
+    <a href="{% url 'settings_sites' %}" class="{% if section == 'sites' %}is-active{% endif %}" {% if section == 'sites' %}aria-current="page"{% endif %}><span class="settings-nav-number">06</span><span>Firewall</span></a>
   </nav>
   <div class="settings-sidebar-note"><span class="status-dot"></span><span>Panel services are managed on this server.</span></div>
 </aside>
