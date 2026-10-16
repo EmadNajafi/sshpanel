@@ -40,6 +40,8 @@ chmod 0600 "$backup_dir/database.dump"
 # Keep the existing administrator, VPN accounts, listener addresses, and TLS mode.
 rsync -a --exclude='.git' --exclude='.venv' --exclude='.env' \
   --exclude='staticfiles' --exclude='__pycache__' --exclude='frontend/node_modules' "$repo_dir/" /opt/ssh-vpn-panel/
+rm -f -- /opt/ssh-vpn-panel/helper/sshvpn_sites.py /opt/ssh-vpn-panel/helper/tests/test_sites.py \
+  /opt/ssh-vpn-panel/accounts/static/site-access.js /opt/ssh-vpn-panel/staticfiles/site-access.js
 chown -R root:root /opt/ssh-vpn-panel
 /opt/ssh-vpn-panel/.venv/bin/pip install --no-cache-dir -r /opt/ssh-vpn-panel/requirements.txt
 
@@ -78,12 +80,12 @@ install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_user_import.py 
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_policy.py /usr/local/sbin/sshvpn_policy.py
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_port.py /usr/local/sbin/sshvpn_port.py
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_usage.py /usr/local/sbin/sshvpn_usage.py
-install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_sites.py /usr/local/sbin/sshvpn_sites.py
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_web.py /usr/local/sbin/sshvpn_web.py
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_tls.py /usr/local/sbin/sshvpn-tls
 install -d -m 0755 -o root -g root /etc/letsencrypt/renewal-hooks/deploy
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/deploy/sshvpn-tls-renew-hook.sh /etc/letsencrypt/renewal-hooks/deploy/sshvpn-panel
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn-authz /usr/local/sbin/sshvpn-authz
+bash "$repo_dir/deploy/remove-legacy-site-rules.sh"
 install -d -m 0700 -o root -g root /etc/sshvpn/accounts
 install -d -m 0750 -o root -g sshvpn-panel /var/lib/sshvpn-panel/backups
 install -d -m 0700 -o sshvpn-panel -g sshvpn-panel /var/lib/sshvpn-panel/restore-uploads

@@ -133,7 +133,6 @@ install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_user_import.py 
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_policy.py /usr/local/sbin/sshvpn_policy.py
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_port.py /usr/local/sbin/sshvpn_port.py
 install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_usage.py /usr/local/sbin/sshvpn_usage.py
-install -m 0644 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_sites.py /usr/local/sbin/sshvpn_sites.py
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_web.py /usr/local/sbin/sshvpn_web.py
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_tls.py /usr/local/sbin/sshvpn-tls
 install -d -m 0755 -o root -g root /etc/letsencrypt/renewal-hooks/deploy

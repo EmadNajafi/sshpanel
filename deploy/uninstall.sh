@@ -79,10 +79,9 @@ import re
 import sys
 
 source = Path(sys.argv[1]).read_text()
-if "# sshvpn-site-access begin" in source or "# sshvpn-site-access global" in source:
-    sys.path.insert(0, "/opt/ssh-vpn-panel/helper")
-    from sshvpn_sites import render_ssh_config
-    source = render_ssh_config(source, {"global_domains": [], "users": {}})
+sys.path.insert(0, "/opt/ssh-vpn-panel/helper")
+from sshvpn_legacy_site_cleanup import without_website_rules
+source = without_website_rules(source)
 marker = sys.argv[3]
 block = """# sshvpn-panel shared-port policy; keep this block at the end of sshd_config
 Match Group sshvpn

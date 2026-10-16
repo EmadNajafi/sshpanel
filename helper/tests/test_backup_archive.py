@@ -43,11 +43,11 @@ class BackupArchiveTests(unittest.TestCase):
         }
         if not include_usage:
             del members["usage.json"]
-        if format_version in (4, 5):
+        if format_version in (4, 5, 6):
             members["backup_schedule.json"] = b'{"enabled": true, "time": "04:15", "timezone": "Asia/Tehran"}'
         if format_version == 5:
             members["site_access.json"] = b'{"global_domains":["example.com"],"users":{}}'
-        if format_version in (3, 4, 5):
+        if format_version in (3, 4, 5, 6):
             manifest = {"format": format_version, "account_count": len(accounts), "sha256": {
                 name: hashlib.sha256(data).hexdigest() for name, data in members.items() if name != "manifest.json"
             }}
@@ -102,7 +102,7 @@ class BackupArchiveTests(unittest.TestCase):
             with self.subTest(member=member), tempfile.TemporaryDirectory() as temporary:
                 directory = Path(temporary)
                 path = directory / "backup.tar.gz"
-                self.make_archive(path, format_version=5, corrupt=member)
+                self.make_archive(path, format_version=6, corrupt=member)
                 extracted = directory / "extracted"
                 extracted.mkdir()
                 with self.assertRaisesRegex(ValueError, "checksum mismatch"):
@@ -141,7 +141,7 @@ class BackupArchiveTests(unittest.TestCase):
             backup.read_archive(archive, extracted)
             self.assertEqual(json.loads((extracted / "backup_schedule.json").read_text())["time"], "04:15")
 
-    def test_new_archive_carries_global_and_user_website_rules(self):
+    def test_old_website_rules_are_verified_but_not_applied(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             archive = directory / "backup.tar.gz"
@@ -150,6 +150,17 @@ class BackupArchiveTests(unittest.TestCase):
             extracted.mkdir()
             backup.read_archive(archive, extracted)
             self.assertEqual(json.loads((extracted / "site_access.json").read_text())["global_domains"], ["example.com"])
+            self.assertNotIn("site_access.json", backup.MEMBERS)
+
+    def test_new_archive_has_no_website_rules(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            archive = directory / "backup.tar.gz"
+            self.make_archive(archive, format_version=6)
+            extracted = directory / "extracted"
+            extracted.mkdir()
+            backup.read_archive(archive, extracted)
+            self.assertFalse((extracted / "site_access.json").exists())
 
     def test_main_restore_detects_full_and_users_only_archives(self):
         with tempfile.TemporaryDirectory() as temporary:

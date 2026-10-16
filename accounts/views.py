@@ -732,66 +732,7 @@ def panel_settings(request, section=None):
             "telegram_allowed_ids": "\n".join(str(item) for item in telegram.allowed_user_ids) if telegram else "",
             "backup_schedule": backup_schedule,
         })
-    elif section == "sites":
-        try:
-            site_policy = json.loads(call_helper("sites-status"))
-            if (not isinstance(site_policy, dict) or
-                    not isinstance(site_policy.get("global_domains"), list) or
-                    not isinstance(site_policy.get("users"), dict)):
-                raise ValueError("Invalid website policy response")
-        except (ProvisionError, ValueError, TypeError):
-            site_policy = {"global_domains": [], "users": {}}
-            messages.error(request, "Website rules could not be loaded.")
-        context["site_policy"] = site_policy
-        context["global_domains_text"] = "\n".join(site_policy["global_domains"])
-        context["vpn_account_search"] = list(VpnAccount.objects.order_by("username").values("id", "username"))
     return render(request, "settings.html", context)
-
-
-def submitted_site_domains(value):
-    if len(value) > 12000:
-        raise ValueError("Website list is too long.")
-    return [line.strip() for line in value.splitlines() if line.strip()]
-
-
-@staff_required
-@require_POST
-def save_global_sites(request):
-    try:
-        domains = submitted_site_domains(request.POST.get("domains", ""))
-        call_helper("sites-global", domains=domains)
-    except (ValueError, ProvisionError) as exc:
-        record(request, "server", "sites-global", False)
-        messages.error(request, str(exc))
-    else:
-        record(request, "server", "sites-global", True)
-        messages.success(request, "Website rules for all VPN users saved.")
-    return redirect("settings_sites")
-
-
-@staff_required
-@require_POST
-def save_user_sites(request):
-    account_id = request.POST.get("account_id", "")
-    if not account_id.isdecimal():
-        messages.error(request, "Select a user from the search results.")
-        return redirect("settings_sites")
-    account = get_object_or_404(VpnAccount, pk=account_id)
-    mode = request.POST.get("mode")
-    try:
-        if mode not in ("custom", "inherit"):
-            raise ValueError("Choose a website rule mode.")
-        domains = submitted_site_domains(request.POST.get("domains", "")) if mode == "custom" else None
-        if mode == "custom" and not domains:
-            raise ValueError("Enter at least one hostname for a custom rule.")
-        call_helper("sites-user", username=account.username, domains=domains)
-    except (ValueError, ProvisionError) as exc:
-        record(request, account.username, "sites-user-remove" if mode == "inherit" else "sites-user", False)
-        messages.error(request, str(exc))
-    else:
-        record(request, account.username, "sites-user-remove" if mode == "inherit" else "sites-user", True)
-        messages.success(request, "Custom firewall rule removed; this user now uses the global list." if mode == "inherit" else "User website rules saved.")
-    return redirect("settings_sites")
 
 
 @staff_required

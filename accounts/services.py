@@ -37,7 +37,7 @@ def call_helper(action, username=None, password=None, *, expires_at=None, valid_
         result = subprocess.run(
             ["sudo", "-n", "/usr/local/sbin/sshvpnctl", action],
             input=json.dumps(payload), text=True, capture_output=True,
-            timeout=120 if action in ("sites-global", "sites-user") else 15, check=False,
+            timeout=15, check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise ProvisionError("The account service is unavailable.") from exc
