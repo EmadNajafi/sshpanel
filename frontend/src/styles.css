@@ -218,6 +218,83 @@ input[type="checkbox"], input[type="radio"] { accent-color: #636fe7; }
 .account-dialog, :root[data-theme="dark"] .account-dialog { border: 1px solid var(--line); border-radius: 19px; background: var(--surface); color: var(--text); box-shadow: 0 30px 80px #060d1f66; }
 .account-dialog::backdrop { background: #060d1fba; backdrop-filter: blur(4px); }
 .dialog-close, :root[data-theme="dark"] .dialog-close { background: var(--surface-soft); color: var(--text); }
+.account-dialog, :root[data-theme="dark"] .account-dialog {
+  position: fixed; inset: auto; top: 50%; left: 50%; margin: 0;
+  transform: translate(-50%, -50%); max-height: calc(100dvh - 36px);
+}
+:is(#create-account-dialog, #bulk-create-dialog, #edit-account-dialog) {
+  width: min(calc(100vw - 36px), 610px); padding: 0; overflow: hidden;
+}
+#bulk-create-dialog { width: min(calc(100vw - 36px), 740px); }
+:is(#create-account-dialog, #bulk-create-dialog, #edit-account-dialog)[open] {
+  display: flex; flex-direction: column;
+}
+:is(#create-account-dialog, #bulk-create-dialog, #edit-account-dialog) .dialog-heading {
+  flex: 0 0 auto; align-items: center; margin: 0; padding: 22px 26px 10px;
+}
+:is(#create-account-dialog, #bulk-create-dialog, #edit-account-dialog) .dialog-heading h2 {
+  font-size: 22px; font-weight: 850;
+}
+:is(#create-account-dialog, #bulk-create-dialog, #edit-account-dialog) > .panel-description {
+  flex: 0 0 auto; margin: 0; padding: 0 26px 18px; border-bottom: 1px solid var(--line);
+  color: var(--subtle); font-size: 12px; line-height: 1.55;
+}
+:is(#create-account-dialog, #bulk-create-dialog, #edit-account-dialog) > form {
+  display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden;
+}
+:is(#create-account-dialog, #bulk-create-dialog, #edit-account-dialog) .dialog-fields {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 20px 26px;
+  scrollbar-color: var(--line) transparent; scrollbar-width: thin;
+}
+:is(#create-account-dialog, #bulk-create-dialog, #edit-account-dialog) .dialog-actions {
+  flex: 0 0 auto; margin: 0; padding: 15px 26px; border-top: 1px solid var(--line);
+  background: var(--surface); box-shadow: 0 -8px 22px #0611220a;
+}
+:is(#create-account-dialog, #edit-account-dialog) .dialog-fields {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start; gap: 15px 16px;
+}
+:is(#create-account-dialog, #edit-account-dialog) .dialog-fields > p,
+#bulk-create-dialog .dialog-fields p { min-width: 0; margin: 0; }
+:is(#create-account-dialog, #edit-account-dialog) .dialog-fields input:not([type="checkbox"]),
+#bulk-create-dialog .dialog-fields input:not([type="checkbox"]):not([type="radio"]) { width: 100%; }
+#create-account-dialog .dialog-fields > p:has(input[type="checkbox"]) {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border: 1px solid var(--line); border-radius: 11px;
+  background: var(--surface-raised);
+}
+#create-account-dialog .dialog-fields > p:has(input[type="checkbox"]) label { margin: 0; }
+#bulk-create-dialog .bulk-grid { gap: 15px 16px; }
+#bulk-create-dialog .bulk-password-mode {
+  margin: 0; padding: 9px 12px; border-color: var(--line);
+  background: var(--surface-raised);
+}
+#bulk-create-dialog .bulk-password-mode legend { color: var(--subtle); }
+#bulk-create-dialog .bulk-password-mode label { margin: 0; }
+#bulk-create-dialog .dialog-fields > p { margin-top: 16px; }
+#bulk-create-dialog .dialog-fields textarea { min-height: 78px; resize: vertical; }
+#bulk-create-dialog .bulk-first-connection { margin-top: 14px !important; padding: 11px 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-raised); }
+#bulk-create-dialog .bulk-first-connection label { margin: 0; }
+#bulk-create-dialog label, #bulk-create-dialog legend { color: var(--text); }
+#bulk-create-dialog .panel-description, #bulk-create-dialog .helptext { color: var(--subtle); }
+#bulk-create-dialog input:not([type="checkbox"]):not([type="radio"]),
+#bulk-create-dialog textarea,
+:root[data-theme="dark"] #bulk-create-dialog input:not([type="checkbox"]):not([type="radio"]),
+:root[data-theme="dark"] #bulk-create-dialog textarea {
+  border-color: var(--line); background: var(--surface-raised); color: var(--text);
+}
+#bulk-create-dialog .dialog-close { background: var(--surface-soft); color: var(--text); }
+@media (max-width: 640px) {
+  :is(#create-account-dialog, #bulk-create-dialog, #edit-account-dialog) {
+    width: calc(100vw - 24px); max-height: calc(100dvh - 24px);
+  }
+  :is(#create-account-dialog, #bulk-create-dialog, #edit-account-dialog) .dialog-heading { padding: 18px 18px 9px; }
+  :is(#create-account-dialog, #bulk-create-dialog, #edit-account-dialog) > .panel-description { padding: 0 18px 13px; }
+  :is(#create-account-dialog, #bulk-create-dialog, #edit-account-dialog) .dialog-fields { padding: 17px 18px; }
+  :is(#create-account-dialog, #bulk-create-dialog, #edit-account-dialog) .dialog-actions { padding: 13px 18px; }
+  :is(#create-account-dialog, #edit-account-dialog) .dialog-fields,
+  #bulk-create-dialog .bulk-grid { grid-template-columns: 1fr; gap: 12px; }
+}
 .login-shell { min-height: calc(100dvh - 72px); padding: 30px 16px; background: radial-gradient(circle at 50% 12%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 43%), var(--canvas); }
 .login-card { width: min(100%, 450px); padding: 38px; }
 .login-symbol { background: linear-gradient(145deg, #929dff, #535fdc); }

@@ -136,6 +136,7 @@
   <div class="dialog-heading"><div><p class="eyebrow">BULK VPN USERS</p><h2 id="bulk-dialog-title">Create users in bulk</h2></div><button type="button" class="dialog-close" data-close-dialog aria-label="Close">×</button></div>
   <p class="panel-description">Each username gets a unique random number at or above the minimum. Up to 100 users per batch.</p>
   <form method="post" action="{% url 'bulk_create_accounts' %}" class="account-form bulk-form">{% csrf_token %}<input type="hidden" name="batch_token" value="{{ bulk_create_token }}">
+    <div class="dialog-fields">
     <div class="bulk-grid">
       <p><label for="{{ bulk_create_form.count.id_for_label }}">Number of users</label>{{ bulk_create_form.count }}</p>
       <p><label for="{{ bulk_create_form.prefix.id_for_label }}">Username prefix</label>{{ bulk_create_form.prefix }}</p>
@@ -149,6 +150,7 @@
     </div>
     <p><label for="{{ bulk_create_form.referral_note.id_for_label }}">Referral text for all users (optional)</label>{{ bulk_create_form.referral_note }}<span class="helptext">This same text is saved with every user created in the batch. It does not link to another account.</span></p>
     <p class="bulk-first-connection"><label for="{{ bulk_create_form.start_on_first_connection.id_for_label }}">{{ bulk_create_form.start_on_first_connection }} Start validity on first connection</label></p>
+    </div>
     <div class="dialog-actions"><button class="button button-secondary" type="button" data-close-dialog>Cancel</button><button class="button button-primary" type="submit">Create users</button></div>
   </form>
 </dialog>
@@ -169,7 +171,9 @@
   <div class="dialog-heading"><div><p class="eyebrow">NEW VPN USER</p><h2 id="create-dialog-title">Create account</h2></div><button type="button" class="dialog-close" data-close-dialog aria-label="Close">×</button></div>
   <p class="panel-description">SSH tunnel and SOCKS forwarding only. Shell and SFTP are blocked.</p>
   <form method="post" action="{% url 'create_account' %}" class="account-form">{% csrf_token %}
+    <div class="dialog-fields">
     {{ create_form.as_p }}
+    </div>
     <div class="dialog-actions"><button class="button button-secondary" type="button" data-close-dialog>Cancel</button><button class="button button-primary" type="submit">Create account</button></div>
   </form>
 </dialog>
@@ -178,11 +182,13 @@
   <div class="dialog-heading"><div><p class="eyebrow">ACCOUNT SETTINGS</p><h2 id="edit-dialog-title">Edit <span data-edit-name></span></h2></div><button type="button" class="dialog-close" data-close-dialog aria-label="Close">×</button></div>
   <p class="panel-description">Username stays the same. Current expiry: <strong data-edit-expires></strong>.</p>
   <form method="post" class="account-form" data-edit-form>{% csrf_token %}
+    <div class="dialog-fields">
     <p><label for="edit-referral-code">This user's referral code</label><input id="edit-referral-code" type="text" name="referral_code" autocomplete="off"><span class="helptext">Any unique length. Clear to remove the code.</span></p>
     <p><label for="edit-password">New password</label><input id="edit-password" type="password" name="password" maxlength="256" autocomplete="new-password"><span class="helptext">Leave blank to keep the current password.</span></p>
     <p><label for="edit-valid-days">New validity (days)</label><input id="edit-valid-days" type="number" name="valid_days" min="1" max="36500"><span class="helptext">Leave blank to keep the current expiry. Enter days to count from now.</span></p>
     <p><label for="edit-connections">Simultaneous connections</label><input id="edit-connections" type="number" name="max_connections" min="0" max="10000"><span class="helptext">0 means unlimited. Leave blank to keep the current limit.</span></p>
     <p><label for="edit-traffic">Traffic limit (GiB)</label><input id="edit-traffic" type="number" name="traffic_gb" min="0" max="100000" step="0.001"><span class="helptext">Blank keeps the current limit; 0 means unlimited.</span></p>
+    </div>
     <div class="dialog-actions"><button class="button button-secondary" type="button" data-close-dialog>Cancel</button><button class="button button-primary" type="submit">Save changes</button></div>
   </form>
 </dialog>
