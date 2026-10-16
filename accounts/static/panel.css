@@ -567,26 +567,26 @@ td { color: #506078; font-size: 12px; }
   .accounts-panel .mobile-account-chevron { flex: 0 0 auto; width: 9px; height: 9px; margin-inline: 5px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(225deg); transition: transform .15s ease; }
   .accounts-panel .mobile-collapsed .mobile-account-chevron { transform: rotate(45deg); }
   .accounts-panel .mobile-collapsed .account-created { display: none; }
-  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td:nth-child(5) { order: 1; }
-  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td:nth-child(6) { order: 2; }
-  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td:nth-child(3) { order: 3; }
-  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td:nth-child(4) { order: 4; }
-  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td:nth-child(7) { order: 5; }
-  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td:nth-child(8) { order: 6; }
-  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td:nth-child(9) { order: 7; }
-  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td:nth-child(10) { order: 8; }
-  .accounts-panel .table-scroll tbody tr.mobile-collapsed td:nth-child(3),
-  .accounts-panel .table-scroll tbody tr.mobile-collapsed td:nth-child(4),
-  .accounts-panel .table-scroll tbody tr.mobile-collapsed td:nth-child(7),
-  .accounts-panel .table-scroll tbody tr.mobile-collapsed td:nth-child(8),
-  .accounts-panel .table-scroll tbody tr.mobile-collapsed td:nth-child(9),
-  .accounts-panel .table-scroll tbody tr.mobile-collapsed td:nth-child(10) { display: none; }
-  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready:not(.mobile-collapsed) td:nth-child(3) { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
-  .accounts-panel .table-scroll tbody td:nth-child(3),
-  .accounts-panel .table-scroll tbody td:nth-child(4),
-  .accounts-panel .table-scroll tbody td:nth-child(7),
-  .accounts-panel .table-scroll tbody td:nth-child(10) { grid-column: 1 / -1; }
-  .accounts-panel .table-scroll tbody td:nth-child(10) { padding-top: 7px; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td[data-account-state] { order: 1; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td[data-online-status] { order: 2; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td.password-column { order: 3; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td.account-limit-cell { order: 4; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td.account-days-cell { order: 5; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td.referral-cell { order: 6; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td.usage-cell { order: 7; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready td.account-actions-cell { order: 8; }
+  .accounts-panel .table-scroll tbody tr.mobile-collapsed td.password-column,
+  .accounts-panel .table-scroll tbody tr.mobile-collapsed td.account-limit-cell,
+  .accounts-panel .table-scroll tbody tr.mobile-collapsed td.account-days-cell,
+  .accounts-panel .table-scroll tbody tr.mobile-collapsed td.referral-cell,
+  .accounts-panel .table-scroll tbody tr.mobile-collapsed td.usage-cell,
+  .accounts-panel .table-scroll tbody tr.mobile-collapsed td.account-actions-cell { display: none; }
+  .accounts-panel .table-scroll tbody tr.mobile-accordion-ready:not(.mobile-collapsed) td.password-column { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .accounts-panel .table-scroll tbody td.password-column,
+  .accounts-panel .table-scroll tbody td.referral-cell,
+  .accounts-panel .table-scroll tbody td.usage-cell,
+  .accounts-panel .table-scroll tbody td.account-actions-cell { grid-column: 1 / -1; }
+  .accounts-panel .table-scroll tbody td.account-actions-cell { padding-top: 7px; }
   .accounts-panel .table-scroll tbody tr[data-account-list-empty],
   .accounts-panel .table-scroll tbody tr[data-filter-empty] { margin: 0; padding: 10px 2px; border: 0; border-radius: 0; background: transparent; }
   .accounts-panel .password-cell, .accounts-panel .referral-cell { max-width: none; }

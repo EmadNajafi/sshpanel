@@ -618,7 +618,7 @@ class AccountViewsTests(TestCase):
         page = self.client.get(reverse("dashboard"))
         self.assertContains(page, "visible-pass")
         self.assertContains(page, 'class="state state-disabled-account">Disabled</span>')
-        self.assertContains(page, "<th>Account</th><th>Password</th><th>Referral</th>", html=False)
+        self.assertContains(page, "<th>Account</th><th>Password</th><th>Limit</th><th>Days left</th><th>Referral</th>", html=False)
         self.assertNotContains(page, "data-reveal-password")
         self.assertNotContains(page, "referrals ·")
         self.assertIn("no-store", page["Cache-Control"])

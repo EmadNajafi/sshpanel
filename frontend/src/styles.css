@@ -208,8 +208,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: #636fe7; }
 .accounts-panel .account-name-button { max-width: 100%; font-size: 13px; line-height: 1.35; }
 .accounts-panel .account-created { margin-top: 6px; line-height: 1.35; white-space: nowrap; }
 .accounts-panel .account-created time { display: inline-block; direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
-.accounts-panel .password-column { min-width: 92px; }
-.accounts-panel .password-cell { width: fit-content; max-width: 100%; margin-inline-end: auto; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); font-size: 11px; line-height: 1.35; }
+.accounts-panel .password-column { min-width: 110px; }
+.accounts-panel .password-cell { display: inline-block; width: auto; max-width: 100%; margin: 0; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); font-size: 11px; line-height: 1.35; vertical-align: middle; }
 .accounts-panel .password-cell:not(:has([data-password-value])) { padding: 0; border: 0; background: transparent; color: var(--subtle); line-height: 1.5; }
 .accounts-panel .referral-cell { min-width: 96px; max-width: 220px; }
 .accounts-panel .referral-value { display: block; font-size: 12px; line-height: 1.45; font-weight: 750; overflow-wrap: anywhere; }
@@ -224,6 +224,12 @@ input[type="checkbox"], input[type="radio"] { accent-color: #636fe7; }
   .accounts-panel .account-actions-cell { width: 171px; min-width: 171px; }
   .accounts-panel .row-actions { display: grid; grid-template-columns: repeat(4, 34px); width: max-content; min-width: 0; gap: 5px; }
   .accounts-panel .row-actions form { width: 34px; height: 34px; }
+}
+@media (min-width: 721px) and (max-width: 1320px) {
+  .accounts-panel .table-scroll th, .accounts-panel .table-scroll td { padding-inline: 7px; }
+  .accounts-panel .password-column { min-width: 106px; }
+  .accounts-panel .account-actions-cell { width: 160px; min-width: 160px; }
+  .accounts-panel .row-actions { gap: 3px; }
 }
 
 /* Settings, backups, audit and forms */
