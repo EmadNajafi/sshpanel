@@ -1,18 +1,35 @@
 (() => {
   const themeButton = document.querySelector("[data-theme-toggle]");
   if (themeButton) {
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+    const savedTheme = () => {
+      try { return localStorage.getItem("sshvpn-theme"); } catch (_) { return null; }
+    };
     const updateThemeButton = () => {
       const dark = document.documentElement.dataset.theme === "dark";
+      const label = dark ? "Switch to light mode" : "Switch to dark mode";
+      const translatedLabel = window.panelT ? window.panelT(label) : label;
       themeButton.setAttribute("aria-pressed", String(dark));
-      themeButton.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
-      themeButton.querySelector("[data-theme-label]").textContent = dark ? "Light mode" : "Dark mode";
+      themeButton.setAttribute("aria-label", translatedLabel);
+      themeButton.setAttribute("title", translatedLabel);
+      if (themeColor) themeColor.content = dark ? "#081b18" : "#f3f6fb";
+    };
+    const applyTheme = (theme) => {
+      document.documentElement.dataset.theme = theme;
+      updateThemeButton();
     };
     updateThemeButton();
     themeButton.addEventListener("click", () => {
       const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-      document.documentElement.dataset.theme = next;
       try { localStorage.setItem("sshvpn-theme", next); } catch (_) { /* Private browsing may block storage. */ }
-      updateThemeButton();
+      applyTheme(next);
+    });
+    systemTheme.addEventListener?.("change", () => {
+      if (savedTheme() !== "dark" && savedTheme() !== "light") applyTheme(systemTheme.matches ? "dark" : "light");
+    });
+    window.addEventListener("storage", (event) => {
+      if (event.key === "sshvpn-theme") applyTheme(event.newValue === "dark" || event.newValue === "light" ? event.newValue : (systemTheme.matches ? "dark" : "light"));
     });
   }
 
