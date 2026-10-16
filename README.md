@@ -2,6 +2,8 @@
 
 A web panel for password based OpenSSH SOCKS and local forwarding accounts on Ubuntu 24.04. The public repository can be installed directly on a new server.
 
+The interface uses React for navigation, live resource indicators and account overview cards, with Tailwind CSS for the shared visual system across the dashboard, account dialogs, settings, backups, audit log and sign-in. The compiled JavaScript and CSS are committed under `accounts/static/`, so installing or updating the panel does not require Node.js on the server. To rebuild the frontend locally, run `cd frontend && npm ci && npm run build` and commit both source and generated assets. Existing Django forms and routes continue to handle account and server operations.
+
 ## Components
 
 - Django staff sign in, account creation and editing with active days and simultaneous VPN connection limit, quick 30/60/90-day renewal, traffic reset, disabling, enabling, password reset, deletion, and audit events. The account list shows remaining days; row actions use labeled icons. The copy action includes host, SSH port, username, password, exact expiry in the Persian calendar and Tehran time, and connection limit.

@@ -2,13 +2,15 @@
   "name": "sshvpn-panel-ui",
   "private": true,
   "scripts": {
-    "build": "node build.cjs"
+    "build": "node build.cjs && tailwindcss -i src/styles.css -o ../accounts/static/panel-tailwind.css --minify"
   },
   "dependencies": {
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },
   "devDependencies": {
-    "esbuild-wasm": "0.25.12"
+    "@tailwindcss/cli": "^4.1.16",
+    "esbuild-wasm": "0.25.12",
+    "tailwindcss": "^4.1.16"
   }
 }

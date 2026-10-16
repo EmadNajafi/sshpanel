@@ -35,9 +35,9 @@ function AccountOverview({ element }) {
     { key: "online", title: "Online now", detail: "Connected users, updated live" },
     { key: "inactive", title: "Inactive users", detail: "Disabled, expired or out of traffic" },
   ];
-  return <section className="summary-grid" aria-label="VPN account overview">
+  return <section className="summary-grid grid gap-4 md:grid-cols-3" aria-label="VPN account overview">
     {cards.map(({ key, title, detail }) =>
-      <button className={`summary-card summary-${key}`} type="button" data-summary-filter={key}
+      <button className={`summary-card summary-${key} group relative text-start transition-all duration-200`} type="button" data-summary-filter={key}
               aria-pressed={filter === key} key={key}>
         <span className="summary-icon" aria-hidden="true"><SummaryIcon type={key} /></span>
         <span className="summary-label">{title}</span>
@@ -47,6 +47,31 @@ function AccountOverview({ element }) {
       </button>
     )}
   </section>;
+}
+
+function NavIcon({ type }) {
+  const shared = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8,
+    strokeLinecap: "round", strokeLinejoin: "round", className: "h-5 w-5" };
+  if (type === "users") return <svg {...shared}><circle cx="9" cy="8" r="3"/><path d="M3.5 20v-2a5.5 5.5 0 0 1 11 0v2H3.5Zm13-14a3 3 0 0 1 0 6M17 16a4 4 0 0 1 3.5 4"/></svg>;
+  if (type === "history") return <svg {...shared}><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 7v5l3 2"/></svg>;
+  if (type === "backup") return <svg {...shared}><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18m-9 4v4m-2-2h4"/></svg>;
+  return <svg {...shared}><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg>;
+}
+
+function WorkspaceNavigation({ element }) {
+  const items = [
+    { key: "dashboard", label: "Dashboard", description: "Users and live sessions", icon: "users", href: element.dataset.dashboardUrl },
+    { key: "audit", label: "Audit log", description: "Activity and changes", icon: "history", href: element.dataset.auditUrl },
+    { key: "settings", label: "Settings", description: "Access and security", icon: "settings", href: element.dataset.settingsUrl },
+    { key: "backup", label: "Backup & recovery", description: "Protect your data", icon: "backup", href: element.dataset.backupUrl },
+  ];
+  return <nav className="workspace-nav grid gap-1" aria-label="Panel navigation">
+    {items.map((item) => <a key={item.key} href={item.href} aria-current={element.dataset.active === item.key ? "page" : undefined}
+      className={`workspace-nav-link flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${element.dataset.active === item.key ? "is-active" : ""}`}>
+      <span className="workspace-nav-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" aria-hidden="true"><NavIcon type={item.icon} /></span>
+      <span className="min-w-0"><strong className="block text-sm font-semibold">{item.label}</strong><small className="block text-xs">{item.description}</small></span>
+    </a>)}
+  </nav>;
 }
 
 function initialMetric(element, name) {
@@ -105,5 +130,7 @@ function ServerResources({ element }) {
 const accountElement = document.getElementById("account-overview-root");
 if (accountElement) createRoot(accountElement).render(<AccountOverview element={accountElement} />);
 
-const resourceElement = document.getElementById("server-resources-root");
-if (resourceElement) createRoot(resourceElement).render(<ServerResources element={resourceElement} />);
+document.querySelectorAll("[data-server-resources-root]").forEach((element) =>
+  createRoot(element).render(<ServerResources element={element} />));
+document.querySelectorAll("[data-workspace-navigation]").forEach((element) =>
+  createRoot(element).render(<WorkspaceNavigation element={element} />));

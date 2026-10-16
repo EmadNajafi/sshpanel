@@ -8,12 +8,13 @@
   <title>{% block title %}SSH VPN Panel{% endblock %}</title>
   <script>try { document.documentElement.dataset.theme = localStorage.getItem('sshvpn-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch (_) { document.documentElement.dataset.theme = 'light'; } {% if not user.is_authenticated %}try { const language = sessionStorage.getItem('sshvpn-login-language'); if (language === 'fa' || language === 'en') { document.documentElement.lang = language; document.documentElement.dir = language === 'fa' ? 'rtl' : 'ltr'; } } catch (_) { /* Keep the server language. */ }{% endif %}</script>
   <link rel="stylesheet" href="{% static 'panel.css' %}?v=33">
+  <link rel="stylesheet" href="{% static 'panel-tailwind.css' %}?v=1">
   <script src="{% static 'i18n.js' %}?v=15" defer></script>
   <script src="{% static 'panel.js' %}?v=4" defer></script>
   {% if user.is_authenticated %}<script src="{% static 'overview-react.js' %}?v=5" defer></script>{% endif %}
   {% block scripts %}{% endblock %}
 </head>
-<body>
+<body class="{% if user.is_authenticated %}workspace-authenticated{% else %}workspace-guest{% endif %}">
   <header class="site-header">
     <div class="site-header-inner{% if user.is_authenticated %} has-menu{% endif %}">
       {% if user.is_authenticated %}<button class="menu-toggle" type="button" aria-label="Open navigation menu" aria-controls="panel-menu" aria-expanded="false" data-menu-toggle><span class="menu-bars" aria-hidden="true"><span></span><span></span><span></span></span><span>Menu</span></button>{% endif %}
@@ -31,19 +32,27 @@
     </div>
   </header>
   {% if user.is_authenticated %}
+  <aside class="workspace-sidebar" aria-label="Workspace">
+    <a class="workspace-sidebar-brand" href="{% url 'dashboard' %}"><span class="workspace-mark" aria-hidden="true">S</span><span><strong>SSH VPN</strong><small>CONTROL CENTER</small></span></a>
+    <p class="workspace-kicker">WORKSPACE</p>
+    <div data-workspace-navigation data-dashboard-url="{% url 'dashboard' %}" data-audit-url="{% url 'audit_log' %}" data-settings-url="{% url 'panel_settings' %}" data-backup-url="{% url 'backup_settings' %}" data-active="{% if request.resolver_match.url_name == 'dashboard' %}dashboard{% elif request.resolver_match.url_name == 'audit_log' %}audit{% elif request.resolver_match.url_name == 'backup_settings' %}backup{% else %}settings{% endif %}">
+      <nav class="workspace-nav" aria-label="Panel navigation"><a class="workspace-nav-link" href="{% url 'dashboard' %}" {% if request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}>Dashboard</a><a class="workspace-nav-link" href="{% url 'audit_log' %}" {% if request.resolver_match.url_name == 'audit_log' %}aria-current="page"{% endif %}>Audit log</a><a class="workspace-nav-link" href="{% url 'panel_settings' %}">Settings</a><a class="workspace-nav-link" href="{% url 'backup_settings' %}">Backup &amp; recovery</a></nav>
+    </div>
+    <div class="workspace-sidebar-bottom">
+      <p class="workspace-kicker">SERVER HEALTH <span class="drawer-live-dot" aria-hidden="true"></span></p>
+      <div data-server-resources-root data-metrics-url="{% url 'system_metrics' %}" data-cpu="{{ metrics.cpu.percent|default_if_none:'' }}" data-cpu-detail="{{ metrics.cpu.detail|default:'' }}" data-memory="{{ metrics.memory.percent|default_if_none:'' }}" data-memory-detail="{{ metrics.memory.detail|default:'' }}" data-disk="{{ metrics.disk.percent|default_if_none:'' }}" data-disk-detail="{{ metrics.disk.detail|default:'' }}"></div>
+      <div class="workspace-profile"><span class="workspace-avatar" aria-hidden="true">{{ user.username|slice:':1'|upper }}</span><span><strong>{{ user.username }}</strong><small>Administrator</small></span><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" title="Sign out" aria-label="Sign out">↗</button></form></div>
+    </div>
+  </aside>
   <dialog id="panel-menu" class="nav-drawer" aria-labelledby="drawer-title">
     <div class="drawer-content">
       <div class="drawer-head"><div><p class="eyebrow">SSH VPN PANEL</p><h2 id="drawer-title">Navigation</h2></div><button class="drawer-close" type="button" data-menu-close aria-label="Close menu">×</button></div>
       <div class="drawer-profile"><span class="drawer-avatar" aria-hidden="true">{{ user.username|slice:':1'|upper }}</span><span><strong>{{ user.username }}</strong><small>Administrator account</small></span></div>
       <p class="drawer-section-label">WORKSPACE</p>
-      <nav class="drawer-links" aria-label="Panel navigation">
-        <a class="drawer-link {% if request.resolver_match.url_name == 'dashboard' %}is-active{% endif %}" href="{% url 'dashboard' %}" {% if request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}><span class="drawer-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><span><strong>Dashboard</strong><small>Users and server overview</small></span></a>
-        <a class="drawer-link {% if request.resolver_match.url_name == 'audit_log' %}is-active{% endif %}" href="{% url 'audit_log' %}" {% if request.resolver_match.url_name == 'audit_log' %}aria-current="page"{% endif %}><span class="drawer-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 4h10a2 2 0 0 1 2 2v14H8a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4Z"/><path d="M4 16a4 4 0 0 1 4-4h12M9 8h7"/></svg></span><span><strong>Audit log</strong><small>Account activity history</small></span></a>
-        <a class="drawer-link {% if request.resolver_match.url_name == 'panel_settings' or request.resolver_match.url_name == 'settings_ssh' or request.resolver_match.url_name == 'settings_web' or request.resolver_match.url_name == 'settings_admin' or request.resolver_match.url_name == 'settings_telegram' or request.resolver_match.url_name == 'backup_settings' %}is-active{% endif %}" href="{% url 'panel_settings' %}" {% if request.resolver_match.url_name == 'panel_settings' or request.resolver_match.url_name == 'settings_ssh' or request.resolver_match.url_name == 'settings_web' or request.resolver_match.url_name == 'settings_admin' or request.resolver_match.url_name == 'settings_telegram' or request.resolver_match.url_name == 'backup_settings' %}aria-current="page"{% endif %}><span class="drawer-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="white"/><circle cx="15" cy="17" r="2" fill="white"/></svg></span><span><strong>Settings</strong><small>Access, port, and backups</small></span></a>
-      </nav>
+      <div class="drawer-links" data-workspace-navigation data-dashboard-url="{% url 'dashboard' %}" data-audit-url="{% url 'audit_log' %}" data-settings-url="{% url 'panel_settings' %}" data-backup-url="{% url 'backup_settings' %}" data-active="{% if request.resolver_match.url_name == 'dashboard' %}dashboard{% elif request.resolver_match.url_name == 'audit_log' %}audit{% elif request.resolver_match.url_name == 'backup_settings' %}backup{% else %}settings{% endif %}"><nav class="workspace-nav" aria-label="Panel navigation"><a class="workspace-nav-link" href="{% url 'dashboard' %}" {% if request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}>Dashboard</a><a class="workspace-nav-link" href="{% url 'audit_log' %}" {% if request.resolver_match.url_name == 'audit_log' %}aria-current="page"{% endif %}>Audit log</a><a class="workspace-nav-link" href="{% url 'panel_settings' %}">Settings</a><a class="workspace-nav-link" href="{% url 'backup_settings' %}">Backup &amp; recovery</a></nav></div>
       <div class="drawer-health" aria-label="Server resource usage">
         <p class="drawer-section-label">SERVER RESOURCES <span class="drawer-live-dot" aria-hidden="true"></span></p>
-        <div id="server-resources-root" data-metrics-url="{% url 'system_metrics' %}"
+        <div id="server-resources-root" data-server-resources-root data-metrics-url="{% url 'system_metrics' %}"
              data-cpu="{{ metrics.cpu.percent|default_if_none:'' }}" data-cpu-detail="{{ metrics.cpu.detail|default:'' }}"
              data-memory="{{ metrics.memory.percent|default_if_none:'' }}" data-memory-detail="{{ metrics.memory.detail|default:'' }}"
              data-disk="{{ metrics.disk.percent|default_if_none:'' }}" data-disk-detail="{{ metrics.disk.detail|default:'' }}">

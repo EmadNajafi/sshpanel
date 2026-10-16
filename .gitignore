@@ -6,3 +6,5 @@ __pycache__/
 staticfiles/
 .pytest_cache/
 frontend/node_modules/
+.local-test-deps/
+.tmp/

@@ -35,6 +35,9 @@
   const fa = {
     "Control panel": "پنل مدیریت", "SSH VPN PANEL": "پنل SSH VPN", "Administrator": "مدیر", "Administrator account": "حساب مدیر",
     "Dashboard": "داشبورد", "Overview": "داشبورد", "Users and server overview": "کاربران و وضعیت سرور",
+    "Users and live sessions": "کاربران و اتصال‌های زنده", "Activity and changes": "فعالیت‌ها و تغییرات",
+    "Access and security": "دسترسی و امنیت", "Protect your data": "حفاظت از اطلاعات",
+    "Backup & recovery": "پشتیبان‌گیری و بازیابی", "SERVER HEALTH": "وضعیت سرور", "CONTROL CENTER": "مرکز مدیریت",
     "Audit log": "گزارش فعالیت", "Account activity history": "تاریخچهٔ فعالیت حساب‌ها",
     "Settings": "تنظیمات", "Access, port, and backups": "دسترسی، پورت و پشتیبان‌گیری",
     "Dark mode": "حالت تاریک", "Light mode": "حالت روشن", "Menu": "منو",
