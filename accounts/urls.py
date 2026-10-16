@@ -7,6 +7,7 @@ urlpatterns = [
     path("audit-log/", views.audit_log, name="audit_log"),
     path("api/system-metrics/", views.system_metrics, name="system_metrics"),
     path("api/account-usage/", views.account_usage, name="account_usage"),
+    path("api/accounts/<int:pk>/isp/", views.account_isp, name="account_isp"),
     path("accounts/new/", views.create_account, name="create_account"),
     path("accounts/bulk-new/", views.bulk_create_accounts, name="bulk_create_accounts"),
     path("accounts/bulk-action/", views.bulk_account_action, name="bulk_account_action"),

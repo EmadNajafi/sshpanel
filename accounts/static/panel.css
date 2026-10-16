@@ -239,6 +239,8 @@ td { color: #506078; font-size: 12px; }
 .online-trigger:hover { background: #d8f3e7; }
 .sessions-list { list-style: none; margin: 0; padding: 0; }
 .sessions-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid #edf1f6; }
+.session-details { display: grid; gap: 4px; min-width: 0; }
+.sessions-list .session-isp { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .sessions-list span { color: var(--muted); font-size: 12px; }
 .sessions-list code { color: var(--ink); font-size: 13px; overflow-wrap: anywhere; text-align: right; }
 .usage-total { display: block; color: #25354f; font-size: 12px; white-space: nowrap; }

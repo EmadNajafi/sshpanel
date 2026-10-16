@@ -344,6 +344,7 @@
     const row = trigger.closest("[data-account-username]");
     if (!row) return;
     const username = row.dataset.accountUsername;
+    const ispUrl = row.dataset.ispUrl;
     const list = sessionsDialog.querySelector("[data-sessions-list]");
     sessionsDialog.querySelector("[data-sessions-name]").textContent = username;
     list.replaceChildren();
@@ -367,12 +368,38 @@
       } else {
         ips.forEach((ip, index) => {
           const item = document.createElement("li");
+          const details = document.createElement("div");
+          details.className = "session-details";
           const label = document.createElement("span");
           label.textContent = `Connection ${index + 1}`;
           const address = document.createElement("code");
           address.textContent = ip ?? "IP unavailable — reconnect needed";
-          item.append(label, address);
+          const isp = document.createElement("small");
+          isp.className = "session-isp";
+          const ispLabel = document.createElement("span");
+          ispLabel.textContent = "ISP:";
+          const ispValue = document.createElement("bdi");
+          ispValue.dataset.ispValue = "";
+          ispValue.textContent = window.panelT?.(ip ? "Loading…" : "Unavailable") ?? (ip ? "Loading…" : "Unavailable");
+          isp.append(ispLabel, " ", ispValue);
+          details.append(label, isp);
+          item.append(details, address);
           list.append(item);
+          if (ip && ispUrl) {
+            const url = new URL(ispUrl, window.location.href);
+            url.searchParams.set("ip", ip);
+            fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" }, cache: "no-store" })
+              .then((response) => {
+                if (!response.ok) throw new Error("ISP lookup failed");
+                return response.json();
+              })
+              .then((result) => {
+                if (isp.isConnected && result.ip === ip) ispValue.textContent = result.isp || (window.panelT?.("Unavailable") ?? "Unavailable");
+              })
+              .catch(() => {
+                if (isp.isConnected) ispValue.textContent = window.panelT?.("Unavailable") ?? "Unavailable";
+              });
+          }
         });
       }
     } catch (_error) {

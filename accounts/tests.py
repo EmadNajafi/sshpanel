@@ -1,10 +1,12 @@
 from unittest.mock import patch
 from io import StringIO
+from io import BytesIO
 from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import Client, TestCase, override_settings
@@ -710,6 +712,33 @@ class AccountViewsTests(TestCase):
     def test_usage_units(self):
         self.assertEqual(format_bytes(0), "0 B")
         self.assertEqual(format_bytes(1024), "1.0 KiB")
+
+    @patch("accounts.views.get_account_usage")
+    @patch("accounts.isp.urlopen")
+    def test_live_isp_lookup_is_scoped_to_active_account_and_cached(self, urlopen, usage):
+        account = VpnAccount.objects.create(username="alice", created_by=self.staff)
+        url = reverse("account_isp", args=[account.pk])
+        usage.return_value = {"alice": {"ips": ["8.8.4.4", "127.0.0.1"]}}
+        urlopen.return_value = BytesIO(b'{"success":true,"ip":"8.8.4.4","connection":{"isp":"Example ISP"}}')
+        cache.clear()
+        response = self.client.get(url, {"ip": "8.8.4.4"})
+        self.assertEqual(response.json(), {"ip": "8.8.4.4", "isp": "Example ISP"})
+        self.assertIn("no-store", response["Cache-Control"])
+        self.assertEqual(self.client.get(url, {"ip": "8.8.4.4"}).json()["isp"], "Example ISP")
+        urlopen.assert_called_once()
+        self.assertEqual(self.client.get(url, {"ip": "8.8.8.8"}).status_code, 404)
+        self.assertEqual(self.client.get(url, {"ip": "127.0.0.1"}).json()["isp"], None)
+        urlopen.assert_called_once()
+        self.client.logout()
+        self.assertEqual(self.client.get(url, {"ip": "8.8.4.4"}).status_code, 302)
+
+    @patch("accounts.views.get_account_usage", return_value={"alice": {"ips": ["8.8.4.4"]}})
+    @patch("accounts.isp.urlopen", side_effect=OSError("upstream unavailable"))
+    def test_isp_failure_does_not_hide_live_ip(self, urlopen, usage):
+        account = VpnAccount.objects.create(username="alice", created_by=self.staff)
+        cache.clear()
+        response = self.client.get(reverse("account_isp", args=[account.pk]), {"ip": "8.8.4.4"})
+        self.assertEqual(response.json(), {"ip": "8.8.4.4", "isp": None})
 
     @patch("accounts.views.get_system_metrics", return_value={})
     @patch("accounts.views.get_account_usage", return_value={})

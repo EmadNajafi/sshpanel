@@ -100,6 +100,7 @@
     "CONNECTION DETAILS": "اطلاعات اتصال", "Copy manually": "کپی دستی",
     "Automatic clipboard access is unavailable in this browser. Select and copy the details below.": "دسترسی خودکار به کلیپ‌بورد در این مرورگر ممکن نیست. متن زیر را انتخاب و کپی کنید.",
     "LIVE CONNECTIONS": "اتصال‌های فعال", "IP addresses": "نشانی‌های IP",
+    "ISP:": "ارائه‌دهندهٔ اینترنت:", "Loading…": "در حال دریافت…",
     "Addresses of currently connected SSH VPN clients.": "نشانی IP کاربران SSH VPN که اکنون متصل‌اند.",
     "NEW VPN USER": "کاربر VPN جدید", "Create account": "ساخت کاربر",
     "SSH tunnel and SOCKS forwarding only. Shell and SFTP are blocked.": "فقط تونل SSH و SOCKS مجاز است؛ شِل و SFTP مسدود هستند.",
@@ -366,7 +367,7 @@
 
   if (language !== "fa") return;
   document.title = translated(document.title);
-  const ignored = ".account-name, [data-password-value], [data-username], [data-password], [data-referral], [data-referral-value], [data-referral-user], [data-sessions-name], .drawer-avatar, .drawer-profile strong, code, pre, script, style, [data-language-toggle]";
+  const ignored = ".account-name, [data-password-value], [data-username], [data-password], [data-referral], [data-referral-value], [data-referral-user], [data-sessions-name], [data-isp-value], .drawer-avatar, .drawer-profile strong, code, pre, script, style, [data-language-toggle]";
   const attributes = ["aria-label", "placeholder", "title"];
   function translateNode(node) {
     if (node.nodeType === Node.TEXT_NODE) {

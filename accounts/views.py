@@ -22,6 +22,7 @@ from django.views.decorators.cache import never_cache
 from django.utils import timezone
 
 from .forms import BulkCreateAccountForm, CreateAccountForm, EditAccountForm, PasswordForm
+from .isp import lookup_isp
 from .backups import BACKUP_DIR, BACKUP_NAME, UPLOAD_DIR, BackupError, call_backup, list_backups, save_upload
 from .models import AuditEvent, PanelAppearance, TelegramBotConfig, VpnAccount, normalized_referral_code, referral_code_digest
 from .services import ProvisionError, call_helper, get_ssh_port
@@ -179,6 +180,22 @@ def account_usage(request):
     response = JsonResponse({"accounts": usage, "available": usage is not None,
                              "activated": [account.username for account in accounts if account.activated_at is not None],
                              "summary": account_summary(accounts, usage, timezone.now())})
+    response["Cache-Control"] = "no-store, private"
+    return response
+
+
+@staff_required
+@require_GET
+def account_isp(request, pk):
+    """Resolve only an IP currently connected to this account."""
+    account = get_object_or_404(VpnAccount, pk=pk)
+    ip = request.GET.get("ip", "")
+    usage = get_account_usage()
+    if usage is None:
+        return JsonResponse({"error": "Usage unavailable."}, status=503)
+    if not ip or ip not in usage.get(account.username, {}).get("ips", []):
+        raise Http404
+    response = JsonResponse({"ip": ip, "isp": lookup_isp(ip)})
     response["Cache-Control"] = "no-store, private"
     return response
 
