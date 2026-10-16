@@ -75,6 +75,7 @@ temp_dir=$(mktemp -d)
 trap 'rm -rf -- "$temp_dir"' EXIT
 python3 - "$ssh_config" "$temp_dir/sshd_config" "$marker" <<'PY'
 from pathlib import Path
+import re
 import sys
 
 source = Path(sys.argv[1]).read_text()
@@ -94,11 +95,29 @@ Match Group sshvpn
     MaxSessions 0
     ForceCommand /usr/sbin/nologin
 """
-if source.count(marker) != 1 or source[source.index(marker):].rstrip() != block.rstrip():
+if source.count(marker) != 1:
     raise SystemExit("Managed SSH block has changed; review sshd_config before uninstalling.")
-Path(sys.argv[2]).write_text(source[:source.index(marker)].rstrip() + "\n")
+prefix, managed = source.split(marker, 1)
+managed_lines = (marker + managed).rstrip().splitlines()
+expected_lines = block.rstrip().splitlines()
+port_line = ""
+if len(managed_lines) == len(expected_lines) + 1 and managed_lines[0] == marker:
+    match = re.fullmatch(r"Port ([1-9][0-9]{0,4})", managed_lines[1])
+    if match and int(match.group(1)) <= 65535:
+        port_line = managed_lines.pop(1) + "\n"
+if managed_lines != expected_lines:
+    raise SystemExit("Managed SSH block has changed; review sshd_config before uninstalling.")
+if port_line and re.search(r"(?im)^\s*(?:Port\s+\d+|Match\s+)", prefix):
+    raise SystemExit("SSH port placement is ambiguous; review sshd_config before uninstalling.")
+Path(sys.argv[2]).write_text(prefix.rstrip() + "\n" + port_line)
 PY
 /usr/sbin/sshd -t -f "$temp_dir/sshd_config"
+current_ports=$(/usr/sbin/sshd -T | awk '$1 == "port" { print $2 }')
+remaining_ports=$(/usr/sbin/sshd -T -f "$temp_dir/sshd_config" | awk '$1 == "port" { print $2 }')
+if [[ "$remaining_ports" != "$current_ports" ]]; then
+  echo 'Uninstall would change the administrator SSH port; no changes made.' >&2
+  exit 1
+fi
 if [[ $(grep -Fxc "$hook" "$pam_config" || true) != 1 ]] || \
    [[ $(grep -Fc '/usr/local/sbin/sshvpn-authz' "$pam_config" || true) != 1 ]]; then
   echo 'The SSH PAM hook has changed; review it before uninstalling.' >&2
