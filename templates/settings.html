@@ -61,6 +61,7 @@
             <div><label for="panel-web-path">Private path</label><input id="panel-web-path" name="path" type="text" maxlength="65" value="{{ panel_web_path }}" autocomplete="off" spellcheck="false" required><span class="helptext">One segment, such as /my-panel. Use / to open the panel at the root.</span></div>
             <div><label for="panel-web-port">{% if tls_enabled %}HTTPS{% else %}HTTP{% endif %} port</label><input id="panel-web-port" name="port" type="number" min="{% if tls_enabled %}443{% else %}80{% endif %}" max="65535" value="{{ panel_web_port }}" required><span class="helptext">Use {% if tls_enabled %}443{% else %}80{% endif %} or a port from 1024 to 65535.</span></div>
             <p class="settings-field-note">Allow the new port in your server and provider firewalls. {% if tls_enabled %}Port 80 stays available for certificate renewal.{% endif %} The new address applies automatically; a failed local check restores the previous address.</p>
+            {% if not tls_enabled %}<p class="settings-field-note">To keep this port when enabling SSL, choose a custom port from 1024 to 65535. Port 80 must remain HTTP for certificate renewal and other sites.</p>{% endif %}
             <button class="button button-primary" type="submit">Change web address</button>
           </form>
         {% endif %}

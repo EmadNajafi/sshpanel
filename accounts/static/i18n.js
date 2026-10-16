@@ -149,6 +149,7 @@
     "One segment, such as /my-panel. Use / to open the panel at the root.": "یک بخش مانند ‎/my-panel‎؛ برای باز کردن پنل در ریشه از / استفاده کنید.",
     "Allow the new port in your server and provider firewalls.": "پورت جدید را در فایروال سرور و ارائه‌دهنده باز کنید.",
     "Port 80 stays available for certificate renewal.": "پورت ۸۰ برای تمدید گواهی باز می‌ماند.",
+    "To keep this port when enabling SSL, choose a custom port from 1024 to 65535. Port 80 must remain HTTP for certificate renewal and other sites.": "برای حفظ همین پورت پس از فعال‌سازی SSL، پورتی بین ۱۰۲۴ تا ۶۵۵۳۵ انتخاب کنید. پورت ۸۰ برای تمدید گواهی و سایت‌های دیگر باید HTTP بماند.",
     "The new address applies automatically; a failed local check restores the previous address.": "نشانی جدید خودکار اعمال می‌شود؛ اگر بررسی داخلی ناموفق باشد، نشانی قبلی برمی‌گردد.",
     "The new address is being activated. No confirmation is needed.": "نشانی جدید در حال فعال‌شدن است و به تأیید نیاز ندارد.",
     "Change web address": "تغییر نشانی وب", "ACCOUNT SECURITY": "امنیت حساب",

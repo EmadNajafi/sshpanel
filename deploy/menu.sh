@@ -28,7 +28,7 @@ admin_usernames() {
 show_menu() {
   local reset=$'\033[0m' blue=$'\033[1;34m' cyan=$'\033[1;36m'
   local green=$'\033[1;32m' yellow=$'\033[1;33m' magenta=$'\033[1;35m'
-  local dim=$'\033[2m' choice admins requested_domain requested_email requested_port
+  local dim=$'\033[2m' choice admins requested_domain requested_email
   if [[ ! -t 1 || -n "${NO_COLOR:-}" ]]; then
     reset='' blue='' cyan='' green='' yellow='' magenta='' dim=''
   fi
@@ -55,10 +55,13 @@ show_menu() {
   case "$choice" in
     1)
       if [[ "${PANEL_TLS_ENABLED:-1}" == "0" ]]; then
+        if [[ "${PANEL_HTTP_PORT:-80}" == 80 ]]; then
+          echo "First set a custom HTTP panel port (1024-65535) in Settings > Web address. SSL will then use that same port; TCP 80 remains HTTP for certificate renewal and other sites." >&2
+          return 1
+        fi
         read -r -p "Panel domain: " requested_domain
         read -r -p "Certificate email: " requested_email
-        read -r -p "HTTPS panel port [443]: " requested_port
-        issue_ssl "$requested_domain" "$requested_email" "${requested_port:-443}"
+        issue_ssl "$requested_domain" "$requested_email"
       else
         issue_ssl
       fi
@@ -165,7 +168,9 @@ issue_ssl() {
       echo "Usage: sudo menu ssl panel.example.com admin@example.com [HTTPS_PORT]" >&2
       return 1
     fi
-    activate_tls "$1" "$2" "${3:-443}"
+    # Keep the listener chosen while the panel was on HTTP unless a caller
+    # explicitly supplies another HTTPS port.
+    activate_tls "$1" "$2" "${3:-${PANEL_HTTP_PORT:-80}}"
     return
   fi
   if [[ $# -ne 0 ]]; then
@@ -197,6 +202,10 @@ restore_tls_settings() {
 activate_tls() {
   local domain="$1" email="$2" port="$3" nginx_config env_file nginx_backup env_backup candidate
   local panel_path="${PANEL_WEB_PATH:-}" attempt ready=0
+  if [[ "$port" == 80 ]]; then
+    echo "HTTPS cannot replace HTTP port 80 while that port also serves other sites and certificate renewal. Set a custom HTTP panel port (1024-65535) in Settings > Web address, then issue SSL; HTTPS will keep that port." >&2
+    return 1
+  fi
   if [[ ! "$domain" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$ ]]; then
     echo "Invalid domain." >&2
     return 1
