@@ -6,7 +6,10 @@ class ProvisionError(Exception):
     pass
 
 
-def call_helper(action, username=None, password=None, *, expires_at=None, valid_days=None, max_connections=None, traffic_limit_bytes=None, enabled=None, port=None, web_path=None, web_port=None):
+_MISSING = object()
+
+
+def call_helper(action, username=None, password=None, *, expires_at=None, valid_days=None, max_connections=None, traffic_limit_bytes=None, enabled=None, port=None, web_path=None, web_port=None, domains=_MISSING):
     payload = {}
     if username is not None:
         payload["username"] = username
@@ -28,11 +31,13 @@ def call_helper(action, username=None, password=None, *, expires_at=None, valid_
         payload["path"] = web_path
     if web_port is not None:
         payload["port"] = web_port
+    if domains is not _MISSING:
+        payload["domains"] = domains
     try:
         result = subprocess.run(
             ["sudo", "-n", "/usr/local/sbin/sshvpnctl", action],
             input=json.dumps(payload), text=True, capture_output=True,
-            timeout=15, check=False,
+            timeout=120 if action in ("sites-global", "sites-user") else 15, check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise ProvisionError("The account service is unavailable.") from exc

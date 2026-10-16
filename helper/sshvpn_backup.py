@@ -23,6 +23,7 @@ import tarfile
 import tempfile
 from datetime import datetime, timezone
 from sshvpn_user_import import read_archive as read_user_import_archive, import_users
+from sshvpn_sites import status as site_status, validate_policy as validate_site_policy, apply_policy as apply_site_policy, POLICY_FILE as SITE_POLICY_FILE
 
 BACKUP_DIR = Path("/var/lib/sshvpn-panel/backups")
 UPLOAD_DIR = Path("/var/lib/sshvpn-panel/restore-uploads")
@@ -38,7 +39,8 @@ SAVED_NAME = re.compile(r"^sshpanel-(?:auto-)?\d{8}T\d{6}Z-[0-9a-f]{8}\.tar\.gz$
 UPLOAD_NAME = re.compile(r"^restore-[0-9a-f]{32}\.tar\.gz$")
 BACKUP_TIME = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
 LEGACY_MEMBERS = {"manifest.json", "database.dump", "panel.env", "accounts.json", "usage.json", "nginx.conf", "sshd_config"}
-MEMBERS = LEGACY_MEMBERS | {"backup_schedule.json"}
+MEMBERS_V4 = LEGACY_MEMBERS | {"backup_schedule.json"}
+MEMBERS = MEMBERS_V4 | {"site_access.json"}
 DATA_MEMBERS = MEMBERS - {"manifest.json"}
 
 
@@ -135,9 +137,10 @@ def create(automatic=False):
             "nginx.conf": Path("/etc/nginx/sites-available/sshvpn-panel").read_bytes(),
             "sshd_config": Path("/etc/ssh/sshd_config").read_bytes(),
             "backup_schedule.json": json.dumps(schedule_status()).encode(),
+            "site_access.json": json.dumps(site_status()).encode(),
         }
         manifest = {
-            "format": 4, "created_at": datetime.now(timezone.utc).isoformat(),
+            "format": 5, "created_at": datetime.now(timezone.utc).isoformat(),
             "account_count": len(accounts),
             "sha256": {"database.dump": file_hash(database), **{
                 name: hashlib.sha256(data).hexdigest() for name, data in content.items()
@@ -166,7 +169,7 @@ def read_archive(path, directory):
     with tarfile.open(path, "r:gz") as archive:
         members = archive.getmembers()
         member_names = {member.name for member in members}
-        if member_names not in (MEMBERS, LEGACY_MEMBERS) or len(members) != len(member_names) or any(not member.isfile() for member in members):
+        if member_names not in (MEMBERS, MEMBERS_V4, LEGACY_MEMBERS) or len(members) != len(member_names) or any(not member.isfile() for member in members):
             raise ValueError("Backup contents are incomplete or unexpected.")
         if sum(member.size for member in members) > 1024 * 1024 * 1024:
             raise ValueError("Backup expands beyond the 1 GiB restore limit.")
@@ -175,14 +178,15 @@ def read_archive(path, directory):
             with archive.extractfile(member) as source, destination.open("wb") as output:
                 shutil.copyfileobj(source, output, CHUNK)
     manifest = json.loads((directory / "manifest.json").read_text())
-    if not isinstance(manifest, dict) or manifest.get("format") not in (2, 3, 4):
+    if not isinstance(manifest, dict) or manifest.get("format") not in (2, 3, 4, 5):
         raise ValueError("Unsupported or incomplete backup.")
-    if (manifest["format"] == 4 and member_names != MEMBERS or
+    if (manifest["format"] == 5 and member_names != MEMBERS or
+            manifest["format"] == 4 and member_names != MEMBERS_V4 or
             manifest["format"] in (2, 3) and member_names != LEGACY_MEMBERS):
         raise ValueError("Backup format does not match its contents.")
-    if manifest["format"] in (3, 4):
+    if manifest["format"] in (3, 4, 5):
         hashes = manifest.get("sha256")
-        required = DATA_MEMBERS if manifest["format"] == 4 else LEGACY_MEMBERS - {"manifest.json"}
+        required = (member_names - {"manifest.json"})
         if not isinstance(hashes, dict) or set(hashes) != required:
             raise ValueError("Backup checksums are incomplete.")
         for name in required:
@@ -212,7 +216,7 @@ def read_archive(path, directory):
         if not isinstance(password_hash, str) or not password_hash or any(char in password_hash for char in ":\n\r\x00"):
             raise ValueError("Invalid VPN password hash in backup.")
         linux = item.get("linux")
-        if manifest["format"] in (3, 4) or linux is not None:
+        if manifest["format"] in (3, 4, 5) or linux is not None:
             aging = ("shadow_last_change", "shadow_min", "shadow_max", "shadow_warn",
                      "shadow_inactive", "shadow_expire", "shadow_flag")
             if not isinstance(linux, dict) or not all(
@@ -245,7 +249,7 @@ def read_archive(path, directory):
         if validity is not None and ((expiry is None) != (activated is None)):
             raise ValueError("Invalid VPN activation state in backup.")
         seen.add(username)
-    if manifest["format"] in (3, 4):
+    if manifest["format"] in (3, 4, 5):
         if set(usage) != seen or any(
             not isinstance(entry, dict) or any(
                 type(entry.get(key)) is not int or entry[key] < 0
@@ -253,11 +257,15 @@ def read_archive(path, directory):
             ) for entry in usage.values()
         ):
             raise ValueError("Traffic data does not match the VPN accounts.")
-    if manifest["format"] == 4:
+    if manifest["format"] in (4, 5):
         schedule = json.loads((directory / "backup_schedule.json").read_text())
         if (not isinstance(schedule, dict) or type(schedule.get("enabled")) is not bool or
                 not isinstance(schedule.get("time"), str) or not BACKUP_TIME.fullmatch(schedule["time"])):
             raise ValueError("Backup schedule is invalid.")
+    if manifest["format"] == 5:
+        site_policy = validate_site_policy(json.loads((directory / "site_access.json").read_text()))
+        if set(site_policy["users"]) - seen:
+            raise ValueError("Website rules refer to accounts absent from the backup.")
     return accounts, secret
 
 
@@ -353,6 +361,8 @@ def restore(archive_name):
         (recovery / "accounts.json").write_text(json.dumps(target_accounts))
         if USAGE_FILE.exists():
             shutil.copy2(USAGE_FILE, recovery / "usage.json")
+        if SITE_POLICY_FILE.exists():
+            shutil.copy2(SITE_POLICY_FILE, recovery / "site_access.json")
         for item in accounts:
             username = item["username"]
             if username not in target_names:
@@ -399,6 +409,9 @@ def restore(archive_name):
             timeout=120,
         )
         run("/usr/local/sbin/sshvpnctl", "usage-sync", timeout=30)
+        site_file = directory / "site_access.json"
+        apply_site_policy(json.loads(site_file.read_text()) if site_file.exists() else
+                          {"global_domains": [], "users": {}}, disconnect=False)
         schedule_file = directory / "backup_schedule.json"
         if schedule_file.exists():
             schedule = json.loads(schedule_file.read_text())

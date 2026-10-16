@@ -79,6 +79,10 @@ import re
 import sys
 
 source = Path(sys.argv[1]).read_text()
+if "# sshvpn-site-access begin" in source or "# sshvpn-site-access global" in source:
+    sys.path.insert(0, "/opt/ssh-vpn-panel/helper")
+    from sshvpn_sites import render_ssh_config
+    source = render_ssh_config(source, {"global_domains": [], "users": {}})
 marker = sys.argv[3]
 block = """# sshvpn-panel shared-port policy; keep this block at the end of sshd_config
 Match Group sshvpn
@@ -254,10 +258,10 @@ rm -rf -- /opt/ssh-vpn-panel /etc/sshvpn /var/lib/sshvpn-panel /var/lib/sshvpn /
 rm -rf -- /run/sshvpn-policy
 rm -f -- /usr/local/sbin/sshvpnctl /usr/local/sbin/sshvpn-backup /usr/local/libexec/sshvpn-badvpn-udpgw \
   /usr/local/sbin/sshvpn_policy.py /usr/local/sbin/sshvpn_port.py \
-  /usr/local/sbin/sshvpn_usage.py /usr/local/sbin/sshvpn_web.py /usr/local/sbin/sshvpn-tls \
+  /usr/local/sbin/sshvpn_usage.py /usr/local/sbin/sshvpn_sites.py /usr/local/sbin/sshvpn_web.py /usr/local/sbin/sshvpn-tls \
   /usr/local/sbin/sshvpn-authz /usr/local/sbin/sshvpn-install-pam-hook \
   /usr/local/sbin/sshvpn-configure-main-ssh
-rm -f -- /usr/local/sbin/__pycache__/sshvpn_*.pyc /run/lock/sshvpn-backup.lock
+rm -f -- /usr/local/sbin/__pycache__/sshvpn_*.pyc /run/lock/sshvpn-backup.lock /run/lock/sshvpn-site-access.lock
 rm -f -- /etc/letsencrypt/renewal-hooks/deploy/sshvpn-panel
 rmdir /usr/local/sbin/__pycache__ 2>/dev/null || true
 if [[ -L /usr/local/bin/menu && $(readlink /usr/local/bin/menu) == /usr/local/bin/sshvpn-menu ]]; then

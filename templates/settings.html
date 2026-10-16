@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Settings · SSH VPN Panel{% endblock %}
+{% block scripts %}{% if section == 'sites' %}<script src="{% static 'site-access.js' %}?v=1" defer></script>{% endif %}{% endblock %}
 {% block content %}
 <div class="settings-page">
   <div class="settings-hero">
@@ -22,8 +24,40 @@
         <a class="settings-overview-card" href="{% url 'settings_admin' %}"><span class="settings-overview-number">03</span><strong>Administrator</strong><span>Change your panel sign-in password.</span><span class="settings-overview-arrow" aria-hidden="true">→</span></a>
         <a class="settings-overview-card" href="{% url 'settings_telegram' %}"><span class="settings-overview-number">04</span><strong>Telegram bot</strong><span>Configure private-chat administration.</span><span class="settings-overview-arrow" aria-hidden="true">→</span></a>
         <a class="settings-overview-card" href="{% url 'backup_settings' %}"><span class="settings-overview-number">05</span><strong>Backup & recovery</strong><span>Create, schedule, download, and restore backups.</span><span class="settings-overview-arrow" aria-hidden="true">→</span></a>
+        <a class="settings-overview-card" href="{% url 'settings_sites' %}"><span class="settings-overview-number">06</span><strong>Website access</strong><span>Allow selected websites for all VPN users or one user.</span><span class="settings-overview-arrow" aria-hidden="true">→</span></a>
       </div>
       {% endif %}
+      {% if section == 'sites' %}
+      <section class="panel settings-section">
+        <div class="settings-section-head"><span class="settings-section-icon settings-icon-blue" aria-hidden="true">06</span><div><p class="eyebrow">VPN DESTINATIONS</p><h2>Website access</h2><p>Choose which hostnames VPN users may open through SSH forwarding.</p></div></div>
+        <p class="settings-field-note">Rules affect VPN accounts only. Administrator SSH, this panel, and other server services are unchanged. Enter exact hostnames, one per line, without https:// or paths. HTTP and HTTPS ports 80 and 443 are allowed for listed hosts. Add each required subdomain separately.</p>
+        <p class="settings-field-note">Clients must send the hostname through the SOCKS tunnel. Direct IP destinations and the UDP gateway are unavailable to restricted users. Changing a rule reconnects the affected VPN users.</p>
+      </section>
+      <section class="panel settings-section">
+        <div class="settings-section-head"><div><p class="eyebrow">ALL VPN USERS</p><h2>Global website list</h2><p>Used by every VPN user without a custom list.</p></div></div>
+        <form method="post" action="{% url 'save_global_sites' %}" class="website-rule-form">{% csrf_token %}
+          <label for="global-sites">Allowed hostnames</label>
+          <textarea id="global-sites" name="domains" rows="5" dir="ltr" spellcheck="false" placeholder="example.com&#10;www.example.com">{{ global_domains_text }}</textarea>
+          <span class="settings-field-note">Leave this list empty to remove the global restriction. User-specific lists remain active.</span>
+          <button class="button button-primary" type="submit">Save global website list</button>
+        </form>
+      </section>
+      <section class="panel settings-section">
+        <div class="settings-section-head"><div><p class="eyebrow">ONE VPN USER</p><h2>User-specific website list</h2><p>A custom list replaces the global list for the selected user.</p></div></div>
+        <form method="post" action="{% url 'save_user_sites' %}" class="website-rule-form">{% csrf_token %}
+          <label for="site-account">VPN user</label>
+          <select id="site-account" name="account_id" data-site-account required><option value="">Select a user</option>{% for account in vpn_accounts %}<option value="{{ account.pk }}" data-username="{{ account.username }}">{{ account.username }}</option>{% endfor %}</select>
+          <label for="site-mode">Rule</label>
+          <select id="site-mode" name="mode" data-site-mode><option value="custom">Use a custom list</option><option value="inherit">Inherit global list</option></select>
+          <label for="user-sites">Allowed hostnames for this user</label>
+          <textarea id="user-sites" name="domains" rows="5" dir="ltr" spellcheck="false" data-user-sites placeholder="example.com&#10;www.example.com"></textarea>
+          <button class="button button-primary" type="submit">Save user website list</button>
+        </form>
+        {% if site_policy.users %}<div class="website-overrides"><strong>Custom rules</strong>{% for username, domains in site_policy.users.items %}<p><bdi dir="ltr">{{ username }}</bdi><span dir="ltr">{{ domains|join:', ' }}</span></p>{% endfor %}</div>{% endif %}
+        {{ site_policy.users|json_script:"site-policy-users" }}
+      </section>
+      {% endif %}
+
       {% if section == 'ssh' %}
       <section id="ssh-access" class="panel settings-section">
         <div class="settings-section-head">

@@ -713,6 +713,31 @@ class AccountViewsTests(TestCase):
         self.assertEqual(format_bytes(0), "0 B")
         self.assertEqual(format_bytes(1024), "1.0 KiB")
 
+    @patch("accounts.views.call_helper", return_value='{"global_domains":["example.com"],"users":{"alice":["other.example"]}}')
+    def test_website_settings_show_global_and_user_rules(self, helper):
+        VpnAccount.objects.create(username="alice", created_by=self.staff)
+        page = self.client.get(reverse("settings_sites"))
+        self.assertContains(page, "Global website list")
+        self.assertContains(page, "example.com")
+        self.assertContains(page, "other.example")
+        self.assertContains(page, 'site-access.js')
+        self.assertEqual(helper.call_args.args[0], "sites-status")
+
+    @patch("accounts.views.call_helper", return_value='{"global_domains":[],"users":{}}')
+    def test_website_rules_can_be_saved_globally_or_for_one_user(self, helper):
+        account = VpnAccount.objects.create(username="alice", created_by=self.staff)
+        response = self.client.post(reverse("save_global_sites"), {"domains": "example.com\nwww.example.com"})
+        self.assertRedirects(response, reverse("settings_sites"))
+        helper.assert_any_call("sites-global", domains=["example.com", "www.example.com"])
+        response = self.client.post(reverse("save_user_sites"), {"account_id": account.pk,
+                                                                  "mode": "custom", "domains": "other.example"})
+        self.assertRedirects(response, reverse("settings_sites"))
+        helper.assert_any_call("sites-user", username="alice", domains=["other.example"])
+        self.client.post(reverse("save_user_sites"), {"account_id": account.pk, "mode": "inherit"})
+        helper.assert_called_with("sites-user", username="alice", domains=None)
+        self.client.logout()
+        self.assertEqual(self.client.post(reverse("save_global_sites"), {"domains": "example.com"}).status_code, 302)
+
     @patch("accounts.views.get_account_usage")
     @patch("accounts.isp.urlopen")
     def test_live_isp_lookup_is_scoped_to_active_account_and_cached(self, urlopen, usage):

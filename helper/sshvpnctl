@@ -16,6 +16,7 @@ from sshvpn_policy import (
 from sshvpn_port import current_port, current_state, stage_port, finalize_port, cancel_port
 from sshvpn_web import stage_change as stage_web_change, status as web_status
 from sshvpn_usage import snapshot as usage_snapshot, reset_account as reset_usage_account, remove_account as remove_usage_account
+from sshvpn_sites import status as site_status, set_global as set_global_sites, set_user as set_user_sites, remove_user as remove_user_sites
 
 
 ALLOWED = {"create", "disable", "enable", "delete", "password", "update", "usage-reset"}
@@ -128,9 +129,22 @@ def disconnect_all_accounts():
 def main():
     if os.geteuid() != 0:
         return fail("Root privileges are required.")
-    if len(sys.argv) != 2 or sys.argv[1] not in ALLOWED | {"seed-legacy", "sweep", "disconnect-all", "port-current", "port-stage", "port-finalize", "port-cancel", "port-status", "web-stage", "web-status", "usage-status", "usage-snapshot", "usage-sync", "policy-status"}:
+    if len(sys.argv) != 2 or sys.argv[1] not in ALLOWED | {"seed-legacy", "sweep", "disconnect-all", "port-current", "port-stage", "port-finalize", "port-cancel", "port-status", "web-stage", "web-status", "usage-status", "usage-snapshot", "usage-sync", "policy-status", "sites-status", "sites-global", "sites-user"}:
         return fail("Invalid action.")
     try:
+        if sys.argv[1] == "sites-status":
+            print(json.dumps(site_status()))
+            return 0
+        if sys.argv[1] in {"sites-global", "sites-user"}:
+            body = sys.stdin.read(16385)
+            if len(body) > 16384:
+                raise ValueError("Request is too large.")
+            request = json.loads(body)
+            if sys.argv[1] == "sites-global":
+                print(json.dumps(set_global_sites(request["domains"])))
+            else:
+                print(json.dumps(set_user_sites(request["username"], request["domains"])))
+            return 0
         if sys.argv[1] == "seed-legacy":
             seed_legacy_accounts()
             return 0
@@ -291,6 +305,7 @@ def main():
                 except (OSError, RuntimeError, ValueError):
                     pass  # Traffic metrics must not prevent account deletion.
                 run("/usr/sbin/userdel", username)
+                remove_user_sites(username)
                 policy_path(username).unlink(missing_ok=True)
                 lease_path(username).unlink(missing_ok=True)
                 try:
