@@ -201,6 +201,30 @@ input[type="checkbox"], input[type="radio"] { accent-color: #636fe7; }
 .action-button, :root[data-theme="dark"] .action-button { border-color: var(--line); border-radius: 10px; background: var(--surface-raised); color: var(--text); }
 .action-button:hover, :root[data-theme="dark"] .action-button:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .action-button-danger { color: var(--negative); }
+.accounts-panel .table-scroll { margin-inline: 0; }
+.accounts-panel .table-scroll th, .accounts-panel .table-scroll td { text-align: start; }
+.accounts-panel .table-scroll tbody td { padding-block: 15px; }
+.accounts-panel .account-identity-cell { min-width: 112px; }
+.accounts-panel .account-name-button { max-width: 100%; font-size: 13px; line-height: 1.35; }
+.accounts-panel .account-created { margin-top: 6px; line-height: 1.35; white-space: nowrap; }
+.accounts-panel .account-created time { display: inline-block; direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+.accounts-panel .password-column { min-width: 92px; }
+.accounts-panel .password-cell { width: fit-content; max-width: 100%; margin-inline-end: auto; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); font-size: 11px; line-height: 1.35; }
+.accounts-panel .password-cell:not(:has([data-password-value])) { padding: 0; border: 0; background: transparent; color: var(--subtle); line-height: 1.5; }
+.accounts-panel .referral-cell { min-width: 96px; max-width: 220px; }
+.accounts-panel .referral-value { display: block; font-size: 12px; line-height: 1.45; font-weight: 750; overflow-wrap: anywhere; }
+.accounts-panel .referral-value bdi { unicode-bidi: isolate; }
+.accounts-panel .referral-cell .table-subtext { margin-top: 5px; line-height: 1.35; }
+.accounts-panel .usage-total { font-size: 12px; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.accounts-panel .usage-cell .table-subtext { line-height: 1.35; }
+.accounts-panel .metric-value { color: var(--text); font-size: 12px; font-weight: 800; line-height: 1.45; }
+:root[dir="rtl"] .accounts-panel .usage-cell .usage-total,
+:root[dir="rtl"] .accounts-panel .usage-cell .table-subtext { text-align: right; }
+@media (min-width: 721px) and (max-width: 1550px) {
+  .accounts-panel .account-actions-cell { width: 171px; min-width: 171px; }
+  .accounts-panel .row-actions { display: grid; grid-template-columns: repeat(4, 34px); width: max-content; min-width: 0; gap: 5px; }
+  .accounts-panel .row-actions form { width: 34px; height: 34px; }
+}
 
 /* Settings, backups, audit and forms */
 .settings-page { max-width: 1360px; }
