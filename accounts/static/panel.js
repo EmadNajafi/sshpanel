@@ -13,7 +13,7 @@
       themeButton.setAttribute("aria-pressed", String(dark));
       themeButton.setAttribute("aria-label", translatedLabel);
       themeButton.setAttribute("title", translatedLabel);
-      if (themeColor) themeColor.content = dark ? "#081b18" : "#f3f6fb";
+      if (themeColor) themeColor.content = dark ? "#171e27" : "#f3f6fb";
     };
     const applyTheme = (theme) => {
       document.documentElement.dataset.theme = theme;
