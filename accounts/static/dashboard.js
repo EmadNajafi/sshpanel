@@ -382,8 +382,8 @@
           ispValue.dataset.ispValue = "";
           ispValue.textContent = window.panelT?.(ip ? "Loading…" : "Unavailable") ?? (ip ? "Loading…" : "Unavailable");
           isp.append(ispLabel, " ", ispValue);
-          details.append(label, isp);
-          item.append(details, address);
+          details.append(label, address);
+          item.append(details, isp);
           list.append(item);
           if (ip && ispUrl) {
             const url = new URL(ispUrl, window.location.href);
