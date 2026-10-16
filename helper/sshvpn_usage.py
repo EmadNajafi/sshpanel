@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import pwd
 import grp
+import re
 import subprocess
 import tempfile
 
@@ -16,6 +17,7 @@ TABLE = "sshvpn_usage"
 STATE_DIR = Path("/var/lib/sshvpn")
 STATE = STATE_DIR / "usage.json"
 LOCK = STATE_DIR / "usage.lock"
+SSH_PROCESS = re.compile(r'\("sshd",pid=(\d+),')
 
 
 def nft(*args, missing_ok=False):
@@ -170,11 +172,66 @@ def _live_connections(username):
     return live
 
 
+def _ssh_ports():
+    result = subprocess.run(["/usr/sbin/sshd", "-T"], text=True, capture_output=True, timeout=5)
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip() or "Could not read SSH ports.")
+    return {int(line.split()[1]) for line in result.stdout.splitlines()
+            if line.startswith("port ") and len(line.split()) == 2}
+
+
+def _ssh_process_uid(pid):
+    if Path(f"/proc/{pid}/comm").read_text().strip() != "sshd":
+        return None
+    for line in Path(f"/proc/{pid}/status").read_text().splitlines():
+        if line.startswith("Uid:"):
+            return int(line.split()[2])  # Effective UID of the SSH session process.
+    return None
+
+
+def _active_ssh_transports(accounts):
+    """Read established SSH transports; older sessions can predate a repaired PAM hook."""
+    sessions = {}
+    uid_names = {uid: username for username, uid in accounts.items()}
+    try:
+        ports = _ssh_ports()
+        for port in ports:
+            result = subprocess.run(
+                ["/usr/bin/ss", "-Htnp", "state", "established", "(", "sport", "=", f":{port}", ")"],
+                text=True, capture_output=True, timeout=5,
+            )
+            if result.returncode:
+                continue
+            for line in result.stdout.splitlines():
+                fields = line.split(maxsplit=4)
+                if len(fields) < 5:
+                    continue
+                username = None
+                for match in SSH_PROCESS.finditer(fields[4]):
+                    try:
+                        username = uid_names.get(_ssh_process_uid(int(match.group(1))))
+                    except (OSError, ValueError, IndexError):
+                        continue
+                    if username:
+                        break
+                if not username:
+                    continue
+                try:
+                    ip = str(ipaddress.ip_address(fields[3].rsplit(":", 1)[0].strip("[]")))
+                except ValueError:
+                    ip = None
+                sessions.setdefault(username, []).append(ip)
+    except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired):
+        return {}
+    return sessions
+
+
 def snapshot():
     def collect():
         state = _read_state()
         accounts = _sync(state)
         counters = _counter_values(table_data())
+        transports = _active_ssh_transports(accounts)
         result = {}
         for username in accounts:
             entry = state[username]
@@ -184,7 +241,9 @@ def snapshot():
                 previous = entry[f"last_{direction}"]
                 entry[direction] += raw - previous if raw >= previous else raw
                 entry[f"last_{direction}"] = raw
-            ips = _live_connections(username)
+            leases = _live_connections(username)
+            observed = transports.get(username, [])
+            ips = observed if len(observed) >= len(leases) else leases
             result[username] = {
                 "upload_bytes": entry["up"],
                 "download_bytes": entry["down"],
