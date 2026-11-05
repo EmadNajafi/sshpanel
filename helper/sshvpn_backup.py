@@ -37,6 +37,9 @@ USERNAME = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 SAVED_NAME = re.compile(r"^sshpanel-(?:auto-)?\d{8}T\d{6}Z-[0-9a-f]{8}\.tar\.gz$")
 UPLOAD_NAME = re.compile(r"^restore-[0-9a-f]{32}\.tar\.gz$")
 BACKUP_TIME = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+# panel.env is sourced by root-run Bash scripts, so a restored key must not
+# contain shell syntax. Installers generate hexadecimal keys.
+SECRET_KEY = re.compile(r"^[A-Za-z0-9._+/=-]{1,256}$")
 LEGACY_MEMBERS = {"manifest.json", "database.dump", "panel.env", "accounts.json", "usage.json", "nginx.conf", "sshd_config"}
 MEMBERS_V4 = LEGACY_MEMBERS | {"backup_schedule.json"}
 MEMBERS_V5 = MEMBERS_V4 | {"site_access.json"}
@@ -201,6 +204,8 @@ def read_archive(path, directory):
     secret = next((line.split("=", 1)[1] for line in source_env.splitlines() if line.startswith("DJANGO_SECRET_KEY=")), None)
     if not secret:
         raise ValueError("The credential encryption key is missing.")
+    if not SECRET_KEY.fullmatch(secret):
+        raise ValueError("The credential encryption key in this backup is invalid.")
     usage = json.loads((directory / "usage.json").read_text())
     if not isinstance(usage, dict):
         raise ValueError("Traffic data is invalid.")

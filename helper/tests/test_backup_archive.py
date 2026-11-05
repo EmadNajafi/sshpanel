@@ -12,8 +12,8 @@ import unittest
 from unittest.mock import patch
 
 
-if sys.platform == "win32":
-    for module in ("fcntl", "grp", "pwd", "spwd"):
+for module in ("fcntl", "grp", "pwd", "spwd"):
+    if importlib.util.find_spec(module) is None:  # Windows, or spwd on Python 3.13+.
         sys.modules.setdefault(module, types.ModuleType(module))
 sys.path.insert(0, str(Path(__file__).parents[1]))
 spec = importlib.util.spec_from_file_location("sshvpn_backup", Path(__file__).parents[1] / "sshvpn_backup.py")
@@ -23,7 +23,8 @@ spec.loader.exec_module(backup)
 
 class BackupArchiveTests(unittest.TestCase):
     def make_archive(self, path, *, database=b"database rows", include_usage=True, accounts=None,
-                     format_version=2, corrupt=None):
+                     format_version=2, corrupt=None,
+                     panel_env=b"DJANGO_SECRET_KEY=source-key\nDB_NAME=sshvpn\n"):
         accounts = [] if accounts is None else accounts
         manifest = {
             "format": 2,
@@ -34,7 +35,7 @@ class BackupArchiveTests(unittest.TestCase):
             "manifest.json": json.dumps(manifest).encode(),
             "database.dump": database,
             "accounts.json": json.dumps(accounts).encode(),
-            "panel.env": b"DJANGO_SECRET_KEY=source-key\nDB_NAME=sshvpn\n",
+            "panel.env": panel_env,
             "usage.json": json.dumps({item["username"]: {
                 "up": 123, "down": 456, "last_up": 10, "last_down": 20, "uid": 1500
             } for item in accounts}).encode(),
@@ -82,6 +83,18 @@ class BackupArchiveTests(unittest.TestCase):
             self.make_archive(path, database=b"changed rows")
             with self.assertRaisesRegex(ValueError, "checksum"):
                 backup.read_archive(path, extracted)
+
+    def test_secret_key_with_shell_syntax_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            extracted = directory / "extracted"
+            extracted.mkdir()
+            for value in (b"x$(touch /tmp/pwned)", b"x;id", b"`id`", b"a b", b"x'y", b"x\\"):
+                path = directory / "backup.tar.gz"
+                self.make_archive(path, format_version=6,
+                                  panel_env=b"DJANGO_SECRET_KEY=" + value + b"\nDB_NAME=sshvpn\n")
+                with self.subTest(value=value), self.assertRaisesRegex(ValueError, "key in this backup is invalid"):
+                    backup.read_archive(path, extracted)
 
     def test_archive_preserves_pending_activation_and_traffic_limit(self):
         account = {"username": "alice", "password_hash": "$6$example", "policy": {
