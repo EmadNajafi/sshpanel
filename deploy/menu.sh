@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ $EUID -ne 0 ]]; then echo "Run with sudo." >&2; exit 1; fi
-set -a
-source /etc/sshvpn/panel.env
-set +a
+# Read /etc/sshvpn/panel.env as literal KEY=VALUE data. Never `source` it: the
+# panel and backup restore can write this file, and root runs these scripts.
+load_panel_env() {
+  local line key
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ ^(DJANGO_SECRET_KEY|(PANEL|VPN|DB)_[A-Z0-9_]+)=(.*)$ ]] || continue
+    key="${BASH_REMATCH[1]}"
+    printf -v "$key" '%s' "${BASH_REMATCH[3]}"
+    export "$key"
+  done < "${1:-/etc/sshvpn/panel.env}"
+}
+load_panel_env
 
 panel_url() {
   local scheme=http port="${PANEL_HTTP_PORT:-80}" default_port=80

@@ -974,3 +974,68 @@ class InitialAdminTests(TestCase):
             with self.assertRaises(CommandError):
                 call_command("initial_admin", stdout=StringIO())
         self.assertFalse(get_user_model().objects.filter(username="emad").exists())
+
+
+class DefaultPasswordTests(TestCase):
+    def setUp(self):
+        self.admin = get_user_model().objects.create_user("admin", password="123456", is_staff=True)
+
+    def sign_in(self, password="123456"):
+        return self.client.post(reverse("login"), {"username": "admin", "password": password})
+
+    def test_default_password_sign_in_is_sent_to_password_change(self):
+        self.assertRedirects(self.sign_in(), reverse("settings_admin"))
+        self.assertRedirects(self.client.get(reverse("dashboard")), reverse("settings_admin"))
+        self.assertEqual(self.client.get(reverse("system_metrics")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("settings_admin")).status_code, 200)
+
+    def test_changing_default_password_unlocks_panel(self):
+        self.sign_in()
+        self.client.post(reverse("change_admin_password"), {
+            "old_password": "123456", "new_password1": "1", "new_password2": "1",
+        })
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.check_password("1"))
+        self.assertEqual(self.client.get(reverse("dashboard")).status_code, 200)
+
+    def test_default_password_cannot_be_chosen_again(self):
+        self.admin.set_password("other")
+        self.admin.save()
+        self.client.force_login(self.admin)
+        self.client.post(reverse("change_admin_password"), {
+            "old_password": "other", "new_password1": "123456", "new_password2": "123456",
+        })
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.check_password("other"))
+
+    def test_password_changed_elsewhere_clears_requirement(self):
+        self.sign_in()
+        self.admin.set_password("changed-by-bot")
+        self.admin.save()
+        session = self.client.session
+        session["_auth_user_hash"] = self.admin.get_session_auth_hash()
+        session.save()
+        self.assertEqual(self.client.get(reverse("dashboard")).status_code, 200)
+
+    def test_other_password_signs_in_normally(self):
+        self.admin.set_password("other")
+        self.admin.save()
+        self.assertRedirects(self.sign_in("other"), reverse("dashboard"))
+
+    def test_django_admin_site_is_not_routed(self):
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.get("/internal-admin/").status_code, 404)
+
+    @override_settings(FORCE_SCRIPT_NAME="/private-42", STATIC_URL="/private-42/static/")
+    def test_password_change_page_is_reachable_under_private_path(self):
+        self.sign_in()
+        original_prefix = get_script_prefix()
+        set_script_prefix("/private-42")
+        try:
+            page = self.client.get("/settings/administrator/", SCRIPT_NAME="/private-42")
+            blocked = self.client.get("/", SCRIPT_NAME="/private-42")
+        finally:
+            set_script_prefix(original_prefix)
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(blocked.status_code, 302)
+        self.assertEqual(blocked["Location"], "/private-42/settings/administrator/")

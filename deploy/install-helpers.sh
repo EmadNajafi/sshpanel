@@ -38,3 +38,15 @@ detect_public_ipv4() {
 
   return 1
 }
+
+# Read /etc/sshvpn/panel.env as literal KEY=VALUE data. Never `source` it: the
+# panel and backup restore can write this file, and root runs these scripts.
+load_panel_env() {
+  local line key
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ ^(DJANGO_SECRET_KEY|(PANEL|VPN|DB)_[A-Z0-9_]+)=(.*)$ ]] || continue
+    key="${BASH_REMATCH[1]}"
+    printf -v "$key" '%s' "${BASH_REMATCH[3]}"
+    export "$key"
+  done < "${1:-/etc/sshvpn/panel.env}"
+}

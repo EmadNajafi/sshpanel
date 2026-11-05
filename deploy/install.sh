@@ -173,9 +173,7 @@ ln -s /etc/nginx/sites-available/sshvpn-panel /etc/nginx/sites-enabled/sshvpn-pa
 bash "$repo_dir/deploy/configure-nginx-catchall.sh"
 nginx -t
 
-set -a
-source /etc/sshvpn/panel.env
-set +a
+load_panel_env
 cd /opt/ssh-vpn-panel
 runuser -u sshvpn-panel -- .venv/bin/python manage.py migrate --noinput
 .venv/bin/python manage.py collectstatic --noinput

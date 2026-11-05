@@ -23,6 +23,7 @@ from django.utils import timezone
 
 from .forms import BulkCreateAccountForm, CreateAccountForm, EditAccountForm, PasswordForm
 from .isp import lookup_isp
+from .password_policy import SESSION_FLAG as PASSWORD_CHANGE_FLAG, is_default_password
 from .backups import BACKUP_DIR, BACKUP_NAME, UPLOAD_DIR, BackupError, call_backup, list_backups, save_upload
 from .models import AuditEvent, PanelAppearance, TelegramBotConfig, VpnAccount, normalized_referral_code, referral_code_digest
 from .services import ProvisionError, call_helper, get_ssh_port
@@ -936,9 +937,12 @@ def remove_backup(request, name):
 @require_POST
 def change_admin_password(request):
     form = PasswordChangeForm(request.user, request.POST)
+    if form.is_valid() and is_default_password(form.cleaned_data["new_password1"]):
+        form.add_error("new_password1", "Choose a password other than the installer default.")
     if form.is_valid():
         user = form.save()
         update_session_auth_hash(request, user)
+        request.session.pop(PASSWORD_CHANGE_FLAG, None)
         messages.success(request, "Administrator password changed.")
     else:
         for field_errors in form.errors.values():

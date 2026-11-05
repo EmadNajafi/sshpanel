@@ -47,8 +47,8 @@ MEMBERS = MEMBERS_V4
 DATA_MEMBERS = MEMBERS - {"manifest.json"}
 
 
-def run(*args, input_data=None, timeout=300):
-    result = subprocess.run(args, input=input_data, capture_output=True, timeout=timeout)
+def run(*args, input_data=None, timeout=300, env=None, cwd=None):
+    result = subprocess.run(args, input=input_data, capture_output=True, timeout=timeout, env=env, cwd=cwd)
     if result.returncode:
         raise RuntimeError(f"{Path(args[0]).name} failed: {result.stderr.decode(errors='replace')[:300]}")
     return result.stdout
@@ -63,6 +63,31 @@ def env_values():
     if not result.get("DJANGO_SECRET_KEY") or not result.get("DB_NAME"):
         raise ValueError("Panel environment is incomplete.")
     return result
+
+
+def panel_db_env(values):
+    """Connect as the panel's own unprivileged database role.
+
+    Archive databases are untrusted: SQL in a crafted dump could RESET ROLE or
+    define functions that a superuser session would run with full privileges.
+    """
+    env = {key: os.environ[key] for key in ("PATH", "LANG", "LC_ALL") if key in os.environ}
+    env.update({
+        "PGHOST": values.get("DB_HOST", "127.0.0.1"),
+        "PGPORT": values.get("DB_PORT", "5432"),
+        "PGUSER": values["DB_USER"],
+        "PGPASSWORD": values["DB_PASSWORD"],
+        "PGSSLMODE": "prefer",
+    })
+    return env
+
+
+def panel_env(values):
+    """Environment for running the Django panel without sourcing panel.env in a shell."""
+    env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "LANG": "C.UTF-8"}
+    env.update({key: value for key, value in values.items()
+                if re.fullmatch(r"(?:DJANGO_SECRET_KEY|(?:PANEL|VPN|DB)_[A-Z0-9_]+)", key)})
+    return env
 
 
 def managed_accounts():
@@ -122,14 +147,14 @@ def create(automatic=False):
         database = directory / "database.dump"
         with database.open("wb") as output:
             result = subprocess.run(
-                ["/usr/sbin/runuser", "-u", "postgres", "--", "pg_dump", "-Fc", "-O", "-x", values["DB_NAME"]],
-                stdout=output, stderr=subprocess.PIPE, timeout=300,
+                ["/usr/bin/pg_dump", "-Fc", "-O", "-x", "-d", values["DB_NAME"]],
+                stdout=output, stderr=subprocess.PIPE, timeout=300, env=panel_db_env(values),
             )
         if result.returncode or database.stat().st_size == 0:
             raise RuntimeError("PostgreSQL backup failed.")
         database_names = set(run(
-            "/usr/sbin/runuser", "-u", "postgres", "--", "psql", "-At", "-d", values["DB_NAME"],
-            "-c", "SELECT username FROM accounts_vpnaccount", timeout=30,
+            "/usr/bin/psql", "-At", "-d", values["DB_NAME"],
+            "-c", "SELECT username FROM accounts_vpnaccount", timeout=30, env=panel_db_env(values),
         ).decode().splitlines())
         if database_names != {item["username"] for item in accounts}:
             raise RuntimeError("Database and Linux VPN accounts changed during backup; retry shortly.")
@@ -335,21 +360,22 @@ def restore(archive_name):
         os.chown(directory / "database.dump", 0, grp.getgrnam("postgres").gr_gid)
         os.chmod(directory / "database.dump", 0o640)
         staging = f"sshvpn_restore_{os.getpid()}"
-        run("/usr/sbin/runuser", "-u", "postgres", "--", "createdb", "-O", values["DB_USER"], staging)
+        db_env = panel_db_env(values)
+        run("/usr/sbin/runuser", "-u", "postgres", "--", "/usr/bin/createdb", "-O", values["DB_USER"], staging)
         try:
-            run("/usr/sbin/runuser", "-u", "postgres", "--", "pg_restore", "--role", values["DB_USER"], "--single-transaction", "--clean", "--if-exists", "--no-owner", "--no-acl", "-d", staging, str(directory / "database.dump"), timeout=300)
+            run("/usr/bin/pg_restore", "--single-transaction", "--clean", "--if-exists", "--no-owner", "--no-acl", "-d", staging, str(directory / "database.dump"), timeout=300, env=db_env)
             staged_names = set(run(
-                "/usr/sbin/runuser", "-u", "postgres", "--", "psql", "-At", "-d", staging,
-                "-c", "SELECT username FROM accounts_vpnaccount", timeout=30,
+                "/usr/bin/psql", "-At", "-d", staging,
+                "-c", "SELECT username FROM accounts_vpnaccount", timeout=30, env=db_env,
             ).decode().splitlines())
             admin_count = int(run(
-                "/usr/sbin/runuser", "-u", "postgres", "--", "psql", "-At", "-d", staging,
-                "-c", "SELECT COUNT(*) FROM auth_user WHERE is_staff AND is_active", timeout=30,
+                "/usr/bin/psql", "-At", "-d", staging,
+                "-c", "SELECT COUNT(*) FROM auth_user WHERE is_staff AND is_active", timeout=30, env=db_env,
             ).decode().strip())
             if staged_names != source_names or admin_count < 1:
                 raise ValueError("Backup database does not match its VPN accounts or has no active administrator.")
         finally:
-            run("/usr/sbin/runuser", "-u", "postgres", "--", "dropdb", "--if-exists", staging)
+            run("/usr/sbin/runuser", "-u", "postgres", "--", "/usr/bin/dropdb", "--if-exists", staging)
 
         # Keep a root-only recovery point before changing live data.
         recovery_dir = Path("/var/backups/sshvpn-panel")
@@ -358,7 +384,7 @@ def restore(archive_name):
         recovery.mkdir(mode=0o700)
         shutil.copy2(ENV_FILE, recovery / "panel.env")
         with (recovery / "database.dump").open("wb") as output:
-            result = subprocess.run(["/usr/sbin/runuser", "-u", "postgres", "--", "pg_dump", "-Fc", "-O", "-x", values["DB_NAME"]], stdout=output, stderr=subprocess.PIPE, timeout=300)
+            result = subprocess.run(["/usr/bin/pg_dump", "-Fc", "-O", "-x", "-d", values["DB_NAME"]], stdout=output, stderr=subprocess.PIPE, timeout=300, env=db_env)
         if result.returncode:
             raise RuntimeError("Could not create the pre-restore database backup.")
         (recovery / "accounts.json").write_text(json.dumps(target_accounts))
@@ -378,7 +404,7 @@ def restore(archive_name):
 
         # Restore the complete PostgreSQL dump, including admin accounts,
         # sessions, audit history and encrypted VPN password fields.
-        run("/usr/sbin/runuser", "-u", "postgres", "--", "pg_restore", "--role", values["DB_USER"], "--single-transaction", "--clean", "--if-exists", "--no-owner", "--no-acl", "-d", values["DB_NAME"], str(directory / "database.dump"), timeout=300)
+        run("/usr/bin/pg_restore", "--single-transaction", "--clean", "--if-exists", "--no-owner", "--no-acl", "-d", values["DB_NAME"], str(directory / "database.dump"), timeout=300, env=db_env)
         # Keep historic totals, then start fresh nft counters for the UIDs
         # assigned by this server. Runtime leases/source IPs are not portable.
         usage = json.loads((directory / "usage.json").read_text())
@@ -404,10 +430,9 @@ def restore(archive_name):
         os.replace(temporary_env, ENV_FILE)
         # An older archive may predate tables used by the installed panel code.
         run(
-            "/usr/sbin/runuser", "-u", "sshvpn-panel", "--", "/bin/bash", "-c",
-            "set -a; source /etc/sshvpn/panel.env; set +a; "
-            "cd /opt/ssh-vpn-panel; exec .venv/bin/python manage.py migrate --noinput",
-            timeout=120,
+            "/usr/sbin/runuser", "-u", "sshvpn-panel", "--",
+            "/opt/ssh-vpn-panel/.venv/bin/python", "manage.py", "migrate", "--noinput",
+            timeout=120, cwd="/opt/ssh-vpn-panel", env=panel_env(env_values()),
         )
         run("/usr/local/sbin/sshvpnctl", "usage-sync", timeout=30)
         schedule_file = directory / "backup_schedule.json"

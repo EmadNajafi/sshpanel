@@ -8,6 +8,7 @@ if ! grep -q '^ID=ubuntu$' /etc/os-release || ! grep -q '^VERSION_ID="24.04"$' /
 fi
 
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$repo_dir/deploy/install-helpers.sh"
 if [[ "$repo_dir" == /opt/ssh-vpn-panel ]]; then
   echo "Run this upgrade from a separate Git checkout, not the live installation." >&2; exit 1
 fi
@@ -18,9 +19,7 @@ fi
 /usr/sbin/sshd -t
 
 # Preserve the live configuration, application code, and database before copying files.
-set -a
-source /etc/sshvpn/panel.env
-set +a
+load_panel_env
 backup_dir="/var/backups/sshvpn-panel/upgrade-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 install -d -m 0700 -o root -g root "$backup_dir"
 cp -a /etc/sshvpn/panel.env "$backup_dir/panel.env"
@@ -70,9 +69,7 @@ else
 fi
 chown root:sshvpn-panel /etc/sshvpn/panel.env
 chmod 0640 /etc/sshvpn/panel.env
-set -a
-source /etc/sshvpn/panel.env
-set +a
+load_panel_env
 
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpnctl /usr/local/sbin/sshvpnctl
 install -m 0755 -o root -g root /opt/ssh-vpn-panel/helper/sshvpn_backup.py /usr/local/sbin/sshvpn-backup
