@@ -3,15 +3,15 @@
 import grp
 import json
 import os
+from pathlib import Path
 import pwd
-import spwd
 import subprocess
 import sys
 import time
 
 from sshvpn_policy import (
-    GROUP, POLICY_DIR, USERNAME, lease_path, policy_path, read_policy,
-    seed_legacy_accounts, write_policy,
+    GROUP, POLICY_DIR, USERNAME, getspnam, lease_path, policy_path, read_policy,
+    seed_legacy_accounts, set_password_hash, write_policy,
 )
 from sshvpn_port import current_port, current_state, stage_port, finalize_port, cancel_port
 from sshvpn_web import stage_change as stage_web_change, status as web_status
@@ -19,6 +19,7 @@ from sshvpn_usage import snapshot as usage_snapshot, reset_account as reset_usag
 
 
 ALLOWED = {"create", "disable", "enable", "delete", "password", "update", "usage-reset"}
+EGRESS_RULES = Path("/etc/sshvpn/egress.nft")
 
 
 def fail(message):
@@ -39,7 +40,7 @@ def set_password(username, password):
     )
     if result.returncode != 0 or not result.stdout.startswith("$6$"):
         raise RuntimeError("Password hashing failed.")
-    run("/usr/sbin/usermod", "--password", result.stdout.strip(), username)
+    set_password_hash(username, result.stdout.strip())
 
 
 def verify_ssh_policy(username):
@@ -104,7 +105,7 @@ def sweep_expired_accounts():
         if policy["traffic_limit_bytes"] is not None:
             if current_usage is None:
                 try:
-                    current_usage = usage_snapshot()
+                    current_usage = usage_snapshot(include_transports=False)
                 except (OSError, RuntimeError, ValueError):
                     current_usage = False  # Disconnect metered sessions if counters cannot be trusted.
             if current_usage is False:
@@ -113,7 +114,7 @@ def sweep_expired_accounts():
                 totals = current_usage.get(username, {})
                 exhausted = totals.get("upload_bytes", 0) + totals.get("download_bytes", 0) >= policy["traffic_limit_bytes"]
         if expired or exhausted:
-            if expired and not spwd.getspnam(username).sp_pwdp.startswith("!"):
+            if expired and not getspnam(username).sp_pwdp.startswith("!"):
                 run("/usr/sbin/usermod", "--lock", username)
             run("/usr/bin/pkill", "-KILL", "-u", username, ok=(0, 1))
 
@@ -123,6 +124,33 @@ def disconnect_all_accounts():
     for account in pwd.getpwall():
         if account.pw_gid == group_id:
             run("/usr/bin/pkill", "-KILL", "-u", account.pw_name, ok=(0, 1))
+
+
+def enforce_egress_isolation():
+    """Cut tunnels whose firewall disappeared, e.g. after `nft flush ruleset`.
+
+    The PAM hook already refuses new logins without the table, but tunnels that
+    were open before the flush would otherwise reach loopback and private
+    networks until they disconnect on their own.
+    """
+    table = subprocess.run(["/usr/sbin/nft", "list", "table", "inet", "sshvpn_egress"],
+                           capture_output=True, timeout=15)
+    if table.returncode == 0:
+        return
+    disconnect_all_accounts()
+    service = subprocess.run(["/usr/bin/systemctl", "is-active", "--quiet", "sshvpn-egress.service"],
+                             capture_output=True, timeout=15)
+    # Reload only when the service is meant to be running; a deliberately
+    # stopped service keeps VPN logins disabled.
+    if service.returncode == 0 and EGRESS_RULES.is_file():
+        run("/usr/sbin/nft", "-f", str(EGRESS_RULES))
+
+
+def read_request():
+    body = sys.stdin.read(4097)
+    if len(body) > 4096:
+        raise ValueError("Request is too large.")
+    return json.loads(body)
 
 
 def main():
@@ -135,6 +163,7 @@ def main():
             seed_legacy_accounts()
             return 0
         if sys.argv[1] == "sweep":
+            enforce_egress_isolation()
             sweep_expired_accounts()
             return 0
         if sys.argv[1] == "disconnect-all":
@@ -160,22 +189,21 @@ def main():
             print(json.dumps(web_status()))
             return 0
         if sys.argv[1] == "web-stage":
-            body = json.loads(sys.stdin.read(4097))
+            body = read_request()
             print(json.dumps(stage_web_change(body["path"], body["port"])))
             return 0
         if sys.argv[1] in {"port-stage", "port-finalize", "port-cancel"}:
             if sys.argv[1] == "port-stage":
-                body = json.loads(sys.stdin.read(4097))
+                body = read_request()
                 print(json.dumps(stage_port(body["port"])))
             elif sys.argv[1] == "port-finalize":
                 print(json.dumps(finalize_port()))
             else:
                 print(json.dumps(cancel_port()))
             return 0
-        body = sys.stdin.read(4097)
-        if len(body) > 4096:
-            raise ValueError("Request is too large.")
-        request = json.loads(body)
+        request = read_request()
+        if not isinstance(request, dict):
+            raise ValueError("Invalid request.")
         username = request["username"]
         if not isinstance(username, str) or not USERNAME.fullmatch(username):
             raise ValueError("Invalid username.")
@@ -236,8 +264,14 @@ def main():
                 password = request.get("password")
                 if enabled is not True and enabled is not False:
                     raise ValueError("Invalid account status.")
-                if expires_at is not None and (type(expires_at) is not int or expires_at <= int(time.time())):
+                now = int(time.time())
+                if expires_at is not None and (type(expires_at) is not int or expires_at <= 0):
+                    raise ValueError("Invalid expiry time.")
+                # Only a newly submitted expiry must lie in the future. An already
+                # expired account can still have its password or limits edited.
+                if "expires_at" in request and expires_at is not None and expires_at <= now:
                     raise ValueError("Expiry must be in the future.")
+                expired = expires_at is not None and expires_at <= now
                 if valid_days is not None and (type(valid_days) is not int or not 1 <= valid_days <= 36500):
                     raise ValueError("Invalid validity period.")
                 if "max_connections" in request and (type(max_connections) is not int or not 0 <= max_connections <= 10000):
@@ -249,23 +283,25 @@ def main():
                     raise ValueError("Invalid traffic limit.")
                 if password is not None and (not isinstance(password, str) or not 1 <= len(password) <= 256 or any(c in password for c in "\n\r\x00")):
                     raise ValueError("Invalid password.")
-                old_hash = spwd.getspnam(username).sp_pwdp
+                old_hash = getspnam(username).sp_pwdp
                 try:
                     if password is not None:
                         set_password(username, password)
                     write_policy(username, expires_at, max_connections,
                                  valid_days=valid_days, activated_at=activated_at,
                                  traffic_limit_bytes=traffic_limit_bytes)
-                    if enabled:
-                        if old_hash.startswith("!"):
+                    if enabled and not expired:
+                        if getspnam(username).sp_pwdp.startswith("!"):
                             run("/usr/sbin/usermod", "--unlock", username)
-                    elif not spwd.getspnam(username).sp_pwdp.startswith("!"):
+                    elif not getspnam(username).sp_pwdp.startswith("!"):
+                        # Disabled or still expired: keep the login locked even
+                        # when a new password was just written.
                         run("/usr/sbin/usermod", "--lock", username)
                 except Exception:
                     write_policy(username, policy["expires_at"], policy["max_connections"],
                                  valid_days=policy["valid_days"], activated_at=policy["activated_at"],
                                  traffic_limit_bytes=policy["traffic_limit_bytes"])
-                    run("/usr/sbin/usermod", "--password", old_hash, username)
+                    set_password_hash(username, old_hash)
                     raise
                 if password is not None or policy["max_connections"] != max_connections:
                     run("/usr/bin/pkill", "-u", username, ok=(0, 1))
@@ -278,7 +314,7 @@ def main():
                     raise ValueError("This account has expired.")
                 run("/usr/sbin/usermod", "--unlock", username)
             elif action == "password":
-                was_locked = spwd.getspnam(username).sp_pwdp.startswith("!")
+                was_locked = getspnam(username).sp_pwdp.startswith("!")
                 set_password(username, password)
                 if was_locked:
                     run("/usr/sbin/usermod", "--lock", username)

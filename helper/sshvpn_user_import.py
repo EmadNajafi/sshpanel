@@ -11,7 +11,7 @@ import sys
 import tarfile
 from datetime import datetime, timezone
 
-from sshvpn_policy import write_policy, policy_path
+from sshvpn_policy import policy_path, set_password_hash, write_policy
 
 
 USERNAME = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
@@ -126,7 +126,7 @@ def import_users(users, actor_id, env_values):
                                  input_data=(item["password"] + "\n").encode()).decode().strip()
                 if not hashed.startswith("$6$"):
                     raise RuntimeError("Password hashing failed.")
-                command("/usr/sbin/usermod", "--password", "!" + hashed, username)
+                set_password_hash(username, "!" + hashed)
                 write_policy(username, item["expires_at"], item["max_connections"] or None,
                              valid_days=item["valid_days"], traffic_limit_bytes=item["traffic_limit_bytes"])
                 if item["enabled"] and (item["expires_at"] is None or
@@ -149,6 +149,9 @@ def import_users(users, actor_id, env_values):
         failures = []
         for username in reversed(created):
             try:
+                # An account unlocked before a later failure may already be connected.
+                subprocess.run(["/usr/sbin/usermod", "--lock", username], capture_output=True, timeout=15)
+                subprocess.run(["/usr/bin/pkill", "-KILL", "-u", username], capture_output=True, timeout=15)
                 command("/usr/sbin/userdel", username)
                 policy_path(username).unlink(missing_ok=True)
             except Exception:

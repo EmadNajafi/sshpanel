@@ -64,7 +64,30 @@ def _write_config(content):
         if os.path.exists(temporary):
             os.unlink(temporary)
     command("/usr/sbin/sshd", "-t")
-    command("/usr/bin/systemctl", "reload", "ssh")
+    reload_ssh()
+
+
+def reload_ssh():
+    """Apply sshd_config, including Port, on socket- and service-activated SSH.
+
+    Ubuntu 24.04 can start OpenSSH from ssh.socket. Its listeners come from a
+    systemd generator, so a plain `reload ssh` never opens or closes a port.
+    """
+    def active(unit):
+        return subprocess.run(["/usr/bin/systemctl", "is-active", "--quiet", unit],
+                              capture_output=True, timeout=15).returncode == 0
+
+    if not active("ssh.socket"):
+        command("/usr/bin/systemctl", "reload", "ssh")
+        return
+    service_active = active("ssh.service")
+    command("/usr/bin/systemctl", "daemon-reload")
+    command("/usr/bin/systemctl", "restart", "ssh.socket")
+    if service_active:
+        # The running daemon still holds the previous listening sockets; a
+        # restart picks up the regenerated ones. ssh.service uses
+        # KillMode=process, so established sessions stay connected.
+        command("/usr/bin/systemctl", "restart", "ssh.service")
 
 
 def _listener_works(port):
@@ -113,7 +136,7 @@ def stage_port(port):
             raise ValueError("The new SSH port did not start listening.")
     except Exception:
         shutil.copy2(BACKUP, CONFIG)
-        command("/usr/bin/systemctl", "reload", "ssh")
+        reload_ssh()
         STATE.unlink(missing_ok=True)
         BACKUP.unlink(missing_ok=True)
         raise

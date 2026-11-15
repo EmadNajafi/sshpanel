@@ -8,14 +8,47 @@ from pathlib import Path
 import pwd
 import grp
 import re
+import subprocess
 import tempfile
 import time
+import types
 
 
 USERNAME = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 GROUP = "sshvpn"
 POLICY_DIR = Path("/etc/sshvpn/accounts")
 LEASE_DIR = Path("/run/sshvpn-policy")
+SHADOW = Path("/etc/shadow")
+
+
+def getspnam(username):
+    """Read one /etc/shadow entry; the spwd module was removed in Python 3.13."""
+    def number(value):
+        return int(value) if value else -1
+
+    with SHADOW.open(encoding="utf-8", errors="surrogateescape") as source:
+        for line in source:
+            fields = line.rstrip("\n").split(":")
+            if len(fields) >= 9 and fields[0] == username:
+                return types.SimpleNamespace(
+                    sp_namp=fields[0], sp_pwdp=fields[1], sp_lstchg=number(fields[2]),
+                    sp_min=number(fields[3]), sp_max=number(fields[4]), sp_warn=number(fields[5]),
+                    sp_inact=number(fields[6]), sp_expire=number(fields[7]), sp_flag=number(fields[8]),
+                )
+    raise KeyError(f"getspnam(): name not found: {username!r}")
+
+
+def set_password_hash(username, password_hash):
+    """Store an already hashed password without exposing it in the process list."""
+    validate_username(username)
+    if not isinstance(password_hash, str) or not password_hash or any(char in password_hash for char in ":\n\r\x00"):
+        raise ValueError("Invalid password hash.")
+    result = subprocess.run(
+        ["/usr/sbin/chpasswd", "--encrypted"], input=f"{username}:{password_hash}\n",
+        text=True, capture_output=True, timeout=15,
+    )
+    if result.returncode:
+        raise RuntimeError("Could not store the account password.")
 
 
 def validate_username(username):
@@ -127,7 +160,8 @@ def admit_connection(username, monitor_pid, now=None, remote_ip=None):
             return False
         if policy["traffic_limit_bytes"] is not None:
             from sshvpn_usage import snapshot
-            current = snapshot().get(username, {})
+            # Only traffic totals are needed here; skip the slower live-transport scan.
+            current = snapshot(include_transports=False).get(username, {})
             if current.get("upload_bytes", 0) + current.get("download_bytes", 0) >= policy["traffic_limit_bytes"]:
                 return False
         limit = policy["max_connections"]

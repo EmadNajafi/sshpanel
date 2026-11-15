@@ -226,12 +226,12 @@ def _active_ssh_transports(accounts):
     return sessions
 
 
-def snapshot():
+def snapshot(include_transports=True):
     def collect():
         state = _read_state()
         accounts = _sync(state)
         counters = _counter_values(table_data())
-        transports = _active_ssh_transports(accounts)
+        transports = _active_ssh_transports(accounts) if include_transports else {}
         result = {}
         for username in accounts:
             entry = state[username]

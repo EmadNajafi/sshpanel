@@ -56,6 +56,8 @@ class AuditEvent(models.Model):
     action = models.CharField(max_length=20)
     succeeded = models.BooleanField()
     created_at = models.DateTimeField(auto_now_add=True)
+    # Set when the action came from the Telegram bot, whose events all share the bot owner as actor.
+    telegram_user_id = models.BigIntegerField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]

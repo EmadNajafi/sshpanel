@@ -1,0 +1,36 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # The panel targets Ubuntu 24.04; run on its Python (3.12) and on a newer one
+    # to catch modules that later Python releases removed.
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+    env:
+      DJANGO_SECRET_KEY: test-secret-key-for-unit-tests
+      PANEL_DOMAIN: localhost
+      DB_PASSWORD: unused-in-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Shell syntax
+        run: for f in install.sh deploy/*.sh; do bash -n "$f"; done
+      - name: Helper tests
+        run: python -m unittest discover -s helper/tests -p "test_*.py"
+      - name: Migrations are complete
+        run: python manage.py makemigrations --check --dry-run --settings=sshvpn.test_settings
+      - name: Django tests
+        run: python manage.py test accounts --settings=sshvpn.test_settings

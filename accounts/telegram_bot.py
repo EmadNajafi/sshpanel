@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
+import json
 import logging
 import math
 import os
@@ -107,7 +108,65 @@ class BotCommandError(Exception):
 
 
 def audit(config, username, action, succeeded):
-    AuditEvent.objects.create(actor=config.owner, username=username, action=action[:20], succeeded=succeeded)
+    AuditEvent.objects.create(actor=config.owner, username=username, action=action[:20], succeeded=succeeded,
+                              telegram_user_id=getattr(config, "acting_telegram_id", None))
+
+
+def audited(config, username, action, operation):
+    """Run a server operation and record failures as well as successes."""
+    try:
+        result = operation()
+    except Exception:
+        audit(config, username, action, False)
+        raise
+    audit(config, username, action, True)
+    return result
+
+
+def helper_result(raw):
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def contains_secret(command_line):
+    """True for commands whose text carries a VPN or administrator password."""
+    try:
+        parts = shlex.split(command_line)
+    except ValueError:
+        return "password" in command_line.lower()
+    if not parts:
+        return False
+    command = parts[0].split("@", 1)[0].lower().lstrip("/")
+    return command in {"password", "adminpassword"} or any(
+        part.startswith("password=") and part != "password=auto" for part in parts[1:]
+    )
+
+
+def forget_message(api, chat_id, message_id):
+    """Remove a message holding a password from the chat history; best effort."""
+    if isinstance(message_id, int):
+        try:
+            api.delete_message(chat_id, message_id)
+        except TelegramError:
+            pass
+
+
+def purge_stale_uploads(max_age=24 * 60 * 60):
+    """Delete restore uploads that were received but never restored."""
+    cutoff = time.time() - max_age
+    try:
+        candidates = list(UPLOAD_DIR.glob("restore-*.tar.gz"))
+    except OSError:
+        return
+    for path in candidates:
+        try:
+            if re.fullmatch(r"restore-[0-9a-f]{32}\.tar\.gz", path.name) and not path.is_symlink() \
+                    and path.stat().st_mtime < cutoff:
+                path.unlink()
+        except OSError:
+            continue
 
 
 def parse_fields(tokens, allowed, required=()):
@@ -189,7 +248,7 @@ def panel_https_enabled():
     return False
 
 
-def read_panel_address():
+def live_panel_values():
     # The bot process survives web-address changes, so read the live environment file.
     values = {}
     try:
@@ -199,6 +258,11 @@ def read_panel_address():
                 values[key] = value.strip('"')
     except OSError:
         values = os.environ
+    return values
+
+
+def read_panel_address():
+    values = live_panel_values()
     tls = values.get("PANEL_TLS_ENABLED") == "1"
     port = values.get("PANEL_HTTPS_PORT" if tls else "PANEL_HTTP_PORT", "443" if tls else "80")
     suffix = "" if port == ("443" if tls else "80") else f":{port}"
@@ -337,7 +401,7 @@ def user_text(username):
         f"معرف: {account.referral_note or account.referral_code or '—'}\n"
         f"آنلاین: {usage.get('connections', 0)}\n"
         f"IP: {', '.join(usage.get('ips', [])) or '—'}\n"
-        f"هاست: {os.environ.get('PANEL_DOMAIN', '—')} | پورت SSH: {get_ssh_port()}"
+        f"هاست: {live_panel_values().get('PANEL_DOMAIN', '—')} | پورت SSH: {get_ssh_port()}"
     )
 
 
@@ -404,7 +468,8 @@ def bulk_create_users(config, args):
                 if password not in used_passwords:
                     break
             else:
-                break
+                return (f"{len(created)} کاربر ساخته شد؛ رمز یکتای کافی ساخته نشد. طول رمز را بیشتر کن.\n"
+                        + "\n".join(created))
             used_passwords.add(password)
         try:
             provision_account(
@@ -642,7 +707,8 @@ def execute(config, api, chat_id, command_line):
         events = AuditEvent.objects.select_related("actor").order_by("-created_at")[:count]
         return "گزارش فعالیت:\n" + "\n".join(
             f"{timezone.localtime(item.created_at):%m-%d %H:%M} {item.username} {item.action}"
-            f" {'✓' if item.succeeded else '✗'}" for item in events
+            f" {'✓' if item.succeeded else '✗'}"
+            f"{f' (TG {item.telegram_user_id})' if item.telegram_user_id else ''}" for item in events
         ), MAIN_MENU
     if command == "backups":
         return backups_page()
@@ -657,9 +723,16 @@ def execute(config, api, chat_id, command_line):
     if command == "restore":
         require_args(args, 1, "/restore FILE")
         source = backup_path(args[0])
-        result = call_backup("restore", name=args[0], actor_id=config.owner_id)
-        if source.parent == UPLOAD_DIR:
-            source.unlink(missing_ok=True)
+        try:
+            result = audited(config, "server", "restore",
+                             lambda: call_backup("restore", name=args[0], actor_id=config.owner_id))
+        finally:
+            # A received upload is single-use, whether the restore worked or not.
+            if source.parent == UPLOAD_DIR:
+                source.unlink(missing_ok=True)
+        if result.get("type") == "users":
+            return (f"{result.get('accounts', 0)} کاربر وارد شد. بکاپ بازیابی: {result.get('recovery_backup', '—')}",
+                    MAIN_MENU)
         return f"ریستور انجام شد: {result.get('accounts', 0)} کاربر. دوباره وارد پنل شو.", MAIN_MENU
     if command == "removebackup":
         require_args(args, 1, "/removebackup FILE")
@@ -702,16 +775,14 @@ def execute(config, api, chat_id, command_line):
             raise BotCommandError("پورت معتبر وارد کن.") from None
         if not 1 <= port <= 65535:
             raise BotCommandError("پورت باید بین ۱ و ۶۵۵۳۵ باشد.")
-        call_helper("port-stage", port=port)
-        audit(config, "server", "port-stage", True)
+        audited(config, "server", "port-stage", lambda: call_helper("port-stage", port=port))
         return f"پورت {port} فعال شد. اتصال مدیریتی را تست کن؛ سپس /sshconfirm بزن.", MAIN_MENU
     if command == "sshconfirm":
-        result = call_helper("port-finalize")
-        audit(config, "server", "port-finalize", True)
-        return f"تغییر پورت SSH نهایی شد: {result}", MAIN_MENU
+        result = helper_result(audited(config, "server", "port-finalize", lambda: call_helper("port-finalize")))
+        new_port = result.get("new") if isinstance(result, dict) else None
+        return f"تغییر پورت SSH نهایی شد{f'؛ پورت جدید: {new_port}' if new_port else ''}.", MAIN_MENU
     if command == "sshcancel":
-        call_helper("port-cancel")
-        audit(config, "server", "port-cancel", True)
+        audited(config, "server", "port-cancel", lambda: call_helper("port-cancel"))
         return "تغییر پورت SSH لغو شد.", MAIN_MENU
     if command == "web":
         require_args(args, 2, "/web /PRIVATE-PATH PORT")
@@ -719,13 +790,16 @@ def execute(config, api, chat_id, command_line):
             port = int(args[1])
         except ValueError:
             raise BotCommandError("پورت معتبر وارد کن.") from None
-        result = call_helper("web-stage", web_path=args[0], web_port=port)
-        audit(config, "server", "web-stage", True)
-        return f"نشانی وب تغییر کرد: {result}", MAIN_MENU
+        result = helper_result(audited(config, "server", "web-stage",
+                                       lambda: call_helper("web-stage", web_path=args[0], web_port=port)))
+        url = result.get("url") if isinstance(result, dict) else None
+        return (f"نشانی وب چند ثانیه دیگر تغییر می‌کند{f': {url}' if url else '.'}\n"
+                "اگر نشانی جدید باز نشد، تنظیمات قبلی خودکار برمی‌گردد."), MAIN_MENU
     if command == "adminpassword":
         require_args(args, 2, "/adminpassword OLD NEW")
         actor = config.owner
         if not actor.check_password(args[0]) or not args[1]:
+            audit(config, "administrator", "password", False)
             raise BotCommandError("رمز فعلی نادرست است یا رمز جدید خالی است.")
         actor.set_password(args[1])
         actor.save(update_fields=["password"])
@@ -913,9 +987,13 @@ def handle_update(config, api, update, pending):
         return
     allowed = user_id in config.allowed_user_ids and config.owner.is_active and config.owner.is_staff
     if not allowed:
-        if not callback and (message.get("text") or "").split(maxsplit=1)[0] == "/id":
+        # Stickers, photos and empty messages have no text to split.
+        words = (message.get("text") or "").split(maxsplit=1)
+        if not callback and words and words[0].split("@", 1)[0] == "/id":
             api.send_message(chat_id, f"شناسهٔ تلگرام شما: {user_id}")
         return
+    # Attribute audit events to the Telegram administrator who acted.
+    config.acting_telegram_id = user_id
     if callback:
         data = callback.get("data", "")
         message_id = message.get("message_id")
@@ -1018,18 +1096,38 @@ def handle_update(config, api, update, pending):
         pending.pop(("input", user_id), None)
         api.send_message(chat_id, HOME_TEXT, MAIN_MENU)
         return
-    if not text.lstrip().startswith("/") and ("flow", user_id) in pending:
-        wizard_value(api, chat_id, user_id, pending, text)
+    message_id = message.get("message_id")
+    is_command = text.lstrip().startswith("/")
+    if not is_command and ("flow", user_id) in pending:
+        state = pending[("flow", user_id)]
+        fields = WIZARD_FIELDS.get(state.get("kind"), ())
+        index = state.get("index", 0)
+        secret = 0 <= index < len(fields) and fields[index][0] == "password"
+        try:
+            wizard_value(api, chat_id, user_id, pending, text)
+        finally:
+            if secret:
+                forget_message(api, chat_id, message_id)
         return
-    if not text.lstrip().startswith("/") and ("input", user_id) in pending:
-        consume_input(config, api, chat_id, user_id, pending, text)
+    if not is_command and ("input", user_id) in pending:
+        kind = pending[("input", user_id)][0]
+        secret = kind in {"password", "adminpassword"} or kind == "edit" and contains_secret(f"/edit _ {text}")
+        try:
+            consume_input(config, api, chat_id, user_id, pending, text)
+        finally:
+            if secret:
+                forget_message(api, chat_id, message_id)
         return
-    if not text.lstrip().startswith("/"):
+    if not is_command:
         api.send_message(chat_id, HOME_TEXT, MAIN_MENU)
         return
     pending.pop(("flow", user_id), None)
     pending.pop(("input", user_id), None)
-    dispatch(config, api, chat_id, user_id, text.strip(), pending)
+    try:
+        dispatch(config, api, chat_id, user_id, text.strip(), pending)
+    finally:
+        if contains_secret(text):
+            forget_message(api, chat_id, message_id)
 
 
 def run_polling():
@@ -1037,8 +1135,12 @@ def run_polling():
     configured_token = None
     webhook_removed = False
     api = None
+    next_purge = 0.0
     while True:
         close_old_connections()
+        if time.monotonic() >= next_purge:
+            purge_stale_uploads()
+            next_purge = time.monotonic() + 3600
         if not panel_https_enabled():
             if api is not None:
                 api.close()

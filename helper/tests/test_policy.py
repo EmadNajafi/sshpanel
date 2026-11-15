@@ -125,11 +125,130 @@ class UnlimitedConnectionCommandTests(unittest.TestCase):
              patch.object(ctl.grp, "getgrnam", return_value=types.SimpleNamespace(gr_gid=1001), create=True), \
              patch.object(ctl, "managed_user"), \
              patch.object(ctl, "read_policy", return_value=current), \
-             patch.object(ctl.spwd, "getspnam", return_value=types.SimpleNamespace(sp_pwdp="$6$hash"), create=True), \
+             patch.object(ctl, "getspnam", return_value=types.SimpleNamespace(sp_pwdp="$6$hash")), \
              patch.object(ctl, "run"), patch.object(ctl, "write_policy") as write:
             self.assertEqual(ctl.main(), 0)
         write.assert_called_once_with("alice", 2000000000, None, valid_days=None, activated_at=None,
                                       traffic_limit_bytes=None)
+
+
+class ExpiredAccountUpdateTests(unittest.TestCase):
+    """Editing an expired account must work without silently re-enabling it."""
+
+    def run_update(self, request, current, hashes):
+        with patch.object(ctl.os, "geteuid", return_value=0, create=True), \
+             patch.object(ctl.sys, "argv", ["sshvpnctl", "update"]), \
+             patch.object(ctl.sys, "stdin", StringIO(json.dumps(request))), \
+             patch.object(ctl.sys, "stderr", StringIO()), \
+             patch.object(ctl.grp, "getgrnam", return_value=types.SimpleNamespace(gr_gid=1001), create=True), \
+             patch.object(ctl, "managed_user"), \
+             patch.object(ctl, "read_policy", return_value=current), \
+             patch.object(ctl, "getspnam", side_effect=lambda _: types.SimpleNamespace(sp_pwdp=hashes[0])), \
+             patch.object(ctl, "set_password", side_effect=lambda *_: hashes.__setitem__(0, "$6$new")), \
+             patch.object(ctl, "set_password_hash"), \
+             patch.object(ctl, "run") as run, patch.object(ctl, "write_policy") as write:
+            status = ctl.main()
+        return status, run, write
+
+    def test_password_change_on_expired_account_keeps_it_locked(self):
+        current = {"expires_at": 1000, "valid_days": None, "activated_at": None,
+                   "max_connections": 2, "traffic_limit_bytes": None}
+        hashes = ["!$6$old"]
+        status, run, write = self.run_update(
+            {"username": "alice", "enabled": True, "max_connections": 2, "password": "fresh"}, current, hashes)
+        self.assertEqual(status, 0)
+        write.assert_called_once_with("alice", 1000, 2, valid_days=None, activated_at=None,
+                                      traffic_limit_bytes=None)
+        commands = [call.args for call in run.call_args_list]
+        self.assertIn(("/usr/sbin/usermod", "--lock", "alice"), commands)
+        self.assertNotIn(("/usr/sbin/usermod", "--unlock", "alice"), commands)
+
+    def test_new_expiry_in_the_past_is_rejected(self):
+        current = {"expires_at": 2000000000, "valid_days": None, "activated_at": None,
+                   "max_connections": 2, "traffic_limit_bytes": None}
+        status, _, write = self.run_update(
+            {"username": "alice", "enabled": True, "max_connections": 2, "expires_at": 1000}, current, ["$6$h"])
+        self.assertEqual(status, 1)
+        write.assert_not_called()
+
+    def test_renewal_unlocks_enabled_account(self):
+        current = {"expires_at": 1000, "valid_days": None, "activated_at": None,
+                   "max_connections": 2, "traffic_limit_bytes": None}
+        status, run, _ = self.run_update(
+            {"username": "alice", "enabled": True, "max_connections": 2, "expires_at": 4000000000},
+            current, ["!$6$old"])
+        self.assertEqual(status, 0)
+        self.assertIn(("/usr/sbin/usermod", "--unlock", "alice"), [call.args for call in run.call_args_list])
+
+
+class RequestSizeTests(unittest.TestCase):
+    def test_port_stage_rejects_oversized_request(self):
+        body = json.dumps({"port": 2222, "padding": "x" * 5000})
+        with patch.object(ctl.os, "geteuid", return_value=0, create=True), \
+             patch.object(ctl.sys, "argv", ["sshvpnctl", "port-stage"]), \
+             patch.object(ctl.sys, "stdin", StringIO(body)), \
+             patch.object(ctl.sys, "stderr", StringIO()), \
+             patch.object(ctl, "stage_port") as stage:
+            self.assertEqual(ctl.main(), 1)
+        stage.assert_not_called()
+
+
+class EgressIsolationTests(unittest.TestCase):
+    def nft_result(self, table_present, service_active):
+        def fake_run(args, **_):
+            if args[:2] == ["/usr/sbin/nft", "list"]:
+                return types.SimpleNamespace(returncode=0 if table_present else 1)
+            return types.SimpleNamespace(returncode=0 if service_active else 3)
+        return fake_run
+
+    def test_missing_table_disconnects_and_reloads_rules(self):
+        with tempfile.NamedTemporaryFile() as rules, \
+             patch.object(ctl, "EGRESS_RULES", Path(rules.name)), \
+             patch.object(ctl.subprocess, "run", side_effect=self.nft_result(False, True)), \
+             patch.object(ctl, "disconnect_all_accounts") as disconnect, \
+             patch.object(ctl, "run") as run:
+            ctl.enforce_egress_isolation()
+        disconnect.assert_called_once_with()
+        run.assert_called_once_with("/usr/sbin/nft", "-f", rules.name)
+
+    def test_stopped_service_stays_stopped(self):
+        with patch.object(ctl.subprocess, "run", side_effect=self.nft_result(False, False)), \
+             patch.object(ctl, "disconnect_all_accounts") as disconnect, \
+             patch.object(ctl, "run") as run:
+            ctl.enforce_egress_isolation()
+        disconnect.assert_called_once_with()
+        run.assert_not_called()
+
+    def test_present_table_changes_nothing(self):
+        with patch.object(ctl.subprocess, "run", side_effect=self.nft_result(True, True)), \
+             patch.object(ctl, "disconnect_all_accounts") as disconnect:
+            ctl.enforce_egress_isolation()
+        disconnect.assert_not_called()
+
+
+class ShadowTests(unittest.TestCase):
+    def test_reads_entry_without_spwd(self):
+        with tempfile.NamedTemporaryFile("w", delete=False) as shadow:
+            shadow.write("root:*:19000:0:99999:7:::\n")
+            shadow.write("alice:!$6$abc:19500:0:99999:7::20000:\n")
+        self.addCleanup(Path(shadow.name).unlink)
+        with patch.object(policy, "SHADOW", Path(shadow.name)):
+            entry = policy.getspnam("alice")
+            self.assertEqual(entry.sp_pwdp, "!$6$abc")
+            self.assertEqual((entry.sp_lstchg, entry.sp_inact, entry.sp_expire, entry.sp_flag),
+                             (19500, -1, 20000, -1))
+            with self.assertRaises(KeyError):
+                policy.getspnam("bob")
+
+    def test_password_hash_goes_through_stdin(self):
+        with patch.object(policy.subprocess, "run",
+                          return_value=types.SimpleNamespace(returncode=0)) as run:
+            policy.set_password_hash("alice", "$6$salt$hash")
+        args, kwargs = run.call_args
+        self.assertEqual(args[0], ["/usr/sbin/chpasswd", "--encrypted"])
+        self.assertEqual(kwargs["input"], "alice:$6$salt$hash\n")
+        with self.assertRaises(ValueError):
+            policy.set_password_hash("alice", "bad:hash")
 
 
 class UsageResetTests(unittest.TestCase):
