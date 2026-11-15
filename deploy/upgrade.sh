@@ -38,7 +38,8 @@ runuser -u postgres -- pg_dump -Fc "${DB_NAME:-sshvpn}" > "$backup_dir/database.
 chmod 0600 "$backup_dir/database.dump"
 
 # Keep the existing administrator, VPN accounts, listener addresses, and TLS mode.
-rsync -a --exclude='.git' --exclude='.venv' --exclude='.env' \
+# --delete removes files that were deleted from the repository; excluded paths are kept.
+rsync -a --delete --exclude='.git' --exclude='.venv' --exclude='.env' --exclude='.installed-commit' \
   --exclude='staticfiles' --exclude='__pycache__' --exclude='frontend/node_modules' "$repo_dir/" /opt/ssh-vpn-panel/
 rm -f -- /opt/ssh-vpn-panel/helper/sshvpn_sites.py /opt/ssh-vpn-panel/helper/tests/test_sites.py \
   /opt/ssh-vpn-panel/accounts/static/site-access.js /opt/ssh-vpn-panel/staticfiles/site-access.js

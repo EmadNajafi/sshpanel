@@ -66,6 +66,9 @@ class TelegramAPI:
             payload["reply_markup"] = {"inline_keyboard": keyboard}
         self.call("sendMessage", payload)
 
+    def delete_message(self, chat_id, message_id):
+        self.call("deleteMessage", {"chat_id": chat_id, "message_id": message_id})
+
     def edit_message(self, chat_id, message_id, text, keyboard=None):
         payload = {"chat_id": chat_id, "message_id": message_id, "text": str(text),
                    "reply_markup": {"inline_keyboard": keyboard or []}}

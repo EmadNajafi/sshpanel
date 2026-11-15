@@ -16,12 +16,12 @@ from pathlib import Path
 import pwd
 import re
 import shutil
-import spwd
 import subprocess
 import sys
 import tarfile
 import tempfile
 from datetime import datetime, timezone
+from sshvpn_policy import getspnam, set_password_hash
 from sshvpn_user_import import read_archive as read_user_import_archive, import_users
 
 BACKUP_DIR = Path("/var/lib/sshvpn-panel/backups")
@@ -74,7 +74,7 @@ def managed_accounts():
         if not policy_file.is_file():
             raise ValueError(f"Policy missing for {user.pw_name}.")
         policy = json.loads(policy_file.read_text())
-        shadow = spwd.getspnam(user.pw_name)
+        shadow = getspnam(user.pw_name)
         records.append({
             "username": user.pw_name,
             "password_hash": shadow.sp_pwdp,
@@ -359,61 +359,131 @@ def restore(archive_name):
         (recovery / "accounts.json").write_text(json.dumps(target_accounts))
         if USAGE_FILE.exists():
             shutil.copy2(USAGE_FILE, recovery / "usage.json")
-        for item in accounts:
-            username = item["username"]
-            if username not in target_names:
-                run("/usr/sbin/useradd", "--no-create-home", "--home-dir", "/var/empty", "--shell", "/usr/sbin/nologin", "--gid", "sshvpn", username)
-            run("/usr/sbin/usermod", "--password", item["password_hash"], username)
-            restore_linux_metadata(item)
-            policy_path = POLICY_DIR / f"{username}.json"
-            temporary_policy = POLICY_DIR / f".{username}.restore"
-            temporary_policy.write_text(json.dumps(item["policy"]))
-            os.chmod(temporary_policy, 0o600)
-            os.replace(temporary_policy, policy_path)
-
-        # Restore the complete PostgreSQL dump, including admin accounts,
-        # sessions, audit history and encrypted VPN password fields.
-        run("/usr/sbin/runuser", "-u", "postgres", "--", "pg_restore", "--role", values["DB_USER"], "--single-transaction", "--clean", "--if-exists", "--no-owner", "--no-acl", "-d", values["DB_NAME"], str(directory / "database.dump"), timeout=300)
-        # Keep historic totals, then start fresh nft counters for the UIDs
-        # assigned by this server. Runtime leases/source IPs are not portable.
-        usage = json.loads((directory / "usage.json").read_text())
-        for username, entry in usage.items():
-            if username in source_names:
-                entry["uid"] = pwd.getpwnam(username).pw_uid
-                entry["last_up"] = 0
-                entry["last_down"] = 0
-        run("/usr/local/sbin/sshvpnctl", "disconnect-all", timeout=30)
-        existing_table = subprocess.run(["/usr/sbin/nft", "list", "table", "inet", "sshvpn_usage"], capture_output=True, timeout=15)
-        if existing_table.returncode == 0:
-            run("/usr/sbin/nft", "delete", "table", "inet", "sshvpn_usage", timeout=15)
-        temporary_usage = USAGE_FILE.with_name(".usage.restore")
-        temporary_usage.write_text(json.dumps(usage))
-        os.chmod(temporary_usage, 0o600)
-        os.replace(temporary_usage, USAGE_FILE)
-        lines = ENV_FILE.read_text().splitlines()
-        updated = "\n".join(f"DJANGO_SECRET_KEY={secret}" if line.startswith("DJANGO_SECRET_KEY=") else line for line in lines) + "\n"
-        temporary_env = ENV_FILE.with_name(".panel.env.restore")
-        temporary_env.write_text(updated)
-        os.chown(temporary_env, 0, grp.getgrnam("sshvpn-panel").gr_gid)
-        os.chmod(temporary_env, 0o640)
-        os.replace(temporary_env, ENV_FILE)
-        # An older archive may predate tables used by the installed panel code.
-        run(
-            "/usr/sbin/runuser", "-u", "sshvpn-panel", "--", "/bin/bash", "-c",
-            "set -a; source /etc/sshvpn/panel.env; set +a; "
-            "cd /opt/ssh-vpn-panel; exec .venv/bin/python manage.py migrate --noinput",
-            timeout=120,
-        )
-        run("/usr/local/sbin/sshvpnctl", "usage-sync", timeout=30)
-        schedule_file = directory / "backup_schedule.json"
-        if schedule_file.exists():
-            schedule = json.loads(schedule_file.read_text())
-            set_schedule(schedule["enabled"], schedule["time"])
+        progress = {"created": [], "database": False, "env": False}
+        try:
+            _apply_restore(directory, accounts, secret, values, source_names, target_names, progress)
+        except BaseException as exc:
+            failures = _rollback_restore(progress, target_accounts, recovery, values)
+            if failures:
+                raise RuntimeError(f"Restore failed ({exc}); automatic rollback was incomplete: "
+                                   f"{'; '.join(failures)}. Recovery copy: {recovery}") from exc
+            raise RuntimeError(f"Restore failed and the previous panel state was restored: {exc}") from exc
         # The new signing key must be loaded by a fresh Gunicorn process after
         # this HTTP request has returned to the browser.
         run("/usr/bin/systemd-run", "--quiet", "--on-active=5s", "/usr/bin/systemctl", "restart", "sshvpn-panel")
         run("/usr/bin/systemd-run", "--quiet", "--on-active=5s", "/usr/bin/systemctl", "restart", "sshvpn-telegram")
     return len(accounts)
+
+
+def _write_policy_file(username, policy):
+    temporary_policy = POLICY_DIR / f".{username}.restore"
+    temporary_policy.write_text(json.dumps(policy))
+    os.chmod(temporary_policy, 0o600)
+    os.replace(temporary_policy, POLICY_DIR / f"{username}.json")
+
+
+def _pg_restore(values, dump):
+    # Feed the archive on stdin: root-only recovery dumps are unreadable by postgres.
+    with dump.open("rb") as source:
+        result = subprocess.run(
+            ["/usr/sbin/runuser", "-u", "postgres", "--", "pg_restore", "--role", values["DB_USER"],
+             "--single-transaction", "--clean", "--if-exists", "--no-owner", "--no-acl",
+             "-d", values["DB_NAME"]],
+            stdin=source, capture_output=True, timeout=300,
+        )
+    if result.returncode:
+        raise RuntimeError(f"pg_restore failed: {result.stderr.decode(errors='replace')[:300]}")
+
+
+def _write_env(content):
+    temporary_env = ENV_FILE.with_name(".panel.env.restore")
+    temporary_env.write_text(content)
+    os.chown(temporary_env, 0, grp.getgrnam("sshvpn-panel").gr_gid)
+    os.chmod(temporary_env, 0o640)
+    os.replace(temporary_env, ENV_FILE)
+
+
+def _apply_restore(directory, accounts, secret, values, source_names, target_names, progress):
+    """Change the live installation; `progress` records what must be undone on failure."""
+    for item in accounts:
+        username = item["username"]
+        if username not in target_names:
+            run("/usr/sbin/useradd", "--no-create-home", "--home-dir", "/var/empty", "--shell", "/usr/sbin/nologin", "--gid", "sshvpn", username)
+            progress["created"].append(username)
+        set_password_hash(username, item["password_hash"])
+        restore_linux_metadata(item)
+        _write_policy_file(username, item["policy"])
+
+    # Restore the complete PostgreSQL dump, including admin accounts,
+    # sessions, audit history and encrypted VPN password fields.
+    _pg_restore(values, directory / "database.dump")
+    progress["database"] = True
+    # Keep historic totals, then start fresh nft counters for the UIDs
+    # assigned by this server. Runtime leases/source IPs are not portable.
+    usage = json.loads((directory / "usage.json").read_text())
+    for username, entry in usage.items():
+        if username in source_names:
+            entry["uid"] = pwd.getpwnam(username).pw_uid
+            entry["last_up"] = 0
+            entry["last_down"] = 0
+    run("/usr/local/sbin/sshvpnctl", "disconnect-all", timeout=30)
+    existing_table = subprocess.run(["/usr/sbin/nft", "list", "table", "inet", "sshvpn_usage"], capture_output=True, timeout=15)
+    if existing_table.returncode == 0:
+        run("/usr/sbin/nft", "delete", "table", "inet", "sshvpn_usage", timeout=15)
+    temporary_usage = USAGE_FILE.with_name(".usage.restore")
+    temporary_usage.write_text(json.dumps(usage))
+    os.chmod(temporary_usage, 0o600)
+    os.replace(temporary_usage, USAGE_FILE)
+    lines = ENV_FILE.read_text().splitlines()
+    updated = "\n".join(f"DJANGO_SECRET_KEY={secret}" if line.startswith("DJANGO_SECRET_KEY=") else line for line in lines) + "\n"
+    progress["env"] = True
+    _write_env(updated)
+    # An older archive may predate tables used by the installed panel code.
+    run(
+        "/usr/sbin/runuser", "-u", "sshvpn-panel", "--", "/bin/bash", "-c",
+        "set -a; source /etc/sshvpn/panel.env; set +a; "
+        "cd /opt/ssh-vpn-panel; exec .venv/bin/python manage.py migrate --noinput",
+        timeout=120,
+    )
+    run("/usr/local/sbin/sshvpnctl", "usage-sync", timeout=30)
+    schedule_file = directory / "backup_schedule.json"
+    if schedule_file.exists():
+        schedule = json.loads(schedule_file.read_text())
+        set_schedule(schedule["enabled"], schedule["time"])
+
+
+def _rollback_restore(progress, target_accounts, recovery, values):
+    """Best-effort undo of a failed restore, using the pre-restore recovery copy."""
+    failures = []
+
+    def attempt(label, action):
+        try:
+            action()
+        except Exception as exc:  # Keep undoing the remaining steps.
+            failures.append(f"{label}: {exc}")
+
+    def remove_created(name):
+        subprocess.run(["/usr/bin/pkill", "-KILL", "-u", name], capture_output=True, timeout=15)
+        run("/usr/sbin/userdel", name)
+        (POLICY_DIR / f"{name}.json").unlink(missing_ok=True)
+
+    def restore_previous(old):
+        set_password_hash(old["username"], old["password_hash"])
+        restore_linux_metadata(old)
+        _write_policy_file(old["username"], old["policy"])
+
+    for username in reversed(progress["created"]):
+        attempt(f"remove {username}", lambda name=username: remove_created(name))
+    for item in target_accounts:
+        attempt(f"restore {item['username']}", lambda old=item: restore_previous(old))
+    if progress["database"]:
+        attempt("database", lambda: _pg_restore(values, recovery / "database.dump"))
+    if progress["env"]:
+        attempt("panel.env", lambda: _write_env((recovery / "panel.env").read_text()))
+    if (recovery / "usage.json").exists():
+        attempt("traffic totals", lambda: shutil.copy2(recovery / "usage.json", USAGE_FILE))
+    attempt("traffic counters", lambda: run("/usr/local/sbin/sshvpnctl", "usage-sync", timeout=30))
+    return failures
 
 
 def import_user_archive(archive_name, actor_id):

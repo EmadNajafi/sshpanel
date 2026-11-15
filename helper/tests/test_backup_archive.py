@@ -203,6 +203,48 @@ class BackupArchiveTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "valid backup time"):
                     backup.set_schedule(True, "25:00")
 
+    def test_failed_restore_rollback_undoes_every_recorded_change(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            recovery = directory / "recovery"
+            recovery.mkdir()
+            (recovery / "panel.env").write_text("DJANGO_SECRET_KEY=old\n")
+            (recovery / "database.dump").write_bytes(b"old database")
+            (recovery / "usage.json").write_text("{}")
+            policies = directory / "accounts"
+            policies.mkdir()
+            (policies / "newuser.json").write_text("{}")
+            old = {"username": "olduser", "password_hash": "$6$old",
+                   "linux": {"gecos": "", "home": "/var/empty", "shell": "/usr/sbin/nologin"},
+                   "policy": {"expires_at": None, "max_connections": None}}
+            progress = {"created": ["newuser"], "database": True, "env": True}
+            with patch.object(backup, "POLICY_DIR", policies), \
+                 patch.object(backup, "USAGE_FILE", directory / "usage.json"), \
+                 patch.object(backup.subprocess, "run"), \
+                 patch.object(backup, "run") as command, \
+                 patch.object(backup, "set_password_hash") as set_hash, \
+                 patch.object(backup, "restore_linux_metadata") as metadata, \
+                 patch.object(backup, "_pg_restore") as pg_restore, \
+                 patch.object(backup, "_write_env") as write_env:
+                failures = backup._rollback_restore(progress, [old], recovery, {"DB_NAME": "sshvpn"})
+            self.assertEqual(failures, [])
+            self.assertIn(("/usr/sbin/userdel", "newuser"), [call.args for call in command.call_args_list])
+            self.assertFalse((policies / "newuser.json").exists())
+            set_hash.assert_called_once_with("olduser", "$6$old")
+            metadata.assert_called_once_with(old)
+            self.assertEqual(json.loads((policies / "olduser.json").read_text()), old["policy"])
+            pg_restore.assert_called_once_with({"DB_NAME": "sshvpn"}, recovery / "database.dump")
+            write_env.assert_called_once_with("DJANGO_SECRET_KEY=old\n")
+
+    def test_rollback_reports_steps_it_could_not_undo(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            recovery = Path(temporary)
+            progress = {"created": [], "database": True, "env": False}
+            with patch.object(backup, "_pg_restore", side_effect=RuntimeError("db down")), \
+                 patch.object(backup, "run"):
+                failures = backup._rollback_restore(progress, [], recovery, {})
+        self.assertEqual(failures, ["database: db down"])
+
 
 if __name__ == "__main__":
     unittest.main()

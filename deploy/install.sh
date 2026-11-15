@@ -20,11 +20,12 @@ fi
 printf '\033[H\033[2J'
 echo 'SSH VPN Panel installation'
 echo
-echo 'Default web administrator: admin / 123456'
+default_admin_password="$(python3 -c 'import secrets, string; alphabet = string.ascii_letters + string.digits; print("".join(secrets.choice(alphabet) for _ in range(14)))')"
+echo "Suggested web administrator: admin / $default_admin_password (randomly generated)"
 while :; do
   read -r -p 'Use these credentials? [Y/n]: ' use_default_admin
   case "${use_default_admin,,}" in
-    ''|y|yes) admin_username=admin; admin_password=123456; admin_confirmation=123456; break ;;
+    ''|y|yes) admin_username=admin; admin_password="$default_admin_password"; admin_confirmation="$default_admin_password"; break ;;
     n|no)
       read -r -p 'Administrator username: ' admin_username
       read -r -s -p 'Administrator password: ' admin_password
@@ -41,7 +42,7 @@ fi
 if [[ -z "$admin_password" || ${#admin_password} -gt 4096 || "$admin_password" != "$admin_confirmation" ]]; then
   echo "Administrator passwords must match and cannot be empty (maximum 4096 characters)." >&2; exit 1
 fi
-unset admin_confirmation use_default_admin
+unset admin_confirmation use_default_admin default_admin_password
 admin_username="$(python3 -c 'import sys; print(sys.argv[1].strip())' "$admin_username")"
 while :; do
   read -r -p 'UDPGW TCP port [7302] (Enter for default): ' udpgw_port
@@ -105,7 +106,8 @@ db_password="$(openssl rand -hex 32)"
 secret_key="$(openssl rand -hex 48)"
 main_ssh_port="$(/usr/sbin/sshd -T | awk '$1 == "port" && !found {print $2; found=1}')"
 panel_path="/$(openssl rand -hex 6)"
-runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "CREATE ROLE sshvpn LOGIN PASSWORD '$db_password'"
+# Send the statement on stdin so the database password never appears in the process list.
+printf "CREATE ROLE sshvpn LOGIN PASSWORD '%s';\n" "$db_password" | runuser -u postgres -- psql -v ON_ERROR_STOP=1 -q
 runuser -u postgres -- createdb -O sshvpn sshvpn
 install -d -m 0750 -o root -g sshvpn-panel /etc/sshvpn
 cat > /etc/sshvpn/panel.env <<EOF

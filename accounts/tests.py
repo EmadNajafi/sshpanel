@@ -974,3 +974,39 @@ class InitialAdminTests(TestCase):
             with self.assertRaises(CommandError):
                 call_command("initial_admin", stdout=StringIO())
         self.assertFalse(get_user_model().objects.filter(username="emad").exists())
+
+
+class AdminLoginTests(TestCase):
+    def test_admin_login_form_redirects_to_rate_limited_panel_sign_in(self):
+        get_user_model().objects.create_user("owner", password="correct-long-password", is_staff=True)
+        client = Client()
+        response = client.post("/internal-admin/login/?next=/internal-admin/",
+                               {"username": "owner", "password": "correct-long-password"})
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response["Location"].startswith(reverse("login")))
+        self.assertIn("next=/internal-admin/", response["Location"])
+        # The admin form never authenticated the request.
+        self.assertNotIn("_auth_user_id", client.session)
+
+    def test_admin_pages_send_anonymous_users_to_panel_sign_in(self):
+        response = Client().get("/internal-admin/")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/internal-admin/login/", response["Location"])
+
+
+class ExpiredAccountEditTests(TestCase):
+    def setUp(self):
+        self.staff = get_user_model().objects.create_user("owner", password="correct-long-password", is_staff=True)
+        self.client.force_login(self.staff)
+
+    @patch("accounts.views.call_helper")
+    def test_expired_account_password_can_change_without_renewal(self, helper):
+        account = VpnAccount.objects.create(username="alice", created_by=self.staff,
+                                            expires_at=timezone.now() - timedelta(days=1), max_connections=1)
+        self.client.post(reverse("edit_account", args=[account.pk]), {"password": "fresh-secret"})
+        update = next(call for call in helper.call_args_list if call.args[0] == "update")
+        # No expiry is sent, so the helper keeps the old (past) expiry instead of rejecting it.
+        self.assertIsNone(update.kwargs.get("expires_at"))
+        self.assertEqual(update.args[2], "fresh-secret")
+        account.refresh_from_db()
+        self.assertEqual(decrypt_password(account.password_ciphertext), "fresh-secret")

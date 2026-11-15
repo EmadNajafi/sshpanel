@@ -6,8 +6,9 @@ from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
-from .models import TelegramBotConfig, VpnAccount
+from .models import AuditEvent, TelegramBotConfig, VpnAccount
 from .secrets import decrypt_bot_token, encrypt_bot_token
+from .services import ProvisionError
 from .telegram_bot import handle_update, send_latest_automatic_backup
 from .telegram_api import TelegramAPI, TelegramError
 
@@ -291,3 +292,67 @@ class TelegramCommandTests(TestCase):
             handle_update(self.config, self.api, self.callback(f"ok:{nonce}"), self.pending)
             backup.assert_called_once_with("restore", name=name, actor_id=self.owner.pk)
             self.assertFalse(uploaded[0].exists())
+
+    def test_failed_restore_still_removes_the_upload(self):
+        from .backups import BackupError
+        with TemporaryDirectory() as directory, patch("accounts.telegram_bot.UPLOAD_DIR", Path(directory)), \
+             patch("accounts.telegram_bot.call_backup", side_effect=BackupError("bad archive")):
+            name = "restore-" + "b" * 32 + ".tar.gz"
+            (Path(directory) / name).write_bytes(b"archive")
+            handle_update(self.config, self.api, self.message(12345, f"/restore {name}"), self.pending)
+            nonce = self.pending[12345][0]
+            handle_update(self.config, self.api, self.callback(f"ok:{nonce}"), self.pending)
+            self.assertFalse((Path(directory) / name).exists())
+        self.assertTrue(AuditEvent.objects.filter(action="restore", succeeded=False,
+                                                  telegram_user_id=12345).exists())
+
+    def test_stale_uploads_are_purged(self):
+        import os
+        import time
+        from .telegram_bot import purge_stale_uploads
+        with TemporaryDirectory() as directory, patch("accounts.telegram_bot.UPLOAD_DIR", Path(directory)):
+            old = Path(directory) / ("restore-" + "c" * 32 + ".tar.gz")
+            new = Path(directory) / ("restore-" + "d" * 32 + ".tar.gz")
+            old.write_bytes(b"x")
+            new.write_bytes(b"x")
+            two_days_ago = time.time() - 2 * 86400
+            os.utime(old, (two_days_ago, two_days_ago))
+            purge_stale_uploads()
+            self.assertFalse(old.exists())
+            self.assertTrue(new.exists())
+
+    def test_unknown_user_sending_a_sticker_does_not_crash(self):
+        update = self.message(99999, "")
+        update["message"]["sticker"] = {"file_id": "sticker"}
+        handle_update(self.config, self.api, update, self.pending)
+        self.api.send_message.assert_not_called()
+
+    @patch("accounts.telegram_bot.call_helper")
+    def test_password_messages_are_deleted_from_the_chat(self, helper):
+        VpnAccount.objects.create(username="alice", created_by=self.owner)
+        update = self.message(12345, "/password alice n3w-secret")
+        update["message"]["message_id"] = 77
+        handle_update(self.config, self.api, update, self.pending)
+        helper.assert_called_once_with("password", "alice", "n3w-secret")
+        self.api.delete_message.assert_called_once_with(12345, 77)
+        self.assertTrue(AuditEvent.objects.filter(action="password", telegram_user_id=12345).exists())
+
+    def test_ordinary_commands_are_not_deleted(self):
+        update = self.message(12345, "/help")
+        update["message"]["message_id"] = 78
+        handle_update(self.config, self.api, update, self.pending)
+        self.api.delete_message.assert_not_called()
+
+    def test_secret_detection(self):
+        from .telegram_bot import contains_secret
+        self.assertTrue(contains_secret("/create username=a password=x days=1"))
+        self.assertTrue(contains_secret("/adminpassword old new"))
+        self.assertFalse(contains_secret("/bulkcreate count=2 prefix=u start=1 password=auto days=1"))
+        self.assertFalse(contains_secret("/user alice"))
+
+    @patch("accounts.telegram_bot.call_helper", side_effect=ProvisionError("port busy"))
+    def test_failed_port_change_is_audited(self, helper):
+        handle_update(self.config, self.api, self.message(12345, "/sshport 2222"), self.pending)
+        nonce = self.pending[12345][0]
+        handle_update(self.config, self.api, self.callback(f"ok:{nonce}"), self.pending)
+        self.assertTrue(AuditEvent.objects.filter(action="port-stage", succeeded=False).exists())
