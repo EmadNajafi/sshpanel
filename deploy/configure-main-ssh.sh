@@ -57,7 +57,9 @@ Match Group sshvpn
     ForceCommand /usr/sbin/nologin
 EOF
 fi
-rm -f "$deny"
+# Keep 05-sshvpn-deny.conf when present: it closes the main port to VPN users
+# once they use the dedicated VPN SSH port. The Match block above stays as a
+# second line of defence.
 /usr/sbin/sshd -t
 
 group_id="$(getent group sshvpn | cut -d: -f3)"
@@ -72,13 +74,16 @@ if [[ -n "$account" ]]; then
       exit 1
     fi
   done
-  if grep -Eq '^denygroups (.* )?sshvpn( |$)' <<< "$policy"; then
-    echo 'VPN group remains denied by the main SSH service.' >&2
-    exit 1
-  fi
 fi
-systemctl reload ssh
+# A socket-activated, idle ssh.service reads the file when it next starts.
+if systemctl is-active --quiet ssh.service; then
+  systemctl reload ssh.service
+fi
 restore=0
 trap - EXIT
-echo "VPN accounts now use the main SSH service on port $(/usr/sbin/sshd -T | awk '$1 == "port" && !found {print $2; found=1}')."
+if [[ -e "$deny" ]]; then
+  echo "VPN logins are closed on the main SSH port; VPN accounts use the dedicated VPN port."
+else
+  echo "VPN logins are still allowed on the main SSH port during migration; close it in Settings > SSH access."
+fi
 echo "SSH configuration backup: $backup_dir"

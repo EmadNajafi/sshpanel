@@ -53,6 +53,26 @@ while :; do
   fi
   echo 'Enter a TCP port from 1024 to 65535, or press Enter for 7302.' >&2
 done
+main_ssh_ports="$(/usr/sbin/sshd -T 2>/dev/null | awk '$1 == "port" { print $2 }' || true)"
+echo "VPN users get their own SSH port; administrator SSH stays on port(s): ${main_ssh_ports//$'\n'/, }."
+while :; do
+  read -r -p 'VPN SSH port [2222] (Enter for default): ' vpn_port
+  vpn_port="${vpn_port:-2222}"
+  if [[ ! $vpn_port =~ ^[0-9]+$ ]] || (( 10#$vpn_port < 1 || 10#$vpn_port > 65535 )); then
+    echo 'Enter a TCP port from 1 to 65535.' >&2; continue
+  fi
+  vpn_port="$((10#$vpn_port))"
+  if (( vpn_port == 80 || vpn_port == 443 )) || { [[ ${1:-} == --local-test ]] && (( vpn_port == 8080 )); }; then
+    echo 'Ports 80, 443 (and 8080 in local test mode) are reserved for the web panel.' >&2; continue
+  fi
+  if (( vpn_port == udpgw_port )) || grep -Fxq "$vpn_port" <<< "$main_ssh_ports"; then
+    echo 'Choose a port different from the administrator SSH and UDPGW ports.' >&2; continue
+  fi
+  if [[ -n "$(ss -Hltn "sport = :$vpn_port" 2>/dev/null)" ]]; then
+    echo "Port $vpn_port is already in use." >&2; continue
+  fi
+  break
+done
 
 local_test=0
 email=""
@@ -118,7 +138,7 @@ PANEL_TLS_ENABLED=0
 PANEL_HTTP_PORT=$([[ $local_test -eq 1 ]] && echo 8080 || echo 80)
 PANEL_HTTPS_PORT=443
 PANEL_WEB_PATH=$panel_path
-VPN_SSH_PORT=$main_ssh_port
+VPN_SSH_PORT=$vpn_port
 VPN_UDPGW_PORT=$udpgw_port
 DB_NAME=sshvpn
 DB_USER=sshvpn
@@ -187,6 +207,9 @@ sshvpn-install-pam-hook
 systemctl daemon-reload
 systemctl enable --now sshvpn-egress
 sshvpn-configure-main-ssh
+# VPN accounts get their own SSH listener; the main port is closed to them from the start.
+bash "$repo_dir/deploy/install-vpn-sshd.sh" "$vpn_port"
+echo '{"allowed": false}' | /usr/local/sbin/sshvpnctl vpn-main-access >/dev/null
 systemctl enable --now postgresql nginx sshvpn-panel sshvpn-telegram.service sshvpn-policy.timer sshvpn-usage.timer sshvpn-udpgw.service
 printf '%s\n' '{"enabled":true,"time":"03:00"}' | /usr/local/sbin/sshvpn-backup schedule-set
 systemctl is-active --quiet sshvpn-udpgw.service
@@ -205,7 +228,8 @@ else
 fi
 echo "Admin username:  $admin_username"
 echo "Admin password:  $admin_password"
-echo "VPN SSH port:    $main_ssh_port"
+echo "VPN SSH port:    $vpn_port (VPN accounts only; allow it in the provider firewall)"
+echo "Admin SSH port:  $main_ssh_port (closed to VPN accounts)"
 echo "UDPGW TCP port:  $udpgw_port (through SSH tunnel)"
 echo 'SSL later:       sudo menu ssl panel.example.com admin@example.com [HTTPS_PORT]'
 echo '============================================================'

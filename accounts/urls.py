@@ -35,6 +35,7 @@ urlpatterns = [
     path("settings/ssh-port/stage/", views.stage_ssh_port, name="stage_ssh_port"),
     path("settings/ssh-port/finalize/", views.finalize_ssh_port, name="finalize_ssh_port"),
     path("settings/ssh-port/cancel/", views.cancel_ssh_port, name="cancel_ssh_port"),
+    path("settings/ssh-main-access/", views.set_main_vpn_access, name="set_main_vpn_access"),
     path("accounts/<int:pk>/disable/", views.disable_account, name="disable_account"),
     path("accounts/<int:pk>/enable/", views.enable_account, name="enable_account"),
     path("accounts/<int:pk>/password/", views.reset_password, name="reset_password"),

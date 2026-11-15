@@ -9,8 +9,10 @@ class ProvisionError(Exception):
 _MISSING = object()
 
 
-def call_helper(action, username=None, password=None, *, expires_at=None, valid_days=None, max_connections=None, traffic_limit_bytes=None, enabled=None, port=None, web_path=None, web_port=None, domains=_MISSING):
+def call_helper(action, username=None, password=None, *, expires_at=None, valid_days=None, max_connections=None, traffic_limit_bytes=None, enabled=None, port=None, web_path=None, web_port=None, domains=_MISSING, allowed=None):
     payload = {}
+    if allowed is not None:
+        payload["allowed"] = allowed
     if username is not None:
         payload["username"] = username
     if password is not None:

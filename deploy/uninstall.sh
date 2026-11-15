@@ -165,15 +165,23 @@ if [[ $answer != 'DELETE SSHVPN' ]]; then
   exit 1
 fi
 
+# Stop VPN logins on the dedicated port before its PAM checks are removed.
+systemctl disable --now sshvpn-sshd.service 2>/dev/null || true
+
 # Remove the SSH integration first. Roll it back if the main SSH service cannot reload.
+deny_config=/etc/ssh/sshd_config.d/05-sshvpn-deny.conf
 cp -a "$ssh_config" "$temp_dir/original-sshd_config"
 cp -a "$pam_config" "$temp_dir/original-pam-sshd"
+if [[ -f $deny_config ]]; then cp -a "$deny_config" "$temp_dir/original-deny"; fi
 install -m 0644 -o root -g root "$temp_dir/sshd_config" "$ssh_config"
 install -m 0644 -o root -g root "$temp_dir/pam-sshd" "$pam_config"
-if ! /usr/sbin/sshd -t || ! systemctl reload ssh; then
+rm -f -- "$deny_config"
+if ! /usr/sbin/sshd -t || { systemctl is-active --quiet ssh.service && ! systemctl reload ssh.service; }; then
   cp -a "$temp_dir/original-sshd_config" "$ssh_config"
   cp -a "$temp_dir/original-pam-sshd" "$pam_config"
+  if [[ -f $temp_dir/original-deny ]]; then cp -a "$temp_dir/original-deny" "$deny_config"; fi
   systemctl reload ssh || true
+  systemctl enable --now sshvpn-sshd.service 2>/dev/null || true
   echo 'SSH reload failed; configuration restored. Uninstall stopped.' >&2
   exit 1
 fi
