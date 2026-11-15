@@ -15,6 +15,9 @@ if [[ ! -f /opt/ssh-vpn-panel/manage.py || ! -x /opt/ssh-vpn-panel/.venv/bin/pyt
       ! -f /etc/sshvpn/panel.env || ! -f /etc/nginx/sites-available/sshvpn-panel ]]; then
   echo "A complete existing SSH VPN panel installation was not found; refusing to change it." >&2; exit 1
 fi
+if [[ -e /etc/sshvpn/ssh-port-pending.json ]]; then
+  echo "Confirm or cancel the pending SSH port change in panel settings, then upgrade again." >&2; exit 1
+fi
 /usr/sbin/sshd -t
 
 # Preserve the live configuration, application code, and database before copying files.
@@ -64,10 +67,17 @@ if ! grep -q '^VPN_UDPGW_PORT=' /etc/sshvpn/panel.env; then
 fi
 udpgw_port="$(sed -n 's/^VPN_UDPGW_PORT=//p' /etc/sshvpn/panel.env | head -n 1)"
 main_ssh_port="$(/usr/sbin/sshd -T | awk '$1 == "port" && !found {print $2; found=1}')"
+# VPN accounts use a dedicated SSH listener: keep its port, or pick a free one on first upgrade.
+had_vpn_listener=0
+if systemctl is-active --quiet sshvpn-sshd.service && \
+   head -n 1 /etc/ssh/sshvpn_sshd_config 2>/dev/null | grep -q '^# Managed by sshvpn-panel'; then
+  had_vpn_listener=1
+fi
+vpn_port="$(bash "$repo_dir/deploy/install-vpn-sshd.sh" --pick)"
 if grep -q '^VPN_SSH_PORT=' /etc/sshvpn/panel.env; then
-  sed -i -E "s/^VPN_SSH_PORT=.*/VPN_SSH_PORT=$main_ssh_port/" /etc/sshvpn/panel.env
+  sed -i -E "s/^VPN_SSH_PORT=.*/VPN_SSH_PORT=$vpn_port/" /etc/sshvpn/panel.env
 else
-  printf 'VPN_SSH_PORT=%s\n' "$main_ssh_port" >> /etc/sshvpn/panel.env
+  printf 'VPN_SSH_PORT=%s\n' "$vpn_port" >> /etc/sshvpn/panel.env
 fi
 chown root:sshvpn-panel /etc/sshvpn/panel.env
 chmod 0640 /etc/sshvpn/panel.env
@@ -157,9 +167,7 @@ fi
 systemctl enable sshvpn-egress
 /usr/local/sbin/sshvpnctl usage-sync
 sshvpn-configure-main-ssh "$backup_dir"
-if systemctl cat sshvpn-sshd.service >/dev/null 2>&1; then
-  systemctl disable --now sshvpn-sshd.service
-fi
+bash "$repo_dir/deploy/install-vpn-sshd.sh" "$vpn_port"
 systemctl enable --now sshvpn-policy.timer
 systemctl enable --now sshvpn-usage.timer
 systemctl enable --now sshvpn-telegram.service
@@ -176,3 +184,12 @@ fi
 echo "Upgrade complete. Existing accounts and web administrator were retained."
 echo "Backup: $backup_dir"
 echo "Panel URL and SSL mode remain as configured before this upgrade."
+echo "VPN SSH port: $vpn_port (VPN accounts only). Allow it in the provider firewall."
+if [[ ! -e /etc/ssh/sshd_config.d/05-sshvpn-deny.conf ]]; then
+  if (( ! had_vpn_listener )); then
+    echo "NEW: VPN users now have their own SSH port $vpn_port. Their old port $main_ssh_port keeps working"
+    echo "     until you close it in Settings > SSH access, after moving clients to port $vpn_port."
+  else
+    echo "VPN logins are still allowed on the administrator port $main_ssh_port; close it in Settings > SSH access."
+  fi
+fi

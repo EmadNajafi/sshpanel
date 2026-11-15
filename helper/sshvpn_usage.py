@@ -172,12 +172,22 @@ def _live_connections(username):
     return live
 
 
+VPN_SSHD_CONFIG = Path("/etc/ssh/sshvpn_sshd_config")
+
+
 def _ssh_ports():
-    result = subprocess.run(["/usr/sbin/sshd", "-T"], text=True, capture_output=True, timeout=5)
-    if result.returncode:
-        raise RuntimeError(result.stderr.strip() or "Could not read SSH ports.")
-    return {int(line.split()[1]) for line in result.stdout.splitlines()
-            if line.startswith("port ") and len(line.split()) == 2}
+    """Ports of the main SSH service and of the dedicated VPN listener."""
+    ports = set()
+    configs = [()]
+    if VPN_SSHD_CONFIG.is_file():
+        configs.append(("-f", str(VPN_SSHD_CONFIG)))
+    for extra in configs:
+        result = subprocess.run(["/usr/sbin/sshd", "-T", *extra], text=True, capture_output=True, timeout=5)
+        if result.returncode:
+            raise RuntimeError(result.stderr.strip() or "Could not read SSH ports.")
+        ports.update(int(line.split()[1]) for line in result.stdout.splitlines()
+                     if line.startswith("port ") and len(line.split()) == 2)
+    return ports
 
 
 def _ssh_process_uid(pid):

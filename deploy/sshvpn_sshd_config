@@ -1,0 +1,38 @@
+# Managed by sshvpn-panel: dedicated SSH listener for VPN accounts only.
+# Change the port in the panel (Settings > SSH access); upgrades rewrite this file.
+Port __VPN_PORT__
+PidFile /run/sshvpn-sshd.pid
+HostKey /etc/ssh/ssh_host_ed25519_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+HostKey /etc/ssh/ssh_host_rsa_key
+
+# Only panel-managed VPN accounts; administrators keep using the main SSH port.
+UsePAM yes
+AllowGroups sshvpn
+PermitRootLogin no
+AuthenticationMethods password
+PasswordAuthentication yes
+PermitEmptyPasswords no
+KbdInteractiveAuthentication no
+PubkeyAuthentication no
+HostbasedAuthentication no
+
+# Port forwarding only: no shell, commands, SFTP, agent, X11 or tun devices.
+AllowTcpForwarding local
+AllowStreamLocalForwarding no
+AllowAgentForwarding no
+X11Forwarding no
+PermitTTY no
+PermitTunnel no
+PermitUserRC no
+GatewayPorts no
+MaxSessions 0
+ForceCommand /usr/sbin/nologin
+
+PrintMotd no
+LoginGraceTime 30
+MaxAuthTries 3
+# Detect dead clients so their slots count against connection limits only briefly.
+ClientAliveInterval 30
+ClientAliveCountMax 4
+LogLevel VERBOSE

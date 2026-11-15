@@ -17,7 +17,7 @@
     <div class="settings-content">
       {% if not section %}
       <div class="settings-overview-grid">
-        <a class="settings-overview-card" href="{% url 'settings_ssh' %}"><span class="settings-overview-number">01</span><strong>SSH access</strong><span>Change the SSH port and view the UDPGW port.</span><span class="settings-overview-arrow" aria-hidden="true">→</span></a>
+        <a class="settings-overview-card" href="{% url 'settings_ssh' %}"><span class="settings-overview-number">01</span><strong>SSH access</strong><span>Change the VPN port and control VPN access to the administrator port.</span><span class="settings-overview-arrow" aria-hidden="true">→</span></a>
         <a class="settings-overview-card" href="{% url 'settings_web' %}"><span class="settings-overview-number">02</span><strong>Web address</strong><span>Manage the private path and panel port.</span><span class="settings-overview-arrow" aria-hidden="true">→</span></a>
         <a class="settings-overview-card" href="{% url 'settings_admin' %}"><span class="settings-overview-number">03</span><strong>Administrator</strong><span>Change your panel sign-in password.</span><span class="settings-overview-arrow" aria-hidden="true">→</span></a>
         <a class="settings-overview-card" href="{% url 'settings_telegram' %}"><span class="settings-overview-number">04</span><strong>Telegram bot</strong><span>Configure private-chat administration.</span><span class="settings-overview-arrow" aria-hidden="true">→</span></a>
@@ -28,21 +28,32 @@
       <section id="ssh-access" class="panel settings-section">
         <div class="settings-section-head">
           <span class="settings-section-icon settings-icon-blue" aria-hidden="true">01</span>
-          <div><p class="eyebrow">SERVER CONNECTION</p><h2>SSH access</h2><p>One SSH port serves administrators and VPN users.</p></div>
+          <div><p class="eyebrow">SERVER CONNECTION</p><h2>SSH access</h2><p>VPN accounts use their own SSH port. The administrator SSH port is never changed by the panel.</p></div>
         </div>
-        <div class="settings-current-port"><div><span class="settings-detail-label">CURRENT PORT</span><strong dir="ltr">{{ ssh_port }}</strong></div><span class="settings-live-badge"><span class="status-dot"></span> Active</span></div>
+        <div class="settings-current-port"><div><span class="settings-detail-label">VPN PORT</span><strong dir="ltr">{{ ssh_port }}</strong></div>{% if vpn_ssh and not vpn_ssh.service_active %}<span class="settings-live-badge">Stopped</span>{% else %}<span class="settings-live-badge"><span class="status-dot"></span> Active</span>{% endif %}</div>
+        {% if vpn_ssh %}
+          <div class="settings-current-port"><div><span class="settings-detail-label">ADMINISTRATOR SSH PORT</span><strong dir="ltr">{{ vpn_ssh.main_ports|join:", " }}</strong></div>{% if vpn_ssh.main_access %}<span class="settings-live-badge">Open to VPN accounts</span>{% else %}<span class="settings-live-badge">Closed to VPN accounts</span>{% endif %}</div>
+        {% endif %}
         <div class="settings-current-port"><div><span class="settings-detail-label">UDPGW TCP PORT</span><strong dir="ltr">{{ udpgw_port }}</strong></div><span class="settings-live-badge">Via SSH tunnel</span></div>
         {% if pending_port %}
-          <div class="settings-callout"><strong>Port change in progress</strong><p>Ports {{ pending_port.old }} and {{ pending_port.new }} are active. Open a new SSH connection from outside the server on port {{ pending_port.new }} before confirming.</p></div>
+          <div class="settings-callout"><strong>Port change in progress</strong><p>VPN ports {{ pending_port.old }} and {{ pending_port.new }} are both active. Connect a VPN client to port {{ pending_port.new }} from outside the server before confirming.</p></div>
           <div class="settings-actions">
             <form method="post" action="{% url 'cancel_ssh_port' %}">{% csrf_token %}<button class="button button-secondary" type="submit">Cancel change</button></form>
-            <form method="post" action="{% url 'finalize_ssh_port' %}" onsubmit="return panelConfirm('Have you connected to the new SSH port {{ pending_port.new }} from outside the server? The old port will close.')">{% csrf_token %}<button class="button button-primary" type="submit">Confirm port {{ pending_port.new }}</button></form>
+            <form method="post" action="{% url 'finalize_ssh_port' %}" onsubmit="return panelConfirm('Have VPN clients connected on port {{ pending_port.new }}? VPN port {{ pending_port.old }} will close.')">{% csrf_token %}<button class="button button-primary" type="submit">Confirm port {{ pending_port.new }}</button></form>
           </div>
         {% else %}
           <form method="post" action="{% url 'stage_ssh_port' %}" class="settings-port-form">{% csrf_token %}
-            <div><label for="new-ssh-port">Change SSH port</label><p class="settings-field-note">The current port stays open until you test and confirm the new one.</p></div>
+            <div><label for="new-ssh-port">Change VPN port</label><p class="settings-field-note">The current VPN port stays open until you test and confirm the new one. Allow the new port in the provider firewall first.</p></div>
             <div class="settings-port-controls"><input id="new-ssh-port" name="port" type="number" min="1" max="65535" placeholder="New port" required><button class="button button-primary" type="submit">Start change</button></div>
           </form>
+        {% endif %}
+        {% if vpn_ssh %}
+          {% if vpn_ssh.main_access %}
+            <div class="settings-callout"><strong>VPN accounts can still use the administrator port</strong><p>Move VPN clients to port {{ ssh_port }}, then close port {{ vpn_ssh.main_ports|join:", " }} to them. Tunnels still open on that port are disconnected.</p></div>
+            <form method="post" action="{% url 'set_main_vpn_access' %}" class="settings-actions" onsubmit="return panelConfirm('Close the administrator SSH port to VPN accounts? Their tunnels on that port will be disconnected.')">{% csrf_token %}<input type="hidden" name="allowed" value="no"><button class="button button-primary" type="submit">Close administrator port to VPN accounts</button></form>
+          {% else %}
+            <form method="post" action="{% url 'set_main_vpn_access' %}" class="settings-actions" onsubmit="return panelConfirm('Allow VPN accounts on the administrator SSH port again?')">{% csrf_token %}<input type="hidden" name="allowed" value="yes"><button class="button button-secondary" type="submit">Allow VPN accounts on the administrator port</button></form>
+          {% endif %}
         {% endif %}
       </section>
       {% endif %}

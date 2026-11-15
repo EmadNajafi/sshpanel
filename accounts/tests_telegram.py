@@ -356,3 +356,12 @@ class TelegramCommandTests(TestCase):
         nonce = self.pending[12345][0]
         handle_update(self.config, self.api, self.callback(f"ok:{nonce}"), self.pending)
         self.assertTrue(AuditEvent.objects.filter(action="port-stage", succeeded=False).exists())
+
+    @patch("accounts.telegram_bot.call_helper", return_value='{"allowed": false, "disconnected": 1}')
+    def test_closing_main_port_needs_confirmation(self, helper):
+        handle_update(self.config, self.api, self.message(12345, "/vpnmain close"), self.pending)
+        helper.assert_not_called()
+        nonce = self.pending[12345][0]
+        handle_update(self.config, self.api, self.callback(f"ok:{nonce}"), self.pending)
+        helper.assert_called_once_with("vpn-main-access", allowed=False)
+        self.assertTrue(AuditEvent.objects.filter(action="main-port-close", telegram_user_id=12345).exists())

@@ -1010,3 +1010,44 @@ class ExpiredAccountEditTests(TestCase):
         self.assertEqual(update.args[2], "fresh-secret")
         account.refresh_from_db()
         self.assertEqual(decrypt_password(account.password_ciphertext), "fresh-secret")
+
+
+class DedicatedVpnPortSettingsTests(TestCase):
+    def setUp(self):
+        self.staff = get_user_model().objects.create_user("owner", password="correct-long-password", is_staff=True)
+        self.client.force_login(self.staff)
+
+    def helper(self, action, *args, **kwargs):
+        return {
+            "port-status": "null",
+            "port-current": '{"port": 2222}',
+            "vpn-status": '{"vpn_port": 2222, "pending": null, "main_ports": [22],'
+                          ' "main_access": true, "service_active": true}',
+            "vpn-main-access": '{"allowed": false, "disconnected": 2}',
+        }[action]
+
+    def test_settings_show_vpn_and_admin_ports(self):
+        with patch("accounts.views.call_helper", side_effect=self.helper), \
+             patch("accounts.services.call_helper", side_effect=self.helper):
+            response = self.client.get(reverse("settings_ssh"))
+        self.assertContains(response, "VPN PORT")
+        self.assertContains(response, "ADMINISTRATOR SSH PORT")
+        self.assertContains(response, "Open to VPN accounts")
+        self.assertContains(response, 'name="allowed" value="no"')
+
+    def test_close_main_port_calls_helper_and_audits(self):
+        with patch("accounts.views.call_helper", side_effect=self.helper) as helper:
+            response = self.client.post(reverse("set_main_vpn_access"), {"allowed": "no"})
+        self.assertRedirects(response, reverse("settings_ssh"), fetch_redirect_response=False)
+        helper.assert_called_once_with("vpn-main-access", allowed=False)
+        self.assertTrue(AuditEvent.objects.filter(action="main-port-close", succeeded=True).exists())
+
+    def test_invalid_choice_is_rejected(self):
+        with patch("accounts.views.call_helper") as helper:
+            self.client.post(reverse("set_main_vpn_access"), {"allowed": "maybe"})
+        helper.assert_not_called()
+
+    def test_helper_failure_is_audited(self):
+        with patch("accounts.views.call_helper", side_effect=ProvisionError("listener stopped")):
+            self.client.post(reverse("set_main_vpn_access"), {"allowed": "no"})
+        self.assertTrue(AuditEvent.objects.filter(action="main-port-close", succeeded=False).exists())

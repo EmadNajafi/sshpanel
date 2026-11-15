@@ -1,0 +1,23 @@
+[Unit]
+Description=SSH VPN dedicated SSH listener (VPN accounts only)
+After=network.target sshvpn-egress.service
+# Never accept VPN logins without the egress firewall.
+Requires=sshvpn-egress.service
+PartOf=sshvpn-egress.service
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sh -c '/usr/sbin/nft list table inet sshvpn_egress >/dev/null'
+# Privilege-separation directory; ssh.service may not be running to create it.
+ExecStartPre=/usr/bin/install -d -m 0755 /run/sshd
+ExecStartPre=/usr/sbin/sshd -t -f /etc/ssh/sshvpn_sshd_config
+ExecStart=/usr/sbin/sshd -D -f /etc/ssh/sshvpn_sshd_config
+ExecReload=/usr/sbin/sshd -t -f /etc/ssh/sshvpn_sshd_config
+ExecReload=/bin/kill -HUP $MAINPID
+# Keep established tunnels when the listener restarts.
+KillMode=process
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

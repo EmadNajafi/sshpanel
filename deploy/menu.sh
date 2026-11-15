@@ -19,6 +19,11 @@ panel_url() {
   fi
 }
 
+vpn_port() {
+  # The dedicated listener's config is the source of truth; the panel can change it.
+  awk '$1 == "Port" { print $2; exit }' /etc/ssh/sshvpn_sshd_config 2>/dev/null || echo "${VPN_SSH_PORT:-?}"
+}
+
 admin_usernames() {
   (cd /opt/ssh-vpn-panel && runuser -u sshvpn-panel -- .venv/bin/python manage.py shell --no-imports -c \
     'from django.contrib.auth import get_user_model; print(", ".join(get_user_model().objects.filter(is_staff=True, is_active=True).order_by("username").values_list("username", flat=True)))' \
@@ -41,6 +46,7 @@ show_menu() {
   printf '  Address   %s%s%s\n' "$green" "$(panel_url)" "$reset"
   printf '  Admin     %s%s%s\n' "$green" "$admins" "$reset"
   printf '  Password  %sNot recoverable (stored as a hash); use option 7%s\n' "$dim" "$reset"
+  printf '  VPN port  %s%s%s %s(VPN accounts only)%s\n' "$green" "$(vpn_port)" "$reset" "$dim" "$reset"
   printf '\n  %sCERTIFICATES%s                 %sOPERATIONS%s\n' "$yellow" "$reset" "$magenta" "$reset"
   printf '   1  Issue or repair SSL         3  Service status\n'
   printf '   2  Renew SSL certificate       4  Restart panel and SSH\n'
@@ -67,9 +73,9 @@ show_menu() {
       fi
       ;;
     2) renew_ssl ;;
-    3) systemctl status --no-pager sshvpn-panel sshvpn-telegram ssh sshvpn-egress sshvpn-udpgw sshvpn-policy.timer nginx postgresql ;;
-    4) systemctl restart sshvpn-panel sshvpn-telegram sshvpn-udpgw; /usr/sbin/sshd -t && systemctl reload ssh ;;
-    5) journalctl -u sshvpn-panel -u sshvpn-telegram -u ssh -u sshvpn-udpgw -u sshvpn-policy.service -n 100 --no-pager ;;
+    3) systemctl status --no-pager sshvpn-panel sshvpn-telegram ssh sshvpn-sshd sshvpn-egress sshvpn-udpgw sshvpn-policy.timer nginx postgresql ;;
+    4) systemctl restart sshvpn-panel sshvpn-telegram sshvpn-udpgw; systemctl reload-or-restart sshvpn-sshd; /usr/sbin/sshd -t && systemctl reload ssh ;;
+    5) journalctl -u sshvpn-panel -u sshvpn-telegram -u ssh -u sshvpn-sshd -u sshvpn-udpgw -u sshvpn-policy.service -n 100 --no-pager ;;
     6) backup_db ;;
     7) read -r -p "Administrator username: " admin_user; change_admin_password "$admin_user" ;;
     8) read -r -p "Server public IPv4: " panel_ip; web_public "$panel_ip" ;;
@@ -323,12 +329,12 @@ case "${1:-menu}" in
   menu) show_menu ;;
   ssl) shift; issue_ssl "$@" ;;
   renew) renew_ssl ;;
-  status) systemctl status --no-pager sshvpn-panel sshvpn-telegram ssh sshvpn-egress sshvpn-udpgw sshvpn-policy.timer nginx postgresql ;;
-  restart) systemctl restart sshvpn-panel sshvpn-telegram sshvpn-udpgw; /usr/sbin/sshd -t && systemctl reload ssh ;;
-  logs) journalctl -u sshvpn-panel -u sshvpn-telegram -u ssh -u sshvpn-policy.service -n 100 --no-pager ;;
+  status) systemctl status --no-pager sshvpn-panel sshvpn-telegram ssh sshvpn-sshd sshvpn-egress sshvpn-udpgw sshvpn-policy.timer nginx postgresql ;;
+  restart) systemctl restart sshvpn-panel sshvpn-telegram sshvpn-udpgw; systemctl reload-or-restart sshvpn-sshd; /usr/sbin/sshd -t && systemctl reload ssh ;;
+  logs) journalctl -u sshvpn-panel -u sshvpn-telegram -u ssh -u sshvpn-sshd -u sshvpn-policy.service -n 100 --no-pager ;;
   backup) backup_db ;;
   admin-password) shift; change_admin_password "$@" ;;
-  vpn-public|vpn-local) echo 'VPN accounts now use the main SSH port; no separate VPN listener exists.' >&2; exit 1 ;;
+  vpn-public|vpn-local) echo "VPN accounts use the dedicated SSH port $(vpn_port); change it in panel Settings > SSH access." >&2; exit 1 ;;
   web-public) shift; web_public "$@" ;;
   uninstall) shift; bash /opt/ssh-vpn-panel/deploy/uninstall.sh "$@" ;;
   *) echo "Usage: sshvpn-menu [menu|ssl [DOMAIN EMAIL [HTTPS_PORT]]|renew|status|restart|logs|backup|admin-password USERNAME|web-public SERVER_PUBLIC_IPV4|uninstall [--dry-run]]" >&2; exit 1 ;;

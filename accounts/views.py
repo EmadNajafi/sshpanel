@@ -703,6 +703,11 @@ def panel_settings(request, section=None):
             context["pending_port"] = None
         context["ssh_port"] = get_ssh_port()
         context["udpgw_port"] = settings.VPN_UDPGW_PORT
+        try:
+            vpn_ssh = json.loads(call_helper("vpn-status"))
+        except (ProvisionError, ValueError):
+            vpn_ssh = None
+        context["vpn_ssh"] = vpn_ssh if isinstance(vpn_ssh, dict) else None
     elif section == "web":
         try:
             context["pending_web"] = json.loads(call_helper("web-status"))
@@ -960,7 +965,31 @@ def stage_ssh_port(request):
         messages.error(request, str(exc))
     else:
         record(request, "server", "port-stage", True)
-        messages.success(request, f"Port {port} is listening. Test a new SSH connection before closing the old port.")
+        messages.success(request, f"VPN port {port} is listening. Test a VPN connection on it before closing the old port.")
+    return redirect("settings_ssh")
+
+
+@staff_required
+@require_POST
+def set_main_vpn_access(request):
+    choice = request.POST.get("allowed")
+    if choice not in ("yes", "no"):
+        messages.error(request, "Choose whether VPN accounts may use the main SSH port.")
+        return redirect("settings_ssh")
+    allowed = choice == "yes"
+    action = "main-port-open" if allowed else "main-port-close"
+    try:
+        result = json.loads(call_helper("vpn-main-access", allowed=allowed))
+    except (ProvisionError, ValueError) as exc:
+        record(request, "server", action, False)
+        messages.error(request, str(exc))
+    else:
+        record(request, "server", action, True)
+        if allowed:
+            messages.success(request, "VPN accounts can sign in on the main SSH port again.")
+        else:
+            disconnected = result.get("disconnected", 0) if isinstance(result, dict) else 0
+            messages.success(request, f"The main SSH port is closed to VPN accounts. Disconnected tunnels: {disconnected}.")
     return redirect("settings_ssh")
 
 
@@ -974,7 +1003,7 @@ def finalize_ssh_port(request):
         messages.error(request, str(exc))
     else:
         record(request, "server", "port-finalize", True)
-        messages.success(request, f"SSH now uses port {result['new']}. The old port is closed.")
+        messages.success(request, f"VPN accounts now use port {result['new']}. The old VPN port is closed.")
     return redirect("settings_ssh")
 
 
@@ -988,5 +1017,5 @@ def cancel_ssh_port(request):
         messages.error(request, str(exc))
     else:
         record(request, "server", "port-cancel", True)
-        messages.success(request, "Port change canceled; the original SSH port is active.")
+        messages.success(request, "Port change canceled; the original VPN port is active.")
     return redirect("settings_ssh")

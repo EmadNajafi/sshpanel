@@ -75,7 +75,7 @@ INPUT_PROMPTS = {
     "search": "نام کاربری یا متن معرف را بفرست.",
     "edit": "فیلدهای دلخواه را به شکل days=30 limit=0 traffic=0 referral=TEXT بفرست.",
     "password": "رمز جدید این کاربر را بفرست.",
-    "sshport": "پورت جدید SSH را بفرست. تغییر نهایی به تأیید جدا نیاز دارد.",
+    "sshport": "پورت جدید VPN را بفرست. پورت فعلی تا تأیید جدا باز می‌ماند.",
     "web": "مسیر و پورت جدید وب را بفرست؛ نمونه: /my-panel 8443",
     "schedule": "وضعیت و ساعت بکاپ را بفرست؛ نمونه: on 03:00 یا off 03:00",
     "adminpassword": "رمز فعلی و رمز جدید مدیر را با یک فاصله بفرست.",
@@ -96,7 +96,8 @@ HELP = """دستورهای ربات (مقادیر دارای فاصله را د�
 برای ریستور از فایل، فایل ‎.tar.gz‎ تا ۲۰ مگابایت را به گفتگوی خصوصی ربات بفرست.
 /schedule on|off HH:MM — ساعت تهران
 /settings — آدرس پنل و پورت‌ها
-/sshport PORT، /sshconfirm، /sshcancel
+/sshport PORT، /sshconfirm، /sshcancel — تغییر پورت اختصاصی VPN
+/vpnmain open|close — باز یا بسته کردن پورت SSH مدیر برای کاربران VPN
 /web PATH PORT — تغییر مسیر و پورت وب
 /adminpassword OLD NEW — تغییر رمز مدیر
 /id — شناسهٔ تلگرام شما
@@ -281,7 +282,7 @@ def status_text():
         resource.append(f"{label}: {value if value is not None else '—'}%")
     return (
         f"آدرس پنل: {read_panel_address()}\n"
-        f"پورت SSH: {get_ssh_port()}\n"
+        f"پورت VPN: {get_ssh_port()}\n"
         f"کاربران: {counts['total']} | آنلاین: {counts['online'] if counts['online'] is not None else '—'}"
         f" | غیرفعال: {counts['inactive']}\n" + " | ".join(resource)
     )
@@ -401,7 +402,7 @@ def user_text(username):
         f"معرف: {account.referral_note or account.referral_code or '—'}\n"
         f"آنلاین: {usage.get('connections', 0)}\n"
         f"IP: {', '.join(usage.get('ips', [])) or '—'}\n"
-        f"هاست: {live_panel_values().get('PANEL_DOMAIN', '—')} | پورت SSH: {get_ssh_port()}"
+        f"هاست: {live_panel_values().get('PANEL_DOMAIN', '—')} | پورت VPN: {get_ssh_port()}"
     )
 
 
@@ -749,24 +750,52 @@ def execute(config, api, chat_id, command_line):
         return f"بکاپ خودکار: {'روشن' if result['enabled'] else 'خاموش'}، ساعت {result['time']} تهران", MAIN_MENU
     if command == "settings":
         schedule = call_backup("schedule-status")
-        port = get_ssh_port()
         try:
-            pending = call_helper("port-status")
+            vpn_ssh = helper_result(call_helper("vpn-status"))
         except ProvisionError:
-            pending = "ناموجود"
-        return (
-            status_text() + f"\nبکاپ خودکار: {'روشن' if schedule['enabled'] else 'خاموش'} "
-            f"ساعت {schedule['time']} تهران\nوضعیت تغییر پورت SSH: {pending}\n"
-            f"ربات: {'فعال' if config.enabled else 'غیرفعال'}"
-        ), [
+            vpn_ssh = None
+        if isinstance(vpn_ssh, dict):
+            pending = vpn_ssh.get("pending")
+            pending_text = (f"{pending.get('old')} → {pending.get('new')}"
+                            if isinstance(pending, dict) else "ندارد")
+            main_ports = ", ".join(str(port) for port in vpn_ssh.get("main_ports", [])) or "—"
+            main_state = "باز" if vpn_ssh.get("main_access") else "بسته"
+            ssh_lines = (f"\nپورت SSH مدیر: {main_ports} ({main_state} برای کاربران VPN)"
+                         f"\nتغییر پورت VPN: {pending_text}")
+            main_open = bool(vpn_ssh.get("main_access"))
+        else:
+            ssh_lines, main_open = "\nوضعیت پورت‌های SSH: ناموجود", None
+        keyboard = [
             [{"text": "🌐 آدرس وب", "callback_data": "prompt:web"},
-             {"text": "🔌 پورت SSH", "callback_data": "prompt:sshport"}],
+             {"text": "🔌 پورت VPN", "callback_data": "prompt:sshport"}],
             [{"text": "🕒 زمان بکاپ", "callback_data": "prompt:schedule"},
              {"text": "🔐 رمز مدیر", "callback_data": "prompt:adminpassword"}],
-            [{"text": "✅ تأیید پورت SSH", "callback_data": "cmd:sshconfirm"},
+            [{"text": "✅ تأیید پورت VPN", "callback_data": "cmd:sshconfirm"},
              {"text": "↩️ لغو تغییر پورت", "callback_data": "cmd:sshcancel"}],
-            BACK_BUTTON,
         ]
+        if main_open is True:
+            keyboard.append([{"text": "🚪 بستن پورت مدیر برای VPN", "callback_data": "cmd:vpnmainclose"}])
+        elif main_open is False:
+            keyboard.append([{"text": "🚪 باز کردن پورت مدیر برای VPN", "callback_data": "cmd:vpnmainopen"}])
+        keyboard.append(BACK_BUTTON)
+        return (
+            status_text() + ssh_lines + f"\nبکاپ خودکار: {'روشن' if schedule['enabled'] else 'خاموش'} "
+            f"ساعت {schedule['time']} تهران\n"
+            f"ربات: {'فعال' if config.enabled else 'غیرفعال'}"
+        ), keyboard
+    if command == "vpnmain":
+        require_args(args, 1, "/vpnmain open|close")
+        if args[0] not in ("open", "close"):
+            raise BotCommandError("ساختار دستور: /vpnmain open|close")
+        allowed = args[0] == "open"
+        result = helper_result(audited(
+            config, "server", "main-port-open" if allowed else "main-port-close",
+            lambda: call_helper("vpn-main-access", allowed=allowed),
+        ))
+        if allowed:
+            return "کاربران VPN دوباره می‌توانند روی پورت SSH مدیر وارد شوند.", MAIN_MENU
+        count = result.get("disconnected", 0) if isinstance(result, dict) else 0
+        return f"پورت SSH مدیر برای کاربران VPN بسته شد. تونل‌های قطع‌شده: {count}", MAIN_MENU
     if command == "sshport":
         require_args(args, 1, "/sshport PORT")
         try:
@@ -776,14 +805,16 @@ def execute(config, api, chat_id, command_line):
         if not 1 <= port <= 65535:
             raise BotCommandError("پورت باید بین ۱ و ۶۵۵۳۵ باشد.")
         audited(config, "server", "port-stage", lambda: call_helper("port-stage", port=port))
-        return f"پورت {port} فعال شد. اتصال مدیریتی را تست کن؛ سپس /sshconfirm بزن.", MAIN_MENU
+        return (f"پورت VPN {port} فعال شد و پورت قبلی هم هنوز باز است. یک کلاینت VPN را روی پورت {port} "
+                "تست کن؛ سپس /sshconfirm بزن."), MAIN_MENU
     if command == "sshconfirm":
         result = helper_result(audited(config, "server", "port-finalize", lambda: call_helper("port-finalize")))
         new_port = result.get("new") if isinstance(result, dict) else None
-        return f"تغییر پورت SSH نهایی شد{f'؛ پورت جدید: {new_port}' if new_port else ''}.", MAIN_MENU
+        suffix = f"؛ پورت جدید: {new_port}" if new_port else ""
+        return f"تغییر پورت VPN نهایی شد{suffix}.", MAIN_MENU
     if command == "sshcancel":
         audited(config, "server", "port-cancel", lambda: call_helper("port-cancel"))
-        return "تغییر پورت SSH لغو شد.", MAIN_MENU
+        return "تغییر پورت VPN لغو شد.", MAIN_MENU
     if command == "web":
         require_args(args, 2, "/web /PRIVATE-PATH PORT")
         try:
@@ -818,7 +849,7 @@ def needs_confirmation(command_line):
     command = parts[0].split("@", 1)[0].lower().lstrip("/")
     return (
         command in {"delete", "resettraffic", "bulkcreate", "restore", "removebackup",
-                    "web", "sshport", "sshconfirm", "adminpassword"}
+                    "web", "sshport", "sshconfirm", "adminpassword", "vpnmain"}
         or command == "bulk" and len(parts) > 1
     )
 
@@ -1046,6 +1077,9 @@ def handle_update(config, api, update, pending):
             if kind in INPUT_PROMPTS:
                 start_input(api, chat_id, user_id, pending, kind, rest[0] if rest else "",
                             message_id=message_id)
+        elif data in {"cmd:vpnmainclose", "cmd:vpnmainopen"}:
+            dispatch(config, api, chat_id, user_id, "/vpnmain " + ("close" if data.endswith("close") else "open"),
+                     pending, message_id=message_id)
         elif data in {"cmd:sshconfirm", "cmd:sshcancel"}:
             dispatch(config, api, chat_id, user_id, "/" + data[4:], pending,
                      message_id=message_id)

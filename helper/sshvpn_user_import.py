@@ -12,6 +12,7 @@ import tarfile
 from datetime import datetime, timezone
 
 from sshvpn_policy import policy_path, set_password_hash, write_policy
+from sshvpn_port import verify_vpn_restrictions
 
 
 USERNAME = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
@@ -78,12 +79,10 @@ def read_archive(path):
 
 
 def verify_ssh_restrictions(username):
-    result = command("/usr/sbin/sshd", "-T", "-C", f"user={username},host=localhost,addr=127.0.0.1")
-    lines = set(result.decode().splitlines())
-    required = {"maxsessions 0", "allowtcpforwarding local", "permittty no",
-                "forcecommand /usr/sbin/nologin", "passwordauthentication yes", "pubkeyauthentication no"}
-    if not required.issubset(lines):
-        raise RuntimeError("VPN SSH restrictions are not active; import stopped.")
+    try:
+        verify_vpn_restrictions(username)
+    except (ValueError, RuntimeError) as exc:
+        raise RuntimeError(f"VPN SSH restrictions are not active; import stopped. {exc}") from exc
 
 
 def import_users(users, actor_id, env_values):
